@@ -34,6 +34,7 @@ export type GovernanceEditorConfig = {
   overview: string
   showPageSettings?: boolean
   showItemDate?: boolean
+  showItemDescription?: boolean
   showItemFile?: boolean
   addLabel: string
   itemLabel: string
@@ -156,10 +157,31 @@ export const governancePages: GovernancePageDefinition[] = flattenNavigation(gov
 
 export const governanceSectionKeys = governancePages.map((page) => page.sectionKey)
 
+export const governanceParentSectionKeys: GovernanceSectionKey[] = [
+  "governance_board",
+  "governance_general_assembly",
+  "governance_licenses",
+]
+
+export const governanceMembersSectionKeys: GovernanceSectionKey[] = [
+  "governance_board_members",
+  "governance_general_assembly_members",
+]
+
+export const governanceDownloadSectionKeys: GovernanceSectionKey[] = [
+  "governance_general_assembly_minutes",
+  "governance_registration_certificate",
+  "governance_donation_site_certificate",
+  "governance_policies",
+  "governance_committees",
+  "governance_endowments",
+]
+
 const defaultGovernanceEditorConfig: GovernanceEditorConfig = {
   overview: "يمكنك تعديل عنوان الصفحة ووصفها، ثم إضافة العناصر أو الملفات التي ستظهر للزوار.",
   showPageSettings: true,
   showItemDate: true,
+  showItemDescription: true,
   showItemFile: true,
   addLabel: "إضافة عنصر",
   itemLabel: "العنصر",
@@ -265,6 +287,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_general_assembly_minutes: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "استخدم هذه الصفحة لرفع محاضر الاجتماعات مع تواريخها وروابط ملفات PDF أو المستندات الرسمية.",
     addLabel: "إضافة محضر",
     itemLabel: "المحضر",
@@ -289,6 +313,9 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_general_assembly_membership: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
+    showItemFile: false,
     overview: "اعرض هنا نموذج طلب العضوية أو تعليماته أو أي ملفات داعمة مرتبطة بالتقديم على العضوية.",
     addLabel: "إضافة طلب أو ملف عضوية",
     itemLabel: "الطلب",
@@ -336,6 +363,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_registration_certificate: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "خصص هذه الصفحة لرفع شهادة تسجيل الجمعية أو الإصدارات المحدثة منها مع الوصف والتاريخ.",
     addLabel: "إضافة شهادة تسجيل",
     itemLabel: "الشهادة",
@@ -360,6 +389,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_donation_site_certificate: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "اعرض هنا شهادة ترخيص موقع التبرعات وأي مستندات أو تحديثات مرتبطة بها.",
     addLabel: "إضافة شهادة ترخيص",
     itemLabel: "الشهادة",
@@ -384,6 +415,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_policies: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "أضف السياسات واللوائح المعتمدة كعناصر مستقلة مع وصف لكل سياسة وملفها المباشر.",
     addLabel: "إضافة سياسة أو لائحة",
     itemLabel: "السياسة",
@@ -408,6 +441,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_committees: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "عرّف باللجان المعتمدة وأدوارها أو اختصاصاتها وأرفق الملفات أو القرارات المرتبطة بها.",
     addLabel: "إضافة لجنة",
     itemLabel: "اللجنة",
@@ -432,6 +467,8 @@ export const governanceEditorConfigs: Record<GovernanceSectionKey, GovernanceEdi
   governance_endowments: {
     ...defaultGovernanceEditorConfig,
     showPageSettings: false,
+    showItemDate: false,
+    showItemDescription: false,
     overview: "أضف بيانات الأوقاف والاستثمارات أو الملفات المرتبطة بها بشكل مستقل ومنظم داخل هذه الصفحة.",
     addLabel: "إضافة وقف أو استثمار",
     itemLabel: "العنصر",
@@ -465,7 +502,13 @@ export function getGovernancePageByPath(pathSegments: string[] | undefined) {
   }
 
   const key = pathSegments.join("/")
-  return governancePages.find((page) => page.slug.join("/") === key) ?? null
+  const page = governancePages.find((entry) => entry.slug.join("/") === key) ?? null
+
+  if (!page || governanceParentSectionKeys.includes(page.sectionKey)) {
+    return null
+  }
+
+  return page
 }
 
 export function getGovernancePageBySection(sectionKey: GovernanceSectionKey) {

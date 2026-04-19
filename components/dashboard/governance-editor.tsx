@@ -94,10 +94,12 @@ export function GovernanceEditor({ section, pageTitle, initialContent }: Governa
                   <Input id={`${section}-item-date-${item.id}`} value={item.date} onChange={(event) => updateItem(index, "date", event.target.value)} placeholder={config.itemDatePlaceholder} />
                 </div>
               ) : null}
-              <div className={`space-y-2 text-right ${config.showItemDate !== false ? "md:col-span-2" : "md:col-span-1"}`}>
-                <Label htmlFor={`${section}-item-description-${item.id}`}>{config.itemDescriptionLabel}</Label>
-                <Textarea id={`${section}-item-description-${item.id}`} rows={3} value={item.description} onChange={(event) => updateItem(index, "description", event.target.value)} placeholder={config.itemDescriptionPlaceholder} />
-              </div>
+              {config.showItemDescription !== false ? (
+                <div className={`space-y-2 text-right ${config.showItemDate !== false ? "md:col-span-2" : "md:col-span-1"}`}>
+                  <Label htmlFor={`${section}-item-description-${item.id}`}>{config.itemDescriptionLabel}</Label>
+                  <Textarea id={`${section}-item-description-${item.id}`} rows={3} value={item.description} onChange={(event) => updateItem(index, "description", event.target.value)} placeholder={config.itemDescriptionPlaceholder} />
+                </div>
+              ) : null}
               {config.showItemFile !== false ? (
                 <>
                   <div className="md:col-span-2">

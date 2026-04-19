@@ -244,6 +244,21 @@ create table if not exists public.weekly_achievement_entries (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.governance_membership_requests (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null,
+  gender employee_gender not null,
+  phone text not null,
+  email text,
+  national_id text not null,
+  education_level text not null,
+  job_title text not null,
+  employer text not null,
+  status text not null default 'pending' check (status in ('pending', 'reviewed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create index if not exists app_sessions_user_id_idx on public.app_sessions(user_id);
 create index if not exists app_sessions_expires_at_idx on public.app_sessions(expires_at);
 create index if not exists administrative_requests_user_id_idx on public.administrative_requests(user_id);
@@ -260,6 +275,7 @@ create index if not exists user_tasks_due_at_idx on public.user_tasks(due_at asc
 create index if not exists task_notifications_user_id_idx on public.task_notifications(user_id, created_at desc);
 create index if not exists weekly_achievement_entries_user_week_idx on public.weekly_achievement_entries(user_id, week_start_date desc);
 create index if not exists weekly_achievement_entries_week_idx on public.weekly_achievement_entries(week_start_date desc, created_at desc);
+create index if not exists governance_membership_requests_created_at_idx on public.governance_membership_requests(created_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -352,6 +368,13 @@ drop trigger if exists weekly_achievement_entries_set_updated_at on public.weekl
 
 create trigger weekly_achievement_entries_set_updated_at
 before update on public.weekly_achievement_entries
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists governance_membership_requests_set_updated_at on public.governance_membership_requests;
+
+create trigger governance_membership_requests_set_updated_at
+before update on public.governance_membership_requests
 for each row
 execute function public.set_updated_at();
 

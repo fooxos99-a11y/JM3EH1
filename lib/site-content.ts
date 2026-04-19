@@ -3,6 +3,7 @@ import "server-only"
 import { z } from "zod"
 
 import { dashboardPermissionKeys, type DashboardPermissionKey } from "@/lib/dashboard-permissions"
+import { governanceSectionKeys } from "@/lib/governance"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const imageSchema = z.string()
@@ -334,6 +335,18 @@ export const permissionsContentSchema = z.object({
   accounts: z.array(adminAccountSchema),
 })
 
+export const governanceItemSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  description: z.string(),
+  date: z.string(),
+  fileUrl: z.string(),
+})
+
+export const governanceContentSchema = z.object({
+  items: z.array(governanceItemSchema),
+})
+
 export type HeroContent = z.infer<typeof heroContentSchema>
 export type DonationMethod = z.infer<typeof donationMethodSchema>
 export type DonationLabel = z.infer<typeof donationLabelSchema>
@@ -352,6 +365,7 @@ export type FooterContent = z.infer<typeof footerContentSchema>
 export type ColorsContent = z.infer<typeof colorsContentSchema>
 export type LogoContent = z.infer<typeof logoContentSchema>
 export type PermissionsContent = z.infer<typeof permissionsContentSchema>
+export type GovernanceContent = z.infer<typeof governanceContentSchema>
 
 export const defaultHeroContent: HeroContent = {
   slides: [
@@ -723,6 +737,10 @@ export const defaultPermissionsContent: PermissionsContent = {
   accounts: [],
 }
 
+export const defaultGovernanceContent: GovernanceContent = {
+  items: [],
+}
+
 const sectionSchemas = {
   logo: logoContentSchema,
   hero: heroContentSchema,
@@ -737,6 +755,18 @@ const sectionSchemas = {
   footer: footerContentSchema,
   colors: colorsContentSchema,
   permissions: permissionsContentSchema,
+  governance_board: governanceContentSchema,
+  governance_board_members: governanceContentSchema,
+  governance_general_assembly: governanceContentSchema,
+  governance_general_assembly_members: governanceContentSchema,
+  governance_general_assembly_minutes: governanceContentSchema,
+  governance_general_assembly_membership: governanceContentSchema,
+  governance_licenses: governanceContentSchema,
+  governance_registration_certificate: governanceContentSchema,
+  governance_donation_site_certificate: governanceContentSchema,
+  governance_policies: governanceContentSchema,
+  governance_committees: governanceContentSchema,
+  governance_endowments: governanceContentSchema,
 }
 
 const defaultContent = {
@@ -753,11 +783,27 @@ const defaultContent = {
   footer: defaultFooterContent,
   colors: defaultColorsContent,
   permissions: defaultPermissionsContent,
+  governance_board: defaultGovernanceContent,
+  governance_board_members: defaultGovernanceContent,
+  governance_general_assembly: defaultGovernanceContent,
+  governance_general_assembly_members: defaultGovernanceContent,
+  governance_general_assembly_minutes: defaultGovernanceContent,
+  governance_general_assembly_membership: defaultGovernanceContent,
+  governance_licenses: defaultGovernanceContent,
+  governance_registration_certificate: defaultGovernanceContent,
+  governance_donation_site_certificate: defaultGovernanceContent,
+  governance_policies: defaultGovernanceContent,
+  governance_committees: defaultGovernanceContent,
+  governance_endowments: defaultGovernanceContent,
 }
 
 type SectionKey = keyof typeof sectionSchemas
 
 export type SiteSectionKey = SectionKey
+
+export const siteSectionKeys = Object.keys(sectionSchemas) as SiteSectionKey[]
+
+export const governanceSiteSectionKeys = governanceSectionKeys as SiteSectionKey[]
 
 export async function getSiteSectionContent<T extends SectionKey>(section: T): Promise<(typeof defaultContent)[T]> {
   const supabase = createSupabaseAdminClient()

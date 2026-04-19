@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 
 import { getCurrentUser, hasPermission } from "@/lib/auth"
-import { getSiteSectionContent, type SiteSectionKey, upsertSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, siteSectionKeys, type SiteSectionKey, upsertSiteSectionContent } from "@/lib/site-content"
 
 function isSectionKey(value: string): value is SiteSectionKey {
-  return value === "logo" || value === "hero" || value === "donations" || value === "projects" || value === "giftings" || value === "achievements" || value === "about" || value === "news" || value === "gallery" || value === "partners" || value === "footer" || value === "colors" || value === "permissions"
+  return siteSectionKeys.includes(value as SiteSectionKey)
 }
 
 async function requireAdminApi(section?: SiteSectionKey) {

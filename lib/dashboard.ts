@@ -1,5 +1,5 @@
 import type { DashboardPermissionKey } from "@/lib/dashboard-permissions"
-import { governancePages } from "@/lib/governance"
+import { governancePages, governanceParentSectionKeys } from "@/lib/governance"
 
 type DashboardItem = {
   slug: string
@@ -76,7 +76,7 @@ export const dashboardSections: DashboardGroup[] = [
   {
     title: "الحوكمة",
     items: governancePages
-      .filter((page) => page.sectionKey !== "governance_board" && page.sectionKey !== "governance_general_assembly")
+      .filter((page) => !governanceParentSectionKeys.includes(page.sectionKey))
       .map((page) => ({
         slug: page.sectionKey,
         label: page.label,

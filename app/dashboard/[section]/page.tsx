@@ -10,6 +10,8 @@ import { DonationsEditor } from "@/components/dashboard/donations-editor"
 import { FooterEditor } from "@/components/dashboard/footer-editor"
 import { GiftingsEditor } from "@/components/dashboard/giftings-editor"
 import { GalleryEditor } from "@/components/dashboard/gallery-editor"
+import { GovernanceEditor } from "@/components/dashboard/governance-editor"
+import { GovernanceMembershipRequestsDashboard } from "@/components/dashboard/governance-membership-requests-dashboard"
 import { HeroEditor } from "@/components/dashboard/hero-editor"
 import { LogoEditor } from "@/components/dashboard/logo-editor"
 import { NewsEditor } from "@/components/dashboard/news-editor"
@@ -20,6 +22,7 @@ import { SupportersDashboard } from "@/components/dashboard/supporters-dashboard
 import { ServicesDashboard } from "@/components/dashboard/services-dashboard"
 import { requireAdminUser } from "@/lib/auth"
 import { getDashboardSection } from "@/lib/dashboard"
+import { getGovernancePageBySection, governanceSectionKeys } from "@/lib/governance"
 import { getSiteSectionContent } from "@/lib/site-content"
 import { TasksPageClient } from "@/components/tasks-page-client"
 
@@ -131,6 +134,20 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
 
   if (section === "permissions") {
     return <PermissionsEditor />
+  }
+
+  if (governanceSectionKeys.includes(section as (typeof governanceSectionKeys)[number])) {
+    if (section === "governance_general_assembly_membership") {
+      return <GovernanceMembershipRequestsDashboard />
+    }
+
+    const page = getGovernancePageBySection(section as (typeof governanceSectionKeys)[number])
+    if (!page) {
+      notFound()
+    }
+
+    const content = await getSiteSectionContent(section as keyof Parameters<typeof getSiteSectionContent>[0] & typeof section)
+    return <GovernanceEditor section={page.sectionKey} pageTitle={page.label} initialContent={content} />
   }
 
   notFound()

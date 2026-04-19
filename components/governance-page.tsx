@@ -38,18 +38,18 @@ export function GovernanceSectionPage({ definition, content }: { definition: Gov
       <div className="container mx-auto px-4">
         <section>
           {content.items.length > 0 ? (
-            <div className={`mx-auto ${isMembersPage ? "grid max-w-5xl gap-6 md:grid-cols-2 xl:grid-cols-3" : "flex max-w-3xl flex-col items-center gap-6"}`}>
+            <div className={`mx-auto ${isMembersPage ? "flex max-w-3xl flex-col items-center gap-5" : "flex max-w-3xl flex-col items-center gap-6"}`}>
               {content.items.map((item, index) => (
                 <Card
                   key={item.id}
-                  className={`animate-fade-in-up w-full rounded-[2rem] border-white/80 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition-transform duration-300 hover:-translate-y-1 ${isMembersPage ? "text-right" : "text-center"}`}
+                  className={`animate-fade-in-up w-full rounded-[2rem] border-white/80 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_26px_60px_rgba(15,23,42,0.1)] ${isMembersPage ? "max-w-2xl text-center" : "text-center"}`}
                   style={{ animationDelay: `${index * 0.08}s` }}
                 >
-                  <CardContent className={`px-8 py-10 ${isMembersPage ? "text-right" : "text-center"}`}>
+                  <CardContent className={`px-8 py-10 ${isMembersPage ? "text-center" : "text-center"}`}>
                     {isMembersPage ? (
                       <div className="space-y-3">
-                        <h2 className="text-2xl font-bold text-foreground">{item.title}</h2>
-                        <p className="text-base font-medium text-primary">{item.description}</p>
+                        <h2 className="text-2xl font-bold text-foreground md:text-3xl">{item.title}</h2>
+                        <p className="text-base font-medium text-primary md:text-lg">{item.description}</p>
                       </div>
                     ) : isDownloadPage ? (
                       <div className="flex items-center justify-between gap-4">

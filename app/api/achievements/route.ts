@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireCurrentUser } from "@/lib/auth"
-import type { AchievementsPageData, EmployeeWeeklyAchievementGroup, WeeklyAchievementEntry } from "@/lib/achievements-log"
+import type { AchievementTeamUser, AchievementsPageData, EmployeeWeeklyAchievementGroup, WeeklyAchievementEntry } from "@/lib/achievements-log"
 import { endOfWeekMonday, formatDateInput, getWeekRangeFromStartDate, startOfWeekMonday } from "@/lib/achievements-log"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
@@ -85,8 +85,10 @@ async function loadAchievementsPageData(currentUserId: string, isManager: boolea
   }
 
   const rows = (entryRows ?? []) as AchievementRow[]
-  const userIds = Array.from(new Set(rows.map((row) => row.user_id).concat(currentUserId)))
-  const { data: userRows, error: userError } = await supabase.from("app_users").select("id,full_name").in("id", userIds)
+  const usersQuery = isManager
+    ? supabase.from("app_users").select("id,full_name").eq("role", "admin")
+    : supabase.from("app_users").select("id,full_name").in("id", Array.from(new Set(rows.map((row) => row.user_id).concat(currentUserId))))
+  const { data: userRows, error: userError } = await usersQuery
 
   if (userError) {
     throw new Error(userError.message)
@@ -95,6 +97,11 @@ async function loadAchievementsPageData(currentUserId: string, isManager: boolea
   const usersById = new Map((userRows ?? []).map((row) => [row.id, row as UserRow]))
   const mappedEntries = rows.map((row) => mapEntry(row, usersById))
   const myEntries = mappedEntries.filter((entry) => entry.userId === currentUserId)
+  const teamUsers: AchievementTeamUser[] = isManager
+    ? Array.from(usersById.values())
+        .map((row) => ({ userId: row.id, userName: row.full_name }))
+        .sort((left, right) => left.userName.localeCompare(right.userName, "ar"))
+    : []
 
   const groupedMap = new Map<string, EmployeeWeeklyAchievementGroup>()
   for (const entry of mappedEntries) {
@@ -120,6 +127,7 @@ async function loadAchievementsPageData(currentUserId: string, isManager: boolea
     currentWeekEndDate: formatDateInput(currentWeekEnd),
     myEntries,
     teamGroups: isManager ? Array.from(groupedMap.values()).sort((a, b) => a.userName.localeCompare(b.userName, "ar")) : [],
+    teamUsers,
   }
 }
 

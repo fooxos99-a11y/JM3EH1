@@ -65,11 +65,19 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
   }
 
   if (section === "tasks") {
-    return <TasksPageClient embedded />
+    return <TasksPageClient embedded view="personal" />
+  }
+
+  if (section === "staff_tasks") {
+    return <TasksPageClient embedded view="manager" />
   }
 
   if (section === "staff_achievements") {
-    return <AchievementsPageClient embedded />
+    return <AchievementsPageClient embedded view="manager" />
+  }
+
+  if (section === "my_achievements") {
+    return <AchievementsPageClient embedded view="personal" />
   }
 
   if (section === "logo") {

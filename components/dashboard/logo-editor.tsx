@@ -6,7 +6,12 @@ import { FileUploadField } from "@/components/dashboard/file-upload-field"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { LogoContent } from "@/lib/site-content"
+
+function getWeightClass(weight: LogoContent["arabicFontWeight"]) {
+  return weight === "bold" ? "font-extrabold" : "font-normal"
+}
 
 export function LogoEditor({ initialContent }: { initialContent: LogoContent }) {
   const [content, setContent] = useState(initialContent)
@@ -52,16 +57,43 @@ export function LogoEditor({ initialContent }: { initialContent: LogoContent }) 
             </div>
 
             <div className="space-y-2 text-right">
-              <Label htmlFor="logo-alt">النص البديل</Label>
-              <Input id="logo-alt" value={content.alt} onChange={(event) => setContent((current) => ({ ...current, alt: event.target.value }))} />
+              <Label htmlFor="logo-text-color">لون النص</Label>
+              <div className="flex items-center gap-3 rounded-xl border border-input bg-background px-3 py-2">
+                <Input id="logo-text-color" type="color" value={content.textColor} onChange={(event) => setContent((current) => ({ ...current, textColor: event.target.value }))} className="h-10 w-14 cursor-pointer border-0 bg-transparent p-0" />
+                <Input value={content.textColor} onChange={(event) => setContent((current) => ({ ...current, textColor: event.target.value }))} dir="ltr" className="border-0 bg-transparent px-0 text-left shadow-none focus-visible:ring-0" />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 text-right">
+                <Label>وزن الخط العربي</Label>
+                <Select value={content.arabicFontWeight} onValueChange={(value) => setContent((current) => ({ ...current, arabicFontWeight: value as LogoContent["arabicFontWeight"] }))}>
+                  <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">عادي</SelectItem>
+                    <SelectItem value="bold">عريض</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 text-right">
+                <Label>وزن الخط الإنجليزي</Label>
+                <Select value={content.englishFontWeight} onValueChange={(value) => setContent((current) => ({ ...current, englishFontWeight: value as LogoContent["englishFontWeight"] }))}>
+                  <SelectTrigger className="w-full rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">عادي</SelectItem>
+                    <SelectItem value="bold">عريض</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="rounded-[1.25rem] border border-border/70 bg-muted/20 p-4 text-right">
               <p className="text-sm font-semibold text-foreground">معاينة</p>
               <div className="mt-4 flex min-h-40 items-center justify-end gap-5 rounded-[1rem] border border-dashed border-border/80 bg-white p-5 text-right">
                 <div className="space-y-1.5">
-                  <p className="text-lg font-extrabold leading-tight text-foreground">{content.arabicName || "اسم الجهة بالعربية"}</p>
-                  <p className="text-sm font-semibold tracking-[0.02em] text-muted-foreground" dir="ltr">{content.englishName || "Organization Name in English"}</p>
+                  <p className={`text-lg leading-tight ${getWeightClass(content.arabicFontWeight)}`} style={{ color: content.textColor }}>{content.arabicName || "اسم الجهة بالعربية"}</p>
+                  <p className={`text-sm tracking-[0.02em] ${getWeightClass(content.englishFontWeight)}`} style={{ color: content.textColor }} dir="ltr">{content.englishName || "Organization Name in English"}</p>
                 </div>
                 <div className="flex h-[140px] w-[140px] items-center justify-center rounded-[1.25rem] border border-border/70 bg-white shadow-sm">
                   {content.logo ? (

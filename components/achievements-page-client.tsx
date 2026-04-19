@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AchievementsPageData } from "@/lib/achievements-log"
 
@@ -43,9 +43,10 @@ function shiftWeek(value: string, weeks: number) {
   return `${year}-${month}-${day}`
 }
 
-export function AchievementsPageClient({ embedded = false }: { embedded?: boolean }) {
+export function AchievementsPageClient({ embedded = false, view = "personal" }: { embedded?: boolean; view?: "personal" | "manager" }) {
   const [data, setData] = useState<AchievementsPageData | null>(null)
   const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>("")
+  const [selectedUserId, setSelectedUserId] = useState<string>("")
   const [form, setForm] = useState(initialForm)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -72,10 +73,29 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
     void loadData()
   }, [])
 
+  useEffect(() => {
+    if (view !== "manager" || !data) {
+      return
+    }
+
+    const currentUserExists = data.teamUsers.some((user) => user.userId === selectedUserId)
+    if (!currentUserExists) {
+      setSelectedUserId(data.teamUsers[0]?.userId ?? "")
+    }
+  }, [data, selectedUserId, view])
+
   const isCurrentWeek = useMemo(
     () => data ? data.selectedWeekStartDate === data.currentWeekStartDate : false,
     [data],
   )
+
+  const selectedTeamGroup = useMemo(() => {
+    if (!data || !selectedUserId) {
+      return null
+    }
+
+    return data.teamGroups.find((group) => group.userId === selectedUserId) ?? null
+  }, [data, selectedUserId])
 
   async function uploadImage(file: File) {
     setIsUploading(true)
@@ -170,8 +190,8 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
         <div className="rounded-[2rem] border border-white/70 bg-white/95 p-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-4">
             <div className="text-right">
-              <h1 className="text-3xl font-bold text-foreground">{data.isManager ? "إنجازات الموظفين" : "إنجازات الموظف"}</h1>
-              <p className="mt-2 text-sm leading-7 text-muted-foreground">رفع إنجازاتك أسبوعيًا كنص وصورة، مع تصفح الأسابيع الماضية. المدير يمكنه مشاهدة جميع إنجازات الموظفين للأسبوع المحدد بشكل منظم.</p>
+              <h1 className="text-3xl font-bold text-foreground">{view === "manager" ? "إنجازات الموظفين" : "إنجازاتي"}</h1>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">{view === "manager" ? "اختر الموظف ثم تنقّل بين الأسابيع لمراجعة إنجازاته المرفوعة، مع عرض أسبوعي مبسّط مخصص للإدارة." : "رفع إنجازاتك أسبوعيًا كنص وصورة، مع تصفح الأسابيع السابقة ومراجعة إنجازاتك الشخصية."}</p>
             </div>
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="h-7 w-7" /></div>
           </div>
@@ -181,25 +201,35 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
 
         <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))}><ChevronLeft className="h-4 w-4" />الأسبوع الماضي</Button>
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => void loadData(data.currentWeekStartDate)} disabled={isCurrentWeek}>الأسبوع الحالي</Button>
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" />الأسبوع التالي</Button>
-            </div>
-            <div className="text-right">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary"><CalendarRange className="h-4 w-4" />{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع محفوظ"}</div>
-              <p className="mt-2 text-sm font-semibold text-foreground">من {formatDate(data.selectedWeekStartDate)} إلى {formatDate(data.selectedWeekEndDate)}</p>
-            </div>
+            {view === "manager" ? (
+              <div className="grid w-full gap-4 md:grid-cols-[minmax(0,280px)_1fr] md:items-center">
+                <div className="space-y-2 text-right">
+                  <Label>الموظف</Label>
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger className="w-full rounded-xl"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
+                    <SelectContent>
+                      {data.teamUsers.map((user) => <SelectItem key={user.userId} value={user.userId}>{user.userName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" className="rounded-xl px-4">{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع مختار"}</Button>
+                  <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))}><ChevronLeft className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex w-full items-center justify-end gap-2">
+                <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" className="rounded-xl px-4">{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع مختار"}</Button>
+                <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))}><ChevronLeft className="h-4 w-4" /></Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="my_entries" className="gap-4">
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
-            <TabsTrigger value="my_entries" className="rounded-xl px-4 py-2">إنجازات الموظف</TabsTrigger>
-            {data.isManager ? <TabsTrigger value="team_entries" className="rounded-xl px-4 py-2">إنجازات الموظفين</TabsTrigger> : null}
-          </TabsList>
-
-          <TabsContent value="my_entries" className="space-y-4">
+        {view === "personal" ? (
+          <>
             {isCurrentWeek ? (
               <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
                 <CardHeader>
@@ -223,7 +253,7 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
 
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>إنجازات الموظف لهذا الأسبوع</CardTitle>
+                <CardTitle>إنجازاتي</CardTitle>
                 <CardDescription>جميع الإنجازات التي رفعتها في الأسبوع المحدد، مرتبة من الأحدث إلى الأقدم.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -236,41 +266,36 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
                 ))}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {data.isManager ? (
-            <TabsContent value="team_entries" className="space-y-4">
-              <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-                <CardHeader>
-                  <CardTitle>جميع إنجازات الموظفين</CardTitle>
-                  <CardDescription>عرض منظم لكل موظف ثم جميع إنجازاته في الأسبوع المحدد، مع ترتيب واضح وصور الإنجازات إن وجدت.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {data.teamGroups.length === 0 ? <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">لا توجد إنجازات مرفوعة من الموظفين في هذا الأسبوع.</div> : (
-                    <Accordion type="multiple" className="space-y-3">
-                      {data.teamGroups.map((group) => (
-                        <AccordionItem key={group.userId} value={group.userId} className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-muted/10 px-4">
-                          <AccordionTrigger className="text-right hover:no-underline"><div className="flex w-full items-center justify-between gap-4"><Badge variant="secondary">{group.entries.length} إنجاز</Badge><div className="text-right"><p className="font-bold text-foreground">{group.userName}</p><p className="text-xs text-muted-foreground">الأسبوع من {formatDate(data.selectedWeekStartDate)} إلى {formatDate(data.selectedWeekEndDate)}</p></div></div></AccordionTrigger>
-                          <AccordionContent>
-                            <div className="space-y-4 pt-2">
-                              {group.entries.map((entry) => (
-                                <div key={entry.id} className="rounded-[1.25rem] border border-white/80 bg-white p-4">
-                                  <div className="flex items-start justify-between gap-4"><p className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</p><Badge variant="outline">{entry.userName}</Badge></div>
-                                  <p className="mt-3 whitespace-pre-wrap text-right text-sm leading-8 text-foreground">{entry.achievementText}</p>
-                                  {entry.imageUrl ? <img src={entry.imageUrl} alt="Achievement" className="mt-4 max-h-96 rounded-[1.25rem] border border-border/60 bg-muted/10 object-contain" /> : null}
-                                </div>
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
-                    </Accordion>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ) : null}
-        </Tabs>
+          </>
+        ) : (
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+            <CardHeader>
+              <CardTitle>إنجازات الموظفين</CardTitle>
+              <CardDescription>اختر الموظف من الأعلى ثم تنقّل بين الأسابيع لعرض إنجازاته المرفوعة فقط.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!selectedUserId ? <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">لا يوجد موظفون متاحون للعرض حاليًا.</div> : !selectedTeamGroup ? <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">لا توجد إنجازات مرفوعة لهذا الموظف في الأسبوع المحدد.</div> : (
+                <Accordion type="multiple" className="space-y-3">
+                  <AccordionItem value={selectedTeamGroup.userId} className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-muted/10 px-4">
+                    <AccordionTrigger className="text-right hover:no-underline"><div className="flex w-full items-center justify-between gap-4"><Badge variant="secondary">{selectedTeamGroup.entries.length} إنجاز</Badge><div className="text-right"><p className="font-bold text-foreground">{selectedTeamGroup.userName}</p></div></div></AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-4 pt-2">
+                        {selectedTeamGroup.entries.map((entry) => (
+                          <div key={entry.id} className="rounded-[1.25rem] border border-white/80 bg-white p-4">
+                            <div className="flex items-start justify-between gap-4"><p className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</p><Badge variant="outline">{entry.userName}</Badge></div>
+                            <p className="mt-3 whitespace-pre-wrap text-right text-sm leading-8 text-foreground">{entry.achievementText}</p>
+                            {entry.imageUrl ? <img src={entry.imageUrl} alt="Achievement" className="mt-4 max-h-96 rounded-[1.25rem] border border-border/60 bg-muted/10 object-contain" /> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        )}
     </div>
   )
 

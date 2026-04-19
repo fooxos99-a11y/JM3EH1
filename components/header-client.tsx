@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button"
 import { governanceNavigation } from "@/lib/governance"
 import type { LogoContent } from "@/lib/site-content"
 
+function getWeightClass(weight: LogoContent["arabicFontWeight"]) {
+  return weight === "bold" ? "font-extrabold" : "font-normal"
+}
+
 export function HeaderClient({ logo }: { logo: LogoContent }) {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -52,6 +56,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
 
   const arabicName = logo.arabicName.trim() || "العناية بالمسلمين الجدد"
   const englishName = logo.englishName.trim() || "New Muslims Care Association"
+  const solidTextStyle = { color: logo.textColor || "#1a1a2e" }
 
   return (
     <header
@@ -61,15 +66,15 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
     >
       <div className="container mx-auto px-4">
         <div className={`flex items-center justify-between rounded-[1.75rem] px-3 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "border border-white/15 bg-black/10 py-3 backdrop-blur-md"}`}>
-          <Link href="/" className="group flex items-center gap-3">
+          <Link href="/" className="group flex items-center gap-4">
             {logo.logo ? (
               <>
-                <div className="flex h-[72px] w-[72px] items-center justify-center px-1 py-2 transition-transform duration-300 group-hover:scale-[1.02]">
-                  <img src={logo.logo} alt={logo.alt} className="h-full w-full object-contain" />
+                <div className="flex h-[82px] w-[82px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02]">
+                  <img src={logo.logo} alt={logo.alt} className="h-[82px] w-[82px] object-contain" />
                 </div>
-                <div className={`text-right transition-colors duration-300 ${useSolidHeader ? "text-foreground" : "text-white"}`}>
-                  <h1 className="text-base font-extrabold leading-tight md:text-lg">{arabicName}</h1>
-                  <p className={`mt-1 text-[10px] font-semibold tracking-[0.02em] md:text-xs ${useSolidHeader ? "text-muted-foreground" : "text-white/70"}`} dir="ltr">{englishName}</p>
+                <div className={`flex min-h-[82px] flex-col justify-center text-right transition-colors duration-300 ${useSolidHeader ? "" : "text-white"}`}>
+                  <h1 className={`text-lg leading-tight md:text-[1.55rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
+                  <p className={`mt-1.5 text-[11px] tracking-[0.02em] md:text-[0.95rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
                 </div>
               </>
             ) : (

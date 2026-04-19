@@ -16,6 +16,11 @@ export type EmployeeWeeklyAchievementGroup = {
   entries: WeeklyAchievementEntry[]
 }
 
+export type AchievementTeamUser = {
+  userId: string
+  userName: string
+}
+
 export type AchievementsPageData = {
   currentUserId: string
   isManager: boolean
@@ -25,6 +30,7 @@ export type AchievementsPageData = {
   currentWeekEndDate: string
   myEntries: WeeklyAchievementEntry[]
   teamGroups: EmployeeWeeklyAchievementGroup[]
+  teamUsers: AchievementTeamUser[]
 }
 
 export function startOfWeekMonday(input: Date) {

@@ -36,7 +36,7 @@ function statusVariant(status: TaskStatus) {
   return "destructive"
 }
 
-export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
+export function TasksPageClient({ embedded = false, view = "personal" }: { embedded?: boolean; view?: "personal" | "manager" }) {
   const [data, setData] = useState<TasksPageData | null>(null)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,17 +67,17 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const stats = useMemo(() => {
-    const assignedTasks = data?.assignedTasks ?? []
-    const unreadNotifications = (data?.notifications ?? []).filter((notification) => !notification.isRead).length
-    const dueSoon = assignedTasks.filter((task) => task.status !== "completed" && new Date(task.dueAt).getTime() - Date.now() <= (1000 * 60 * 60 * 24) && new Date(task.dueAt).getTime() > Date.now()).length
+    const sourceTasks = view === "manager" ? (data?.managedTasks ?? []) : (data?.assignedTasks ?? [])
+    const unreadNotifications = view === "manager" ? 0 : (data?.notifications ?? []).filter((notification) => !notification.isRead).length
+    const dueSoon = sourceTasks.filter((task) => task.status !== "completed" && new Date(task.dueAt).getTime() - Date.now() <= (1000 * 60 * 60 * 24) && new Date(task.dueAt).getTime() > Date.now()).length
     return {
-      total: assignedTasks.length,
-      inProgress: assignedTasks.filter((task) => task.status === "in_progress").length,
-      completed: assignedTasks.filter((task) => task.status === "completed").length,
+      total: sourceTasks.length,
+      inProgress: sourceTasks.filter((task) => task.status === "in_progress").length,
+      completed: sourceTasks.filter((task) => task.status === "completed").length,
       unreadNotifications,
       dueSoon,
     }
-  }, [data])
+  }, [data, view])
 
   function runAction(task: () => Promise<void>) {
     setMessage(null)
@@ -179,8 +179,8 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
         <div className="rounded-[2rem] border border-white/70 bg-white/95 p-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-4">
             <div className="text-right">
-              <h1 className="text-3xl font-bold text-foreground">{data.isManager ? "مهام الموظفين" : "المهام"}</h1>
-              <p className="mt-2 text-sm leading-7 text-muted-foreground">متابعة المهام الموكلة لك، تحديث حالتها، واستلام إشعارات عند إضافة مهام جديدة أو قبل موعد التسليم.</p>
+              <h1 className="text-3xl font-bold text-foreground">{view === "manager" ? "مهام الموظفين" : "مهامي"}</h1>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">{view === "manager" ? "إسناد المهام للموظفين ومتابعة حالاتها وموعد تسليمها من صفحة مستقلة مخصصة للإدارة." : "متابعة المهام الموكلة لك، تحديث حالتها، واستلام إشعارات عند إضافة مهام جديدة أو قبل موعد التسليم."}</p>
             </div>
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><ClipboardList className="h-7 w-7" /></div>
           </div>
@@ -188,23 +188,23 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
 
         {message ? <Alert className={message.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}><AlertTitle>{message.type === "success" ? "تم تنفيذ العملية" : "يوجد تنبيه"}</AlertTitle><AlertDescription>{message.text}</AlertDescription></Alert> : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className={`grid gap-4 ${view === "manager" ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-5"}`}>
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">كل المهام</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.total}</p></CardContent></Card>
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">قيد التنفيذ</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.inProgress}</p></CardContent></Card>
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">منجزة</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.completed}</p></CardContent></Card>
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">موعدها قريب</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.dueSoon}</p></CardContent></Card>
-          <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">إشعارات غير مقروءة</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.unreadNotifications}</p></CardContent></Card>
+          {view === "personal" ? <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">إشعارات غير مقروءة</p><p className="mt-2 text-3xl font-bold text-foreground">{stats.unreadNotifications}</p></CardContent></Card> : null}
         </div>
 
-        <Tabs defaultValue="my_tasks" className="gap-4">
+        <Tabs defaultValue={view === "manager" ? "assign_task" : "my_tasks"} className="gap-4">
           <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
-            <TabsTrigger value="my_tasks" className="rounded-xl px-4 py-2">مهامي</TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-xl px-4 py-2">التنبيهات</TabsTrigger>
-            {data.isManager ? <TabsTrigger value="assign_task" className="rounded-xl px-4 py-2">إضافة مهمة</TabsTrigger> : null}
-            {data.isManager ? <TabsTrigger value="team_tasks" className="rounded-xl px-4 py-2">مهام الموظفين</TabsTrigger> : null}
+            {view === "personal" ? <TabsTrigger value="my_tasks" className="rounded-xl px-4 py-2">مهامي</TabsTrigger> : null}
+            {view === "personal" ? <TabsTrigger value="notifications" className="rounded-xl px-4 py-2">التنبيهات</TabsTrigger> : null}
+            {view === "manager" && data.isManager ? <TabsTrigger value="assign_task" className="rounded-xl px-4 py-2">إضافة مهمة</TabsTrigger> : null}
+            {view === "manager" && data.isManager ? <TabsTrigger value="team_tasks" className="rounded-xl px-4 py-2">مهام الموظفين</TabsTrigger> : null}
           </TabsList>
 
-          <TabsContent value="my_tasks" className="space-y-4">
+          {view === "personal" ? <TabsContent value="my_tasks" className="space-y-4">
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
                 <CardTitle>جميع المهام الموكلة إليك</CardTitle>
@@ -247,9 +247,9 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> : null}
 
-          <TabsContent value="notifications" className="space-y-4">
+          {view === "personal" ? <TabsContent value="notifications" className="space-y-4">
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
                 <CardTitle>تنبيهات المهام</CardTitle>
@@ -264,9 +264,9 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
                 ))}
               </CardContent>
             </Card>
-          </TabsContent>
+          </TabsContent> : null}
 
-          {data.isManager ? (
+          {view === "manager" && data.isManager ? (
             <TabsContent value="assign_task" className="space-y-4">
               <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
                 <CardHeader>
@@ -284,7 +284,7 @@ export function TasksPageClient({ embedded = false }: { embedded?: boolean }) {
             </TabsContent>
           ) : null}
 
-          {data.isManager ? (
+          {view === "manager" && data.isManager ? (
             <TabsContent value="team_tasks" className="space-y-4">
               <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
                 <CardHeader>

@@ -15,24 +15,6 @@ type DashboardGroup = {
   items: DashboardItem[]
 }
 
-function getContextualDashboardItem(item: DashboardItem, isManager: boolean): DashboardItem {
-  if (item.slug === "staff_achievements") {
-    return {
-      ...item,
-      label: isManager ? "إنجازات الموظفين" : "إنجازات الموظف",
-    }
-  }
-
-  if (item.slug === "tasks") {
-    return {
-      ...item,
-      label: isManager ? "مهام الموظفين" : "المهام",
-    }
-  }
-
-  return item
-}
-
 export const dashboardSections: DashboardGroup[] = [
   {
     title: "البيانات",
@@ -43,6 +25,20 @@ export const dashboardSections: DashboardGroup[] = [
         description: "نقطة البداية لترتيب بيانات الإدارة قبل نشر أي تحديثات.",
         permission: "preparation",
           autoAccess: true,
+      },
+      {
+        slug: "tasks",
+        label: "مهامي",
+        description: "متابعة المهام الشخصية المسندة لك وتحديث حالتها وتنبيهاتها.",
+        permission: "tasks",
+        autoAccess: true,
+      },
+      {
+        slug: "my_achievements",
+        label: "إنجازاتي",
+        description: "رفع إنجازاتك الأسبوعية ومراجعة إنجازاتك السابقة.",
+        permission: "staff_achievements",
+        autoAccess: true,
       },
     ],
   },
@@ -57,18 +53,16 @@ export const dashboardSections: DashboardGroup[] = [
         managerOnly: true,
       },
       {
-        slug: "staff_achievements",
-        label: "إنجازات الموظفين",
-        description: "متابعة إنجازات الموظفين الأسبوعية وعرض جميع المدخلات للمدير حسب الأسبوع المحدد.",
-        permission: "staff_achievements",
-          autoAccess: true,
+        slug: "staff_tasks",
+        label: "مهام الموظفين",
+        description: "إدارة مهام الموظفين، إسنادها، ومتابعة حالاتها داخل لوحة التحكم.",
+        permission: "tasks",
       },
       {
-        slug: "tasks",
-        label: "المهام",
-        description: "إضافة المهام من المدير ومتابعة جميع المهام أو المهام الموكلة داخل لوحة التحكم.",
-        permission: "tasks",
-          autoAccess: true,
+        slug: "staff_achievements",
+        label: "إنجازات الموظفين",
+        description: "متابعة إنجازات الموظفين الأسبوعية حسب الموظف والأسبوع المحدد.",
+        permission: "staff_achievements",
       },
     ],
   },
@@ -217,13 +211,8 @@ export function getDashboardSection(slug: string) {
 }
 
 export function filterDashboardSections(permissions: Array<DashboardPermissionKey | "*">) {
-  const isManager = permissions.includes("*")
-
   if (permissions.includes("*")) {
-    return dashboardSections.map((group) => ({
-      ...group,
-      items: group.items.map((item) => getContextualDashboardItem(item, isManager)),
-    }))
+    return dashboardSections
   }
 
   return dashboardSections
@@ -231,7 +220,6 @@ export function filterDashboardSections(permissions: Array<DashboardPermissionKe
       ...group,
       items: group.items
           .filter((item) => item.autoAccess || (!item.managerOnly && permissions.includes(item.permission)))
-        .map((item) => getContextualDashboardItem(item, isManager)),
     }))
     .filter((group) => group.items.length > 0)
 }

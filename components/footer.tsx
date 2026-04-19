@@ -3,6 +3,10 @@ import { Mail, MapPin, Phone } from "lucide-react"
 
 import { getSiteSectionContent } from "@/lib/site-content"
 
+function getWeightClass(weight: "normal" | "bold") {
+  return weight === "bold" ? "font-extrabold" : "font-normal"
+}
+
 export async function Footer() {
   const content = await getSiteSectionContent("footer")
   const logo = await getSiteSectionContent("logo")
@@ -21,8 +25,8 @@ export async function Footer() {
                     <img src={logo.logo} alt={logo.alt} className="h-full w-full object-contain" />
                   </div>
                   <div className="text-right">
-                    <h3 className="text-lg font-extrabold text-foreground">{arabicName}</h3>
-                    <p className="mt-1 text-xs font-semibold tracking-[0.02em] text-muted-foreground" dir="ltr">{englishName}</p>
+                    <h3 className={`text-lg ${getWeightClass(logo.arabicFontWeight)}`} style={{ color: logo.textColor }}>{arabicName}</h3>
+                    <p className={`mt-1 text-xs tracking-[0.02em] ${getWeightClass(logo.englishFontWeight)}`} style={{ color: logo.textColor }} dir="ltr">{englishName}</p>
                   </div>
                 </>
               ) : (

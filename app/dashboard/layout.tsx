@@ -6,5 +6,5 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const user = await requireAdminUser()
   const logo = await getSiteSectionContent("logo")
 
-  return <AdminDashboardShell userId={user.id} userName={user.name} userPermissions={user.permissions} userTitle={user.title} logoUrl={logo.logo} logoAlt={logo.alt} logoArabicName={logo.arabicName} logoEnglishName={logo.englishName}>{children}</AdminDashboardShell>
+  return <AdminDashboardShell userId={user.id} userName={user.name} userPermissions={user.permissions} userTitle={user.title} logoUrl={logo.logo} logoAlt={logo.alt} logoArabicName={logo.arabicName} logoEnglishName={logo.englishName} logoTextColor={logo.textColor} logoArabicFontWeight={logo.arabicFontWeight} logoEnglishFontWeight={logo.englishFontWeight}>{children}</AdminDashboardShell>
 }

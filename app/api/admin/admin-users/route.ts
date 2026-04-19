@@ -14,7 +14,7 @@ const adminUserSchema = z.object({
   phone: z.string().trim().min(8),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   password: z.string().min(8),
-  nationalId: z.string().trim().min(6).max(20),
+  nationalId: z.string().trim().min(1),
   birthDate: z.string().trim().min(8),
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
@@ -28,7 +28,7 @@ const updateAdminUserSchema = z.object({
   title: z.string().trim().min(2),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   password: z.string().min(8).optional(),
-  nationalId: z.string().trim().min(6).max(20),
+  nationalId: z.string().trim().min(1),
   birthDate: z.string().trim().min(8),
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
@@ -156,175 +156,183 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, response } = await requirePermissionsAdmin()
-  if (response || !user) return response
+  try {
+    const { user, response } = await requirePermissionsAdmin()
+    if (response || !user) return response
 
-  const body = await request.json()
-  const parsed = adminUserSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" }, { status: 400 })
-  }
+    const body = await request.json()
+    const parsed = adminUserSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" }, { status: 400 })
+    }
 
-  const normalizedPhone = normalizePhone(parsed.data.phone)
-  if (!isPhoneValid(normalizedPhone)) {
-    return NextResponse.json({ error: "رقم الجوال غير صحيح" }, { status: 400 })
-  }
+    const normalizedPhone = normalizePhone(parsed.data.phone)
+    if (!isPhoneValid(normalizedPhone)) {
+      return NextResponse.json({ error: "رقم الجوال غير صحيح" }, { status: 400 })
+    }
 
-  const supabase = createSupabaseAdminClient()
-  const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
-  if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
-    return schemaResponse()
-  }
+    const supabase = createSupabaseAdminClient()
+    const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
+    if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
+      return schemaResponse()
+    }
 
-  const passwordHash = await hash(parsed.data.password, 12)
-  const normalizedEmail = parsed.data.email ? parsed.data.email.toLowerCase() : null
+    const passwordHash = await hash(parsed.data.password, 12)
+    const normalizedEmail = parsed.data.email ? parsed.data.email.toLowerCase() : null
 
-  const { data: insertedUser, error } = await supabase
-    .from("app_users")
-    .insert({
-      full_name: parsed.data.name,
-      phone: normalizedPhone,
-      email: normalizedEmail,
-      password_hash: passwordHash,
-      role: "admin",
-      phone_verified_at: new Date().toISOString(),
-    })
-    .select("id,full_name,phone,email")
-    .single<{ id: string; full_name: string; phone: string; email: string | null }>()
+    const { data: insertedUser, error } = await supabase
+      .from("app_users")
+      .insert({
+        full_name: parsed.data.name,
+        phone: normalizedPhone,
+        email: normalizedEmail,
+        password_hash: passwordHash,
+        role: "admin",
+        phone_verified_at: new Date().toISOString(),
+      })
+      .select("id,full_name,phone,email")
+      .single<{ id: string; full_name: string; phone: string; email: string | null }>()
 
-  if (error || !insertedUser) {
-    return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
-  }
+    if (error || !insertedUser) {
+      return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
+    }
 
-  const { error: profileError } = await supabase.from("employee_profiles").upsert(
-    {
-      user_id: insertedUser.id,
-      national_id: parsed.data.nationalId,
-      birth_date: parsed.data.birthDate,
-      gender: parsed.data.gender,
-      marital_status: parsed.data.maritalStatus,
-      job_rank: parsed.data.jobRank,
-      created_by: user.id,
-      updated_by: user.id,
-    },
-    { onConflict: "user_id" },
-  )
-
-  if (profileError) {
-    await supabase.from("app_users").delete().eq("id", insertedUser.id)
-    return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
-  }
-
-  const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
-    {
-      user_id: insertedUser.id,
-      updated_by: user.id,
-    },
-    { onConflict: "user_id" },
-  )
-
-  if (balanceError && !isSchemaMissing(balanceError)) {
-    return NextResponse.json({ error: getReadableDatabaseError(balanceError) }, { status: 400 })
-  }
-
-  const permissionsContent = await getSiteSectionContent("permissions")
-  const permissions = parsed.data.permissions as Array<DashboardPermissionKey | "*">
-  await upsertSiteSectionContent("permissions", {
-    accounts: [
-      ...permissionsContent.accounts,
+    const { error: profileError } = await supabase.from("employee_profiles").upsert(
       {
-        userId: insertedUser.id,
+        user_id: insertedUser.id,
+        national_id: parsed.data.nationalId,
+        birth_date: parsed.data.birthDate,
+        gender: parsed.data.gender,
+        marital_status: parsed.data.maritalStatus,
+        job_rank: parsed.data.jobRank,
+        created_by: user.id,
+        updated_by: user.id,
+      },
+      { onConflict: "user_id" },
+    )
+
+    if (profileError) {
+      await supabase.from("app_users").delete().eq("id", insertedUser.id)
+      return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
+    }
+
+    const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
+      {
+        user_id: insertedUser.id,
+        updated_by: user.id,
+      },
+      { onConflict: "user_id" },
+    )
+
+    if (balanceError && !isSchemaMissing(balanceError)) {
+      return NextResponse.json({ error: getReadableDatabaseError(balanceError) }, { status: 400 })
+    }
+
+    const permissionsContent = await getSiteSectionContent("permissions")
+    const permissions = parsed.data.permissions as Array<DashboardPermissionKey | "*">
+    await upsertSiteSectionContent("permissions", {
+      accounts: [
+        ...permissionsContent.accounts,
+        {
+          userId: insertedUser.id,
+          title: parsed.data.title,
+          permissions,
+        },
+      ],
+    })
+
+    return NextResponse.json({
+      account: {
+        id: insertedUser.id,
+        name: insertedUser.full_name,
+        phone: insertedUser.phone,
+        email: insertedUser.email,
         title: parsed.data.title,
         permissions,
+        nationalId: parsed.data.nationalId,
+        birthDate: parsed.data.birthDate,
+        gender: parsed.data.gender,
+        maritalStatus: parsed.data.maritalStatus,
+        jobRank: parsed.data.jobRank,
       },
-    ],
-  })
-
-  return NextResponse.json({
-    account: {
-      id: insertedUser.id,
-      name: insertedUser.full_name,
-      phone: insertedUser.phone,
-      email: insertedUser.email,
-      title: parsed.data.title,
-      permissions,
-      nationalId: parsed.data.nationalId,
-      birthDate: parsed.data.birthDate,
-      gender: parsed.data.gender,
-      maritalStatus: parsed.data.maritalStatus,
-      jobRank: parsed.data.jobRank,
-    },
-  })
+    })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "تعذر إنشاء الحساب الإداري" }, { status: 500 })
+  }
 }
 
 export async function PATCH(request: Request) {
-  const { user, response } = await requirePermissionsAdmin()
-  if (response || !user) return response
+  try {
+    const { user, response } = await requirePermissionsAdmin()
+    if (response || !user) return response
 
-  const body = await request.json()
-  const parsed = updateAdminUserSchema.safeParse(body)
+    const body = await request.json()
+    const parsed = updateAdminUserSchema.safeParse(body)
 
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" }, { status: 400 })
-  }
-
-  const supabase = createSupabaseAdminClient()
-  const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
-  if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
-    return schemaResponse()
-  }
-
-  const updates: Record<string, string | null> = {}
-
-  if (parsed.data.name) updates.full_name = parsed.data.name
-  if (parsed.data.email !== undefined) updates.email = parsed.data.email ? parsed.data.email.toLowerCase() : null
-  if (parsed.data.password) updates.password_hash = await hash(parsed.data.password, 12)
-
-  if (Object.keys(updates).length > 0) {
-    const { error } = await supabase.from("app_users").update(updates).eq("id", parsed.data.userId).eq("role", "admin")
-    if (error) {
-      return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" }, { status: 400 })
     }
+
+    const supabase = createSupabaseAdminClient()
+    const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
+    if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
+      return schemaResponse()
+    }
+
+    const updates: Record<string, string | null> = {}
+
+    if (parsed.data.name) updates.full_name = parsed.data.name
+    if (parsed.data.email !== undefined) updates.email = parsed.data.email ? parsed.data.email.toLowerCase() : null
+    if (parsed.data.password) updates.password_hash = await hash(parsed.data.password, 12)
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase.from("app_users").update(updates).eq("id", parsed.data.userId).eq("role", "admin")
+      if (error) {
+        return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
+      }
+    }
+
+    const { error: profileError } = await supabase.from("employee_profiles").upsert(
+      {
+        user_id: parsed.data.userId,
+        national_id: parsed.data.nationalId,
+        birth_date: parsed.data.birthDate,
+        gender: parsed.data.gender,
+        marital_status: parsed.data.maritalStatus,
+        job_rank: parsed.data.jobRank,
+        updated_by: user.id,
+      },
+      { onConflict: "user_id" },
+    )
+
+    if (profileError) {
+      return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
+    }
+
+    const permissionsContent = await getSiteSectionContent("permissions")
+    const permissions = parsed.data.permissions as Array<DashboardPermissionKey | "*">
+    const hasExistingAccount = permissionsContent.accounts.some((account) => account.userId === parsed.data.userId)
+    await upsertSiteSectionContent("permissions", {
+      accounts: hasExistingAccount
+        ? permissionsContent.accounts.map((account) =>
+            account.userId === parsed.data.userId
+              ? { ...account, title: parsed.data.title, permissions }
+              : account,
+          )
+        : [
+            ...permissionsContent.accounts,
+            {
+              userId: parsed.data.userId,
+              title: parsed.data.title,
+              permissions,
+            },
+          ],
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "تعذر تحديث الحساب الإداري" }, { status: 500 })
   }
-
-  const { error: profileError } = await supabase.from("employee_profiles").upsert(
-    {
-      user_id: parsed.data.userId,
-      national_id: parsed.data.nationalId,
-      birth_date: parsed.data.birthDate,
-      gender: parsed.data.gender,
-      marital_status: parsed.data.maritalStatus,
-      job_rank: parsed.data.jobRank,
-      updated_by: user.id,
-    },
-    { onConflict: "user_id" },
-  )
-
-  if (profileError) {
-    return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
-  }
-
-  const permissionsContent = await getSiteSectionContent("permissions")
-  const permissions = parsed.data.permissions as Array<DashboardPermissionKey | "*">
-  const hasExistingAccount = permissionsContent.accounts.some((account) => account.userId === parsed.data.userId)
-  await upsertSiteSectionContent("permissions", {
-    accounts: hasExistingAccount
-      ? permissionsContent.accounts.map((account) =>
-          account.userId === parsed.data.userId
-            ? { ...account, title: parsed.data.title, permissions }
-            : account,
-        )
-      : [
-          ...permissionsContent.accounts,
-          {
-            userId: parsed.data.userId,
-            title: parsed.data.title,
-            permissions,
-          },
-        ],
-  })
-
-  return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(request: Request) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Minimize2, Paperclip, RefreshCcw, SendHorizontal, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, SendHorizontal, X } from "lucide-react"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import type { AdminChatAttachment, AdminChatData, AdminChatMessage } from "@/lib/admin-chat"
@@ -211,12 +211,6 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
               <div className="flex items-center gap-2">
                 <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => setOpen(false)} aria-label="إغلاق الشات">
                   <X className="h-4 w-4" />
-                </Button>
-                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => setOpen(false)} aria-label="تصغير الشات">
-                  <Minimize2 className="h-4 w-4" />
-                </Button>
-                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => void loadChat()} disabled={isLoading || isPending} aria-label="تحديث المحادثة">
-                  {isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                 </Button>
               </div>
 

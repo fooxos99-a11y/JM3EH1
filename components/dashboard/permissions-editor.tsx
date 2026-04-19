@@ -132,15 +132,15 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
       <button
         type="button"
         onClick={toggleAllPermissions}
-        className={`flex w-full items-center justify-between rounded-[1.15rem] border px-4 py-3 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_12px_25px_rgba(1,154,151,0.1)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+        className={`flex w-full items-center justify-between rounded-[1rem] border px-3.5 py-2.5 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_10px_22px_rgba(1,154,151,0.08)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
       >
-        <span className={`flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
+        <div className="flex items-center gap-2">
+          <p className="text-base font-bold text-foreground">كل الصلاحيات</p>
+          <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{allSelectablePermissions.length}</span>
+        </div>
+        <span className={`flex h-5.5 w-5.5 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
           <Check className="h-3.5 w-3.5" />
         </span>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{allSelectablePermissions.length}</span>
-          <p className="font-bold text-foreground">كل الصلاحيات</p>
-        </div>
       </button>
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -152,29 +152,29 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
           return (
             <div
               key={bundle.id}
-              className={`rounded-[1.15rem] border px-3 py-3 text-right transition-all duration-300 ${isSelected ? "border-primary/30 bg-primary/10 shadow-[0_12px_25px_rgba(1,154,151,0.08)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+              className={`rounded-[1rem] border px-2.5 py-2.5 text-right transition-all duration-300 ${isSelected ? "border-primary/30 bg-primary/10 shadow-[0_10px_22px_rgba(1,154,151,0.06)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
             >
               <div className="flex items-center justify-between gap-2">
+                <button type="button" onClick={() => toggleBundleExpansion(bundle)} className="flex flex-1 items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{bundle.count}</span>
+                    <p className="text-[15px] font-bold text-foreground">{bundle.title}</p>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                </button>
+
                 <button
                   type="button"
                   onClick={() => toggleBundle(bundle)}
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}
+                  className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}
                   aria-label={`تحديد ${bundle.title}`}
                 >
                   <Check className="h-3.5 w-3.5" />
                 </button>
-
-                <button type="button" onClick={() => toggleBundleExpansion(bundle)} className="flex flex-1 items-center justify-between gap-3">
-                  <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{bundle.count}</span>
-                    <p className="font-bold text-foreground">{bundle.title}</p>
-                  </div>
-                </button>
               </div>
 
               {isExpanded ? (
-                <div className="mt-3 space-y-1 border-t border-border/50 pt-3">
+                <div className="mt-2.5 space-y-1 border-t border-border/50 pt-2.5">
                   {bundle.items.map((item) => {
                     const isChecked = isAll || selectedPermissions.includes(item.permission)
 
@@ -183,12 +183,12 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
                         key={`${bundle.id}-${item.permission}`}
                         type="button"
                         onClick={() => toggleSinglePermission(item.permission)}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors hover:bg-white/60"
+                        className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-sm transition-colors hover:bg-white/60"
                       >
+                        <span className="font-medium text-foreground">{item.label}</span>
                         <span className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${isChecked ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
                           <Check className="h-3 w-3" />
                         </span>
-                        <span className="font-medium text-foreground">{item.label}</span>
                       </button>
                     )
                   })}
@@ -198,10 +198,6 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
           )
         })}
       </div>
-
-      {selectedPermissions.length === 0 && !isAll ? (
-        <p className="text-sm text-muted-foreground">يمكن ترك الصلاحيات الإضافية فارغة، وستبقى له أدواته الأساسية تلقائيًا.</p>
-      ) : null}
     </div>
   )
 }
@@ -254,8 +250,27 @@ export function PermissionsEditor() {
 
   const managerCount = useMemo(() => accounts.filter((account) => account.permissions.includes("*")).length, [accounts])
 
+  function validateCreateForm() {
+    if (!form.name.trim()) return "أدخل اسم الحساب"
+    if (!form.title.trim()) return "أدخل المسمى الوظيفي"
+    if (!form.phone.trim()) return "أدخل رقم الجوال"
+    if (!form.nationalId.trim()) return "أدخل رقم الهوية"
+    if (!form.birthDate.trim()) return "أدخل تاريخ الميلاد"
+    if (!form.jobRank.trim()) return "أدخل الرتبة الوظيفية"
+    if (form.password.length < 8) return "كلمة المرور يجب أن تكون 8 أحرف على الأقل"
+
+    return null
+  }
+
   function handleCreate() {
     setMessage(null)
+
+    const validationError = validateCreateForm()
+    if (validationError) {
+      setMessage({ type: "error", text: validationError })
+      return
+    }
+
     startTransition(async () => {
       try {
         const response = await fetch("/api/admin/admin-users", {
@@ -349,6 +364,13 @@ export function PermissionsEditor() {
 
   return (
     <section className="space-y-6">
+      {message ? (
+        <Alert className={message.type === "success" ? "rounded-[1.25rem] border-emerald-200 bg-emerald-50/85 text-emerald-900" : "rounded-[1.25rem] border-red-200 bg-red-50/85 text-red-900"}>
+          <AlertTitle>{message.type === "success" ? "تمت العملية بنجاح" : "تعذر تنفيذ العملية"}</AlertTitle>
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
         <div className="mb-6 text-right">
           <h2 className="text-lg font-bold text-foreground">إضافة حساب إداري</h2>
@@ -392,13 +414,6 @@ export function PermissionsEditor() {
           </div>
         ))}
       </div>
-
-      {message ? (
-        <Alert className={message.type === "success" ? "rounded-[1.25rem] border-emerald-200 bg-emerald-50/85 text-emerald-900" : "rounded-[1.25rem] border-red-200 bg-red-50/85 text-red-900"}>
-          <AlertTitle>{message.type === "success" ? "تمت العملية بنجاح" : "تعذر تنفيذ العملية"}</AlertTitle>
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
-      ) : null}
     </section>
   )
 }

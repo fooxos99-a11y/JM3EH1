@@ -16,7 +16,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isGovernanceOpen, setIsGovernanceOpen] = useState(false)
   const [isMobileGovernanceOpen, setIsMobileGovernanceOpen] = useState(false)
-  const [expandedGovernanceHref, setExpandedGovernanceHref] = useState<string | null>(governanceNavigation[0]?.href ?? null)
+  const [expandedGovernanceHref, setExpandedGovernanceHref] = useState<string | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -105,8 +105,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </button>
 
-              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[360px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
-                <div className="space-y-2 rounded-[1.75rem] border border-primary/20 bg-[#173f40] p-3 text-right shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
+              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
+                <div className="space-y-1.5 rounded-[1.4rem] border border-slate-200/90 bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)] backdrop-blur-xl">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)
                       const isExpanded = expandedGovernanceHref === item.href
@@ -116,7 +116,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           {hasChildren ? (
                             <button
                               type="button"
-                              className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10"}`}
+                              className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
                               <span>{item.label}</span>
@@ -125,7 +125,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           ) : (
                             <Link
                               href={item.href}
-                              className="flex items-center justify-between rounded-full bg-transparent px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:bg-white/10"
+                              className="flex items-center justify-between rounded-full bg-transparent px-4 py-2.5 text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
                               <span>{item.label}</span>
@@ -134,16 +134,15 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           )}
 
                           {hasChildren && isExpanded ? (
-                            <div className="space-y-1 pr-5">
+                            <div className="space-y-1 pr-3">
                               {item.children?.map((child) => (
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  className="flex items-center justify-between rounded-full px-5 py-2 text-sm font-medium text-white/90 transition-all duration-300 hover:bg-white/10 hover:text-white"
+                                  className="flex items-center justify-end rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
                                   onClick={() => setIsGovernanceOpen(false)}
                                 >
                                   <span>{child.label}</span>
-                                  <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                                 </Link>
                               ))}
                             </div>
@@ -188,10 +187,10 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </Link>
             ))}
 
-            <div className="mt-2 rounded-[1.5rem] border border-white/15 bg-[#173f40] p-2 shadow-[0_20px_50px_rgba(15,23,42,0.2)]">
+            <div className="mt-2 rounded-[1.35rem] border border-slate-200/90 bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-white"
+                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-slate-900 transition-all duration-300 hover:bg-slate-100/90"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
@@ -201,11 +200,11 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
                 <div className="mt-2 space-y-2 px-2 pb-2">
                   {governanceNavigation.map((item) => (
-                    <div key={item.href} className="rounded-[1.25rem] border border-white/10 bg-[#173f40] p-2">
+                    <div key={item.href} className="rounded-[1.1rem] border border-slate-200/80 bg-slate-50/90 p-1.5">
                       {item.children?.length ? (
                         <button
                           type="button"
-                          className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10"}`}
+                          className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
                           <span>{item.label}</span>
@@ -215,7 +214,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         <div className="flex justify-end">
                           <Link
                             href={item.href}
-                            className="inline-flex items-center rounded-full bg-transparent px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:bg-white/10"
+                            className="inline-flex items-center rounded-full bg-transparent px-4 py-2.5 text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-white/90"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -226,19 +225,18 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         </div>
                       )}
                       {item.children?.length && expandedGovernanceHref === item.href ? (
-                        <div className="mt-1 space-y-1 pr-5">
+                        <div className="mt-1 space-y-1 pr-3">
                           {item.children.map((child) => (
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="flex items-center justify-between rounded-full px-5 py-2 text-sm font-medium text-white/90 transition-all duration-300 hover:bg-white/10 hover:text-white"
+                              className="flex items-center justify-end rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)
                               }}
                             >
                               {child.label}
-                              <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                             </Link>
                           ))}
                         </div>

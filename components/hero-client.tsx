@@ -57,10 +57,17 @@ export function HeroClient({ content }: HeroClientProps) {
     <section ref={containerRef} className="relative min-h-screen w-full overflow-hidden">
       {slides.map((slide, index) => (
         <div key={slide.id} className={`absolute inset-0 transition-all duration-1000 ease-out ${index === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}>
-          <div className="absolute inset-0 bg-cover bg-center transition-transform duration-100 blur-sm" style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY}px) scale(1.12)` }} />
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-transform duration-100 blur-sm"
+            style={{
+              backgroundImage: `url(${slide.image})`,
+              backgroundPosition: "center 32%",
+              transform: `translateY(${scrollY * 0.72}px) scale(1.04)`,
+            }}
+          />
           <div
             className="absolute inset-0 bg-contain bg-center bg-no-repeat transition-transform duration-100"
-            style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY * 0.35}px)` }}
+            style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY * 0.22}px) scale(0.98)` }}
           />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(7,24,22,0.36),rgba(18,88,78,0.14),rgba(7,24,22,0.4))]" />
         </div>

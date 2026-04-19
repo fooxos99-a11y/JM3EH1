@@ -195,7 +195,7 @@ export const dashboardSections: DashboardGroup[] = [
     items: [
       {
         slug: "permissions",
-        label: "الصلاحيات",
+        label: "ادارة الموظفين",
         description: "إنشاء الحسابات الإدارية وتحديد الصلاحيات لكل حساب.",
         permission: "permissions",
       },

@@ -38,7 +38,7 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     notFound()
   }
 
-  const currentUser = await requireAdminUser(currentSection.permission)
+  const currentUser = await requireAdminUser(currentSection.autoAccess ? undefined : currentSection.permission)
 
   if (currentSection.managerOnly && !currentUser.permissions.includes("*")) {
     redirect("/dashboard")

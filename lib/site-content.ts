@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_noStore as noStore } from "next/cache"
 import { z } from "zod"
 
 import { dashboardPermissionKeys, type DashboardPermissionKey } from "@/lib/dashboard-permissions"
@@ -806,6 +807,8 @@ export const siteSectionKeys = Object.keys(sectionSchemas) as SiteSectionKey[]
 export const governanceSiteSectionKeys = governanceSectionKeys as SiteSectionKey[]
 
 export async function getSiteSectionContent<T extends SectionKey>(section: T): Promise<(typeof defaultContent)[T]> {
+  noStore()
+
   const supabase = createSupabaseAdminClient()
   const { data } = await supabase.from("site_content").select("content").eq("section_key", section).maybeSingle<{ content: unknown }>()
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bell, ChevronDown, Menu, ShieldCheck } from "lucide-react"
+import { Bell, ChevronDown, Menu } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { AdminChatPanel } from "@/components/admin-chat-panel"
@@ -120,15 +120,6 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
 
         <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8 lg:pl-0">
           <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
-              <Button variant="outline" size="icon" className="relative h-9 w-9 rounded-full border-primary/15 bg-white/80" aria-label="الإشعارات">
-                <Bell className="h-5 w-5" />
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500" />
-              </Button>
-              <ShieldCheck className="h-4 w-4" />
-              {userTitle ?? "حساب إداري"}
-            </div>
-
             <div className="flex items-center gap-3">
               <Sheet>
                 <SheetTrigger asChild>
@@ -147,6 +138,17 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
               <div className="text-right">
                 <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
                 <p className="text-sm font-bold text-foreground">{userName}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="icon" className="relative h-10 w-10 rounded-full border-primary/15 bg-white/80" aria-label="الإشعارات">
+                <Bell className="h-5 w-5" />
+                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500" />
+              </Button>
+              <div className="text-right">
+                <p className="text-xs font-medium text-muted-foreground">{userTitle ?? "حساب إداري"}</p>
+                <p className="text-sm font-bold text-foreground">لوحة التحكم</p>
               </div>
             </div>
           </div>

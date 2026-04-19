@@ -170,7 +170,7 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
         <div className="rounded-[2rem] border border-white/70 bg-white/95 p-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
           <div className="flex items-start justify-between gap-4">
             <div className="text-right">
-              <h1 className="text-3xl font-bold text-foreground">الإنجازات</h1>
+              <h1 className="text-3xl font-bold text-foreground">{data.isManager ? "إنجازات الموظفين" : "إنجازات الموظف"}</h1>
               <p className="mt-2 text-sm leading-7 text-muted-foreground">رفع إنجازاتك أسبوعيًا كنص وصورة، مع تصفح الأسابيع الماضية. المدير يمكنه مشاهدة جميع إنجازات الموظفين للأسبوع المحدد بشكل منظم.</p>
             </div>
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="h-7 w-7" /></div>
@@ -195,7 +195,7 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
 
         <Tabs defaultValue="my_entries" className="gap-4">
           <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
-            <TabsTrigger value="my_entries" className="rounded-xl px-4 py-2">إنجازاتي</TabsTrigger>
+            <TabsTrigger value="my_entries" className="rounded-xl px-4 py-2">إنجازات الموظف</TabsTrigger>
             {data.isManager ? <TabsTrigger value="team_entries" className="rounded-xl px-4 py-2">إنجازات الموظفين</TabsTrigger> : null}
           </TabsList>
 
@@ -223,7 +223,7 @@ export function AchievementsPageClient({ embedded = false }: { embedded?: boolea
 
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>إنجازاتي لهذا الأسبوع</CardTitle>
+                <CardTitle>إنجازات الموظف لهذا الأسبوع</CardTitle>
                 <CardDescription>جميع الإنجازات التي رفعتها في الأسبوع المحدد، مرتبة من الأحدث إلى الأقدم.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

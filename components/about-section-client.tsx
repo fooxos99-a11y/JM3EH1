@@ -68,12 +68,12 @@ export function AboutSectionClient({ content }: { content: AboutContent }) {
                 <div className="absolute bottom-0 left-0 right-0 p-8">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md">
-                      <Eye className="mb-2 h-8 w-8 text-accent" />
+                      <Eye className="mb-2 h-8 w-8 text-primary" />
                       <h4 className="mb-1 text-lg font-bold text-white">{content.visionTitle}</h4>
                       <p className="text-sm text-white/80">{content.visionDescription}</p>
                     </div>
                     <div className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-md">
-                      <Target className="mb-2 h-8 w-8 text-accent" />
+                      <Target className="mb-2 h-8 w-8 text-primary" />
                       <h4 className="mb-1 text-lg font-bold text-white">{content.missionTitle}</h4>
                       <p className="text-sm text-white/80">{content.missionDescription}</p>
                     </div>

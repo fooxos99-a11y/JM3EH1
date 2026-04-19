@@ -73,25 +73,17 @@ export function HeroEditor({ initialContent }: { initialContent: HeroContent }) 
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button type="button" variant="outline" className="rounded-xl" onClick={addSlide}>
-          <Plus className="h-4 w-4" />
-          إضافة شريحة
-        </Button>
-      </div>
-
       <div className="space-y-4">
         {content.slides.map((slide, index) => (
           <div key={slide.id} className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
             <div className="mb-4 flex items-center justify-between">
+              <div className="text-right">
+                <h3 className="text-lg font-bold text-foreground">الشريحة {index + 1}</h3>
+              </div>
               <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeSlide(slide.id)} disabled={content.slides.length === 1}>
                 <Trash2 className="h-4 w-4" />
                 حذف الشريحة
               </Button>
-              <div className="text-right">
-                <h3 className="text-lg font-bold text-foreground">الشريحة {index + 1}</h3>
-                <p className="text-sm text-muted-foreground">الصورة والعنوان الصغير والعنوان الكبير والوصف فقط.</p>
-              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -112,6 +104,13 @@ export function HeroEditor({ initialContent }: { initialContent: HeroContent }) 
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="button" variant="outline" className="rounded-xl" onClick={addSlide}>
+          <Plus className="h-4 w-4" />
+          إضافة شريحة
+        </Button>
       </div>
 
       <div className="flex items-center justify-between gap-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">

@@ -14,6 +14,24 @@ type DashboardGroup = {
   items: DashboardItem[]
 }
 
+function getContextualDashboardItem(item: DashboardItem, isManager: boolean): DashboardItem {
+  if (item.slug === "staff_achievements") {
+    return {
+      ...item,
+      label: isManager ? "إنجازات الموظفين" : "إنجازات الموظف",
+    }
+  }
+
+  if (item.slug === "tasks") {
+    return {
+      ...item,
+      label: isManager ? "مهام الموظفين" : "المهام",
+    }
+  }
+
+  return item
+}
+
 export const dashboardSections: DashboardGroup[] = [
   {
     title: "البيانات",
@@ -24,6 +42,11 @@ export const dashboardSections: DashboardGroup[] = [
         description: "نقطة البداية لترتيب بيانات الإدارة قبل نشر أي تحديثات.",
         permission: "preparation",
       },
+    ],
+  },
+  {
+    title: "الإدارة",
+    items: [
       {
         slug: "preparation-history",
         label: "سجل التحضير الكامل",
@@ -32,16 +55,16 @@ export const dashboardSections: DashboardGroup[] = [
         managerOnly: true,
       },
       {
-        slug: "tasks",
-        label: "المهام",
-        description: "إدارة المهام الموكلة ومتابعة حالتها والتنبيهات المرتبطة بها داخل لوحة التحكم.",
-        permission: "tasks",
-      },
-      {
         slug: "staff_achievements",
         label: "إنجازات الموظفين",
-        description: "متابعة إنجازات الموظفين الأسبوعية ورفعها وعرضها بشكل مرتب حسب الأسبوع.",
+        description: "متابعة إنجازات الموظفين الأسبوعية وعرض جميع المدخلات للمدير حسب الأسبوع المحدد.",
         permission: "staff_achievements",
+      },
+      {
+        slug: "tasks",
+        label: "المهام",
+        description: "إضافة المهام من المدير ومتابعة جميع المهام أو المهام الموكلة داخل لوحة التحكم.",
+        permission: "tasks",
       },
     ],
   },
@@ -190,14 +213,21 @@ export function getDashboardSection(slug: string) {
 }
 
 export function filterDashboardSections(permissions: Array<DashboardPermissionKey | "*">) {
+  const isManager = permissions.includes("*")
+
   if (permissions.includes("*")) {
-    return dashboardSections
+    return dashboardSections.map((group) => ({
+      ...group,
+      items: group.items.map((item) => getContextualDashboardItem(item, isManager)),
+    }))
   }
 
   return dashboardSections
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.managerOnly && permissions.includes(item.permission)),
+      items: group.items
+        .filter((item) => !item.managerOnly && permissions.includes(item.permission))
+        .map((item) => getContextualDashboardItem(item, isManager)),
     }))
     .filter((group) => group.items.length > 0)
 }

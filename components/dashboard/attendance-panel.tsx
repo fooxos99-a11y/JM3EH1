@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { AlertCircle, BriefcaseBusiness, CheckCircle2, LoaderCircle, LogIn, LogOut, MapPin } from "lucide-react"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 
 import { WorkLocationMapPicker } from "@/components/dashboard/work-location-map-picker"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Textarea } from "@/components/ui/textarea"
 import {
   formatDate,
   formatTime,
@@ -56,8 +55,6 @@ function getInitialPermissionForm() {
 export function AttendancePanel({ data, onRefresh, compact = false }: AttendancePanelProps) {
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [advancedPermissionOpen, setAdvancedPermissionOpen] = useState(false)
-  const [permissionForm, setPermissionForm] = useState(getInitialPermissionForm)
   const [locationForm, setLocationForm] = useState({
     name: data.workLocation.name,
     address: data.workLocation.address,
@@ -89,7 +86,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
 
       currentSaudiDate = nextSaudiDate
       setFeedback(null)
-      setPermissionForm(getInitialPermissionForm())
       void onRefresh()
     }, 30000)
 
@@ -150,37 +146,8 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
     })
   }
 
-  function handlePermissionRequest() {
-    runRequest(async () => {
-      const response = await fetch("/api/admin/administrative-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create_request",
-          requestType: "permission",
-          subject: permissionForm.subject.trim() || "استئذان",
-          details: permissionForm.details,
-          requestDate: permissionForm.requestDate,
-          fromTime: permissionForm.fromTime,
-          toTime: permissionForm.toTime,
-        }),
-      })
-
-      const payload = (await response.json()) as { error?: string }
-      if (!response.ok) {
-        throw new Error(payload.error ?? "تعذر تسجيل الاستئذان")
-      }
-
-      setFeedback({ type: "success", text: "تم تسجيل الاستئذان بنجاح" })
-      setPermissionForm(getInitialPermissionForm())
-      setAdvancedPermissionOpen(false)
-      await onRefresh()
-    })
-  }
-
   function handleQuickPermissionRequest() {
     const quickForm = getInitialPermissionForm()
-    setPermissionForm(quickForm)
 
     runRequest(async () => {
       const response = await fetch("/api/admin/administrative-requests", {
@@ -203,7 +170,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
       }
 
       setFeedback({ type: "success", text: "تم إرسال الاستئذان السريع مباشرة" })
-      setPermissionForm(getInitialPermissionForm())
       await onRefresh()
     })
   }
@@ -236,10 +202,13 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
   }
 
   const todayRecord = data.todayAttendance
-  const canClockIn = data.workLocation.isConfigured && !todayRecord?.clockInAt
-  const canClockOut = data.workLocation.isConfigured && Boolean(todayRecord?.clockInAt) && !todayRecord?.clockOutAt
+  const hasClockedIn = Boolean(todayRecord?.clockInAt)
+  const hasClockedOut = Boolean(todayRecord?.clockOutAt)
+  const canClockIn = data.workLocation.isConfigured && !hasClockedIn
+  const canClockOut = data.workLocation.isConfigured && hasClockedIn && !hasClockedOut
   const attendanceAction = canClockIn ? "clock_in" : canClockOut ? "clock_out" : null
-  const attendanceButtonLabel = canClockIn ? "تسجيل حضور" : canClockOut ? "تسجيل انصراف" : "اكتمل تسجيل اليوم"
+  const attendanceButtonLabel = !hasClockedIn ? "تسجيل حضور" : !hasClockedOut ? "تسجيل انصراف" : "اكتمل تسجيل اليوم"
+  const showPermissionButton = hasClockedIn && !hasClockedOut
 
   return (
     <div className="space-y-4">
@@ -284,60 +253,19 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : attendanceAction === "clock_out" ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
               {attendanceButtonLabel}
             </Button>
-            <Button type="button" variant="outline" className="rounded-xl" onClick={handleQuickPermissionRequest} disabled={isPending}>
-              <BriefcaseBusiness className="h-4 w-4" />
-              تسجيل استئذان
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            {data.isManager ? (
-              <Button asChild variant="ghost" className="rounded-xl px-0 text-primary hover:text-primary">
-                <Link href="/dashboard/preparation-history">سجل التحضير الكامل</Link>
+            {showPermissionButton ? (
+              <Button type="button" variant="outline" className="rounded-xl" onClick={handleQuickPermissionRequest} disabled={isPending}>
+                <BriefcaseBusiness className="h-4 w-4" />
+                تسجيل استئذان
               </Button>
-            ) : <span />}
-            <Button type="button" variant="ghost" className="rounded-xl px-0 text-muted-foreground hover:text-foreground" onClick={() => setAdvancedPermissionOpen((current) => !current)}>
-              {advancedPermissionOpen ? "إخفاء النموذج التفصيلي" : "تحتاج استئذانًا بتفاصيل أكثر؟"}
-            </Button>
+            ) : null}
           </div>
-
-          {advancedPermissionOpen ? (
-            <div className="grid gap-4 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2">
-              <div className="space-y-2 text-right md:col-span-2">
-                <Label htmlFor="permission-subject">عنوان الاستئذان</Label>
-                <Input id="permission-subject" value={permissionForm.subject} onChange={(event) => setPermissionForm((current) => ({ ...current, subject: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right md:col-span-2">
-                <Label htmlFor="permission-details">التفاصيل</Label>
-                <Textarea id="permission-details" rows={3} value={permissionForm.details} onChange={(event) => setPermissionForm((current) => ({ ...current, details: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="permission-date">تاريخ الاستئذان</Label>
-                <Input id="permission-date" type="date" value={permissionForm.requestDate} onChange={(event) => setPermissionForm((current) => ({ ...current, requestDate: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="permission-from-time">من الساعة</Label>
-                <Input id="permission-from-time" type="time" value={permissionForm.fromTime} onChange={(event) => setPermissionForm((current) => ({ ...current, fromTime: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="permission-to-time">إلى الساعة</Label>
-                <Input id="permission-to-time" type="time" value={permissionForm.toTime} onChange={(event) => setPermissionForm((current) => ({ ...current, toTime: event.target.value }))} />
-              </div>
-              <div className="flex items-end justify-end">
-                <Button type="button" className="rounded-xl" disabled={isPending} onClick={handlePermissionRequest}>
-                  {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                  إرسال الاستئذان
-                </Button>
-              </div>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 
       <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
         <CardHeader>
           <CardTitle>السجل الأسبوعي</CardTitle>
-          <CardDescription>يعرض الأسبوع الحالي فقط من الأحد إلى السبت حسب توقيت السعودية.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -362,6 +290,14 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               ))}
             </TableBody>
           </Table>
+
+          {data.isManager ? (
+            <div className="mt-4 flex justify-end">
+              <Button asChild variant="ghost" className="rounded-xl px-0 text-primary hover:text-primary">
+                <Link href="/dashboard/preparation-history">سجل التحضير الكامل</Link>
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

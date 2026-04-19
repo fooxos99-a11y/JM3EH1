@@ -67,7 +67,7 @@ export function AchievementsSectionClient({ content }: { content: AchievementsCo
 
       <div className="container relative z-10 mx-auto px-4">
         <div className={`mb-16 text-center transition-all duration-700 ${isInView ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
-          <span className="mb-4 inline-block text-sm font-semibold tracking-wider text-accent uppercase">{content.badge}</span>
+          <span className="mb-4 inline-block text-sm font-semibold tracking-wider text-primary uppercase">{content.badge}</span>
           <h2 className="mb-6 text-4xl font-bold text-white md:text-5xl">{content.title}</h2>
           <p className="mx-auto max-w-2xl text-lg text-white/70">{content.description}</p>
         </div>
@@ -85,14 +85,14 @@ export function AchievementsSectionClient({ content }: { content: AchievementsCo
                   <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
                     <div className="absolute inset-0 animate-shimmer" />
                   </div>
-                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 transition-transform duration-300 group-hover:scale-110 group-hover:bg-accent/20">
-                    <Icon className="h-6 w-6 text-accent" />
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 transition-transform duration-300 group-hover:scale-110 group-hover:bg-primary/20">
+                    <Icon className="h-6 w-6 text-primary" />
                   </div>
                   <h3 className="mb-3 text-xs font-medium text-white/60">{achievement.title}</h3>
                   <div className="mb-1 text-3xl font-bold text-white md:text-4xl">
                     <Counter end={achievement.number} />
                   </div>
-                  <p className="text-sm font-medium text-accent">{achievement.label}</p>
+                  <p className="text-sm font-medium text-primary">{achievement.label}</p>
                 </div>
               </div>
             )

@@ -86,7 +86,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 }`}
               >
                 {link.label}
-                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-accent transition-all duration-300 group-hover:w-1/2" />
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </Link>
             ))}
 
@@ -102,11 +102,11 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               >
                 <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
                 <span>الحوكمة</span>
-                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-accent transition-all duration-300 group-hover:w-1/2" />
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </button>
 
               <div className={`absolute left-1/2 top-full z-50 mt-3 w-[430px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
-                <div className="rounded-[1.75rem] border border-[#d6a32f]/25 bg-[#173f40] p-3 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
+                <div className="rounded-[1.75rem] border border-primary/20 bg-[#173f40] p-3 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
                   <div className="space-y-2 rounded-[1.35rem] border border-white/10 bg-[#173f40] p-2 text-right">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)

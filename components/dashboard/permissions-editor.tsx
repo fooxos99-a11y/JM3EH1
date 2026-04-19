@@ -1,6 +1,6 @@
 "use client"
 
-import { LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
+import { Check, LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { calculateAge, employeeGenderValues, maritalStatusValues } from "@/lib/administrative-services"
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { dashboardPermissionKeys, type DashboardPermissionKey } from "@/lib/dashboard-permissions"
+import { dashboardSections } from "@/lib/dashboard"
 
 type AdminAccount = {
   id: string
@@ -25,62 +26,113 @@ type AdminAccount = {
   jobRank: string
 }
 
-const labels: Record<DashboardPermissionKey | "*", string> = {
-  "*": "كل الصلاحيات",
-  preparation: "التحضير",
-  administrative_requests: "الطلبات الإدارية",
-  services: "الخدمات",
-  tasks: "المهام",
-  staff_achievements: "إنجازات الموظفين",
-  supporters: "المتبرعين",
-  logo: "الشعار",
-  hero: "الهيرو",
-  donations: "فرص التبرع",
-  projects: "المشاريع",
-  giftings: "الإهداءات",
-  achievements: "الإنجازات",
-  about: "من نحن",
-  news: "الأخبار",
-  gallery: "المعرض",
-  partners: "الشركاء",
-  footer: "الفوتر",
-  colors: "الألوان",
-  permissions: "الصلاحيات",
+type PermissionBundle = {
+  id: string
+  title: string
+  permissions: DashboardPermissionKey[]
+  count: number
 }
+
+const permissionBundles: PermissionBundle[] = dashboardSections
+  .map((group) => {
+    const permissions = Array.from(
+      new Set(group.items.filter((item) => !item.managerOnly).map((item) => item.permission)),
+    )
+
+    return {
+      id: group.title,
+      title: group.title,
+      permissions,
+      count: permissions.length,
+    }
+  })
+  .filter((bundle) => bundle.permissions.length > 0)
 
 function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissionKey | "*">; onChange: (value: Array<DashboardPermissionKey | "*">) => void }) {
   const isAll = value.includes("*")
+  const selectedPermissions = value.filter((permission): permission is DashboardPermissionKey => permission !== "*")
 
-  function togglePermission(permission: DashboardPermissionKey | "*") {
-    if (permission === "*") {
-      onChange(isAll ? ["hero"] : ["*"])
-      return
+  function getBundleState(bundle: PermissionBundle) {
+    if (isAll) {
+      return "all"
     }
+
+    const matchedPermissions = bundle.permissions.filter((permission) => selectedPermissions.includes(permission)).length
+
+    if (matchedPermissions === 0) {
+      return "none"
+    }
+
+    if (matchedPermissions === bundle.permissions.length) {
+      return "all"
+    }
+
+    return "partial"
+  }
+
+  function toggleAllPermissions() {
+    onChange(isAll ? [] : ["*"])
+  }
+
+  function toggleBundle(bundle: PermissionBundle) {
+    const bundleState = getBundleState(bundle)
 
     if (isAll) {
-      onChange([permission])
+      onChange(bundle.permissions)
       return
     }
 
-    onChange(value.includes(permission) ? value.filter((item) => item !== permission) : [...value, permission])
+    if (bundleState === "all") {
+      onChange(selectedPermissions.filter((permission) => !bundle.permissions.includes(permission)))
+      return
+    }
+
+    onChange(Array.from(new Set([...selectedPermissions, ...bundle.permissions])))
   }
 
   return (
-    <div className="grid gap-2 md:grid-cols-3">
-      <label className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2 text-sm">
-        <input type="checkbox" checked={isAll} onChange={() => togglePermission("*")} />
-        <span>{labels["*"]}</span>
-      </label>
-      {dashboardPermissionKeys.filter((permission) => permission !== "permissions").map((permission) => (
-        <label key={permission} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2 text-sm">
-          <input type="checkbox" checked={isAll || value.includes(permission)} onChange={() => togglePermission(permission)} />
-          <span>{labels[permission]}</span>
-        </label>
-      ))}
-      <label className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2 text-sm">
-        <input type="checkbox" checked={isAll || value.includes("permissions")} onChange={() => togglePermission("permissions")} />
-        <span>{labels.permissions}</span>
-      </label>
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={toggleAllPermissions}
+        className={`flex w-full items-center justify-between rounded-[1.4rem] border px-5 py-4 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_16px_35px_rgba(1,154,151,0.12)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+      >
+        <span className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
+          <Check className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="font-bold text-foreground">كل الصلاحيات</p>
+          <p className="text-sm text-muted-foreground">يشمل جميع أقسام لوحة التحكم دفعة واحدة.</p>
+        </div>
+      </button>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {permissionBundles.map((bundle) => {
+          const state = getBundleState(bundle)
+          const isSelected = state !== "none"
+
+          return (
+            <button
+              key={bundle.id}
+              type="button"
+              onClick={() => toggleBundle(bundle)}
+              className={`flex min-h-24 items-start justify-between rounded-[1.4rem] border px-5 py-4 text-right transition-all duration-300 ${isSelected ? "border-primary/30 bg-primary/10 shadow-[0_14px_30px_rgba(1,154,151,0.1)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+            >
+              <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}>
+                <Check className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="font-bold text-foreground">{bundle.title}</p>
+                <p className="text-sm text-muted-foreground">يشمل {bundle.count} قسم{bundle.count > 1 ? "ًا" : ""} رئيسي{bundle.count > 1 ? "ة" : ""}.</p>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {selectedPermissions.length === 0 && !isAll ? (
+        <p className="text-sm text-muted-foreground">اختر صلاحية رئيسية واحدة على الأقل لهذا الحساب.</p>
+      ) : null}
     </div>
   )
 }
@@ -96,7 +148,7 @@ const initialForm = {
   gender: "male" as (typeof employeeGenderValues)[number],
   maritalStatus: "single" as (typeof maritalStatusValues)[number],
   jobRank: "",
-  permissions: ["hero"] as Array<DashboardPermissionKey | "*">,
+  permissions: [] as Array<DashboardPermissionKey | "*">,
 }
 
 export function PermissionsEditor() {

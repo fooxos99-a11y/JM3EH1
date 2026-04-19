@@ -723,7 +723,7 @@ export const defaultColorsContent: ColorsContent = {
   mode: "duo",
   primary: "#019a97",
   secondary: "#01b5b2",
-  accent: "#d4af37",
+  accent: "#019a971a",
   background: "#fafbfc",
   foreground: "#1a1a2e",
   muted: "#f8f9fa",

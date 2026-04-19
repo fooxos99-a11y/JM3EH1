@@ -117,16 +117,16 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           {hasChildren ? (
                             <button
                               type="button"
-                              className={`flex w-full items-center justify-between rounded-[1.1rem] border px-4 py-3 text-sm font-bold transition-all duration-300 ${isExpanded ? "border-[#d6a32f] bg-[#d6a32f]/12 text-white shadow-[0_10px_30px_rgba(214,163,47,0.12)]" : "border-white/10 bg-white/[0.04] text-white/92 hover:border-[#d6a32f]/60 hover:bg-white/[0.07]"}`}
+                              className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-white/10 text-white" : "text-white hover:bg-white/10"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
-                              <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? "rotate-90" : "rotate-0 opacity-80"}`} />
+                              <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                               <span>{item.label}</span>
                             </button>
                           ) : (
                             <Link
                               href={item.href}
-                              className="flex items-center justify-between rounded-[1.1rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-bold text-white/92 transition-all duration-300 hover:border-[#d6a32f]/60 hover:bg-white/[0.07]"
+                              className="flex items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:bg-white/10"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
                               <span className="opacity-0">.</span>
@@ -135,15 +135,15 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           )}
 
                           {hasChildren && isExpanded ? (
-                            <div className="space-y-2 pr-6">
+                            <div className="space-y-1 pr-5">
                               {item.children?.map((child) => (
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  className="flex items-center justify-between rounded-[1rem] border border-[#d6a32f]/35 bg-[#d6a32f] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(214,163,47,0.18)] transition-all duration-300 hover:brightness-95"
+                                  className="flex items-center justify-between rounded-full px-5 py-2 text-sm font-medium text-white/90 transition-all duration-300 hover:bg-white/10 hover:text-white"
                                   onClick={() => setIsGovernanceOpen(false)}
                                 >
-                                  <ChevronDown className="h-4 w-4 rotate-90" />
+                                  <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                                   <span>{child.label}</span>
                                 </Link>
                               ))}
@@ -207,7 +207,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                       {item.children?.length ? (
                         <button
                           type="button"
-                          className={`flex w-full items-center justify-between rounded-[1rem] border px-4 py-3 font-semibold transition-all duration-300 ${expandedGovernanceHref === item.href ? "border-[#d6a32f] bg-[#d6a32f]/12 text-white" : "border-white/12 bg-white/[0.08] text-white"}`}
+                          className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white/10 text-white" : "text-white hover:bg-white/10"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
                           <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
@@ -217,7 +217,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         <div className="flex justify-end">
                           <Link
                             href={item.href}
-                            className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 font-semibold text-white transition-colors hover:border-accent/50 hover:bg-white/[0.12] hover:text-accent"
+                            className="inline-flex items-center rounded-full px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:bg-white/10"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -228,18 +228,18 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         </div>
                       )}
                       {item.children?.length && expandedGovernanceHref === item.href ? (
-                        <div className="mt-2 space-y-2 pr-4">
+                        <div className="mt-1 space-y-1 pr-5">
                           {item.children.map((child) => (
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="flex items-center justify-between rounded-[1rem] border border-[#d6a32f]/35 bg-[#d6a32f] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(214,163,47,0.18)] transition-all duration-300 hover:brightness-95"
+                              className="flex items-center justify-between rounded-full px-5 py-2 text-sm font-medium text-white/90 transition-all duration-300 hover:bg-white/10 hover:text-white"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)
                               }}
                             >
-                              <ChevronDown className="h-4 w-4 rotate-90" />
+                              <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                               {child.label}
                             </Link>
                           ))}

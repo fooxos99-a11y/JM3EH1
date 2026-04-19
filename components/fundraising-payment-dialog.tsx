@@ -92,14 +92,14 @@ export function FundraisingPaymentDialog({
       </Button>
 
       <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-2xl" showCloseButton={false}>
-        <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.10),rgba(255,255,255,0.98))] p-6">
+        <div className="bg-[linear-gradient(135deg,#ecfbfa,#ffffff_55%,#f4fbfb)] p-6">
           <DialogHeader className="items-start text-right">
             <DialogTitle className="text-2xl text-foreground">{item.title}</DialogTitle>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{dialogDescription}</p>
           </DialogHeader>
         </div>
 
-        <div className="space-y-5 p-6 pt-4">
+        <div className="space-y-5 bg-[linear-gradient(180deg,#ffffff_0%,#f8fbfb_100%)] p-6 pt-4">
           {item.labels.length > 0 ? (
             <div className="space-y-3 text-right">
               <p className="text-sm font-semibold text-foreground">خيارات المساهمة</p>
@@ -132,10 +132,10 @@ export function FundraisingPaymentDialog({
             </div>
           ) : null}
 
-          <div className="mx-auto max-w-xl rounded-[1.75rem] border border-border/60 bg-card/70 p-6 text-right shadow-sm">
-            <p className="text-sm text-muted-foreground">{item.title}</p>
-            <p className="mt-4 text-4xl font-bold text-foreground">{numericAmount} ريال</p>
-            <Button className="mt-6 h-12 w-full rounded-2xl" onClick={() => setOpen(false)}>
+          <div className="mx-auto max-w-xl rounded-[1.75rem] border border-primary/10 bg-[linear-gradient(180deg,#0f766e_0%,#0b4f4c_100%)] p-6 text-right shadow-sm">
+            <p className="text-sm text-white/75">{item.title}</p>
+            <p className="mt-4 text-4xl font-bold text-white">{numericAmount} ريال</p>
+            <Button className="mt-6 h-12 w-full rounded-2xl border-0 bg-white text-primary hover:bg-[#f4fffe]" onClick={() => setOpen(false)}>
               ادفع الآن
             </Button>
           </div>

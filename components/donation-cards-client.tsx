@@ -147,57 +147,64 @@ export function DonationCardsClient({
                               handleCardNavigation(donation.id)
                             }
                           }}
-                          className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[2rem] bg-[linear-gradient(180deg,var(--primary),color-mix(in_srbg,var(--primary)_82%,white))] shadow-xl transition-all duration-500 hover:-translate-y-1.5 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[2rem] border border-[#d7ece9] bg-white shadow-[0_22px_60px_rgba(15,23,42,0.10)] transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_28px_80px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                         >
-                          <div className="relative h-40 overflow-hidden">
-                            <img src={donation.image} alt={donation.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-primary/85 to-transparent" />
-                            <div className="absolute right-4 top-4 rounded-full bg-white/20 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                          <div className="relative h-48 overflow-hidden">
+                            <img src={donation.image} alt={donation.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#083433]/90 via-[#0d6d69]/35 to-transparent" />
+                            <div className="absolute right-4 top-4 rounded-full bg-white/92 px-3 py-1 text-xs font-bold text-primary shadow-sm">
                               {donation.badge}
+                            </div>
+                            <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                              <h3 className="text-xl font-bold leading-8 drop-shadow-sm">{donation.title}</h3>
+                              <p className="mt-2 text-sm leading-6 text-white/90 line-clamp-2">{donation.description}</p>
                             </div>
                           </div>
 
-                          <div className="flex flex-1 flex-col p-5 text-white">
-                            <div className="mb-3 flex items-center justify-between gap-3">
-                              <h3 className="text-lg font-bold leading-7">{donation.title}</h3>
+                          <div className="flex flex-1 flex-col bg-[linear-gradient(180deg,#ffffff_0%,#f6fbfb_100%)] p-5 text-right text-foreground">
+                            <div className="mb-4 flex items-start justify-between gap-3 rounded-[1.5rem] border border-primary/10 bg-primary/[0.05] px-4 py-3">
+                              <div className="text-left">
+                                {!donation.hideTotalAmount && donation.totalAmount > 0 ? (
+                                  <p className="text-lg font-bold text-primary">{donation.totalAmount} ريال</p>
+                                ) : (
+                                  <p className="text-lg font-bold text-primary">دعم مفتوح</p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground">{totalLabel}</p>
+                                <p className="mt-1 text-sm font-semibold text-foreground">{donation.labels.length} خيارات متاحة</p>
+                              </div>
                             </div>
 
-                            <p className="mb-3 text-sm leading-6 text-white/80 line-clamp-2">{donation.description}</p>
-
-                            <div className="mb-3 grid gap-2 rounded-xl bg-white/10 p-2.5 text-xs backdrop-blur-sm">
-                              {!donation.hideTotalAmount && donation.totalAmount > 0 ? (
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="text-white/75">{totalLabel}</span>
-                                  <span className="font-semibold">{donation.totalAmount} ريال</span>
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="mb-4 flex flex-wrap gap-2.5">
+                            <div className="mb-5 flex flex-wrap gap-2.5">
                               {donation.labels.slice(0, 2).map((label) => (
-                                <span
+                                <button
                                   key={label.id}
-                                  className="rounded-2xl border border-white/25 bg-white/12 px-3 py-2 text-xs font-semibold text-white transition-all duration-300 hover:scale-[1.03] hover:bg-white hover:text-primary"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                  }}
+                                  className="rounded-full border border-primary/15 bg-white px-3 py-2 text-xs font-semibold text-primary shadow-sm transition-all duration-300 hover:border-primary/35 hover:bg-primary/5"
                                 >
                                   {label.label}
-                                </span>
+                                </button>
                               ))}
                             </div>
 
-                            <div className="mt-auto grid grid-cols-2 gap-2.5">
+                            <div className="mt-auto grid grid-cols-2 gap-3">
                               <div onClick={(event) => event.stopPropagation()}>
                                 <FundraisingPaymentDialog
                                   item={donation}
                                   dialogDescription={dialogDescription}
                                   triggerLabel={donation.buttonLabel}
-                                  triggerClassName="group/btn h-10 rounded-xl bg-white text-primary transition-all duration-300 hover:scale-[1.02] hover:bg-white/90"
+                                  triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]"
                                   fullWidthTrigger
                                 />
                               </div>
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="h-10 rounded-xl border-white/35 bg-white/12 text-white transition-all duration-300 hover:scale-[1.02] hover:bg-white hover:text-primary"
+                                className="h-11 rounded-2xl border-primary/15 bg-white text-foreground transition-all duration-300 hover:scale-[1.02] hover:border-primary/35 hover:bg-primary/5 hover:text-primary"
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   handleAddToCart(donation)

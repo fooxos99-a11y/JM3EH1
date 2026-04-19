@@ -76,10 +76,10 @@ export function HeroClient({ content }: HeroClientProps) {
                   <h1 className="mb-6 text-4xl font-bold leading-tight text-white md:text-6xl lg:text-7xl">{slide.title}</h1>
                   <p className="mx-auto mb-10 max-w-3xl text-base leading-8 text-white/88 md:text-xl">{slide.description}</p>
                   <div className="flex flex-wrap justify-center gap-4">
-                    <Button asChild size="lg" className="rounded-2xl bg-white px-8 py-6 text-lg font-bold text-primary shadow-xl shadow-black/10 transition-all duration-300 hover:scale-105 hover:bg-[#f4fffe]">
+                    <Button asChild size="lg" className="rounded-2xl bg-white px-10 py-7 text-xl font-bold text-primary shadow-xl shadow-black/10 transition-all duration-300 hover:scale-105 hover:bg-[#f4fffe]">
                       <Link href="#donation">{content.donateLabel}</Link>
                     </Button>
-                    <Button asChild size="lg" variant="outline" className="rounded-2xl border-2 border-white/35 bg-transparent px-8 py-6 text-lg font-bold text-white transition-all duration-300 hover:scale-105 hover:bg-white/10 hover:text-white">
+                    <Button asChild size="lg" variant="outline" className="rounded-2xl border-2 border-white/35 bg-transparent px-10 py-7 text-xl font-bold text-white transition-all duration-300 hover:scale-105 hover:bg-white/10 hover:text-white">
                       <Link href="#about">{content.aboutLabel}</Link>
                     </Button>
                   </div>

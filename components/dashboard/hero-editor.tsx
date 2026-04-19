@@ -1,5 +1,6 @@
 "use client"
 
+import { Plus, Trash2 } from "lucide-react"
 import { useState, useTransition } from "react"
 
 import { FileUploadField } from "@/components/dashboard/file-upload-field"
@@ -9,31 +10,38 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { HeroContent } from "@/lib/site-content"
 
-function normalizeHeroContent(content: HeroContent): HeroContent {
-  const firstSlide = content.slides[0] ?? {
-    id: 1,
-    image: "",
-    title: "",
-    subtitle: "",
-    description: "",
-  }
-
-  return {
-    ...content,
-    slides: [firstSlide],
-  }
-}
-
 export function HeroEditor({ initialContent }: { initialContent: HeroContent }) {
-  const [content, setContent] = useState(() => normalizeHeroContent(initialContent))
+  const [content, setContent] = useState(initialContent)
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const slide = content.slides[0]
 
-  function updateSlide(field: keyof HeroContent["slides"][number], value: string) {
+  function updateSlide(index: number, field: keyof HeroContent["slides"][number], value: string) {
     setContent((current) => ({
       ...current,
-      slides: current.slides.map((entry, index) => (index === 0 ? { ...entry, [field]: value } : entry)),
+      slides: current.slides.map((entry, slideIndex) => (slideIndex === index ? { ...entry, [field]: value } : entry)),
+    }))
+  }
+
+  function addSlide() {
+    setContent((current) => ({
+      ...current,
+      slides: [
+        ...current.slides,
+        {
+          id: Math.max(0, ...current.slides.map((slide) => slide.id)) + 1,
+          image: "",
+          title: "شريحة جديدة",
+          subtitle: "عنوان صغير",
+          description: "وصف مختصر للشريحة",
+        },
+      ],
+    }))
+  }
+
+  function removeSlide(id: number) {
+    setContent((current) => ({
+      ...current,
+      slides: current.slides.length > 1 ? current.slides.filter((slide) => slide.id !== id) : current.slides,
     }))
   }
 
@@ -43,7 +51,7 @@ export function HeroEditor({ initialContent }: { initialContent: HeroContent }) 
       const response = await fetch("/api/admin/content/hero", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(normalizeHeroContent(content)),
+        body: JSON.stringify(content),
       })
 
       setMessage(response.ok ? "تم حفظ الواجهة الرئيسية" : "تعذر حفظ بيانات الواجهة الرئيسية")
@@ -65,28 +73,45 @@ export function HeroEditor({ initialContent }: { initialContent: HeroContent }) 
         </div>
       </div>
 
-      <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <div className="mb-4 text-right">
-          <h3 className="text-lg font-bold text-foreground">محتوى الواجهة الرئيسية</h3>
-          <p className="text-sm text-muted-foreground">الصورة والنص العلوي والعنوان والوصف فقط، كما ستظهر في الصفحة الرئيسية.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <FileUploadField label="صورة الواجهة" value={slide.image} onChange={(value) => updateSlide("image", value)} />
+      <div className="flex justify-start">
+        <Button type="button" variant="outline" className="rounded-xl" onClick={addSlide}>
+          <Plus className="h-4 w-4" />
+          إضافة شريحة
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {content.slides.map((slide, index) => (
+          <div key={slide.id} className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+            <div className="mb-4 flex items-center justify-between">
+              <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeSlide(slide.id)} disabled={content.slides.length === 1}>
+                <Trash2 className="h-4 w-4" />
+                حذف الشريحة
+              </Button>
+              <div className="text-right">
+                <h3 className="text-lg font-bold text-foreground">الشريحة {index + 1}</h3>
+                <p className="text-sm text-muted-foreground">الصورة والعنوان الصغير والعنوان الكبير والوصف فقط.</p>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <FileUploadField label="صورة الواجهة" value={slide.image} onChange={(value) => updateSlide(index, "image", value)} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor={`hero-title-${slide.id}`}>العنوان الكبير</Label>
+                <Input id={`hero-title-${slide.id}`} value={slide.title} onChange={(event) => updateSlide(index, "title", event.target.value)} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor={`hero-subtitle-${slide.id}`}>العنوان الصغير</Label>
+                <Input id={`hero-subtitle-${slide.id}`} value={slide.subtitle} onChange={(event) => updateSlide(index, "subtitle", event.target.value)} />
+              </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label htmlFor={`hero-description-${slide.id}`}>الوصف</Label>
+                <Textarea id={`hero-description-${slide.id}`} value={slide.description} onChange={(event) => updateSlide(index, "description", event.target.value)} rows={4} />
+              </div>
+            </div>
           </div>
-          <div className="space-y-2 text-right">
-            <Label htmlFor="hero-title">العنوان الكبير</Label>
-            <Input id="hero-title" value={slide.title} onChange={(event) => updateSlide("title", event.target.value)} />
-          </div>
-          <div className="space-y-2 text-right">
-            <Label htmlFor="hero-subtitle">العنوان الصغير</Label>
-            <Input id="hero-subtitle" value={slide.subtitle} onChange={(event) => updateSlide("subtitle", event.target.value)} />
-          </div>
-          <div className="space-y-2 text-right md:col-span-2">
-            <Label htmlFor="hero-description">الوصف</Label>
-            <Textarea id="hero-description" value={slide.description} onChange={(event) => updateSlide("description", event.target.value)} rows={4} />
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="flex items-center justify-between gap-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">

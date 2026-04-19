@@ -87,17 +87,23 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-accent transition-all duration-300 group-hover:w-1/2" />
               </button>
 
-              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[360px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible opacity-100" : "invisible opacity-0"}`}>
-                <div className="rounded-[1.75rem] border border-white/80 bg-white/96 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[420px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
+                <div className="rounded-[1.75rem] border border-white/15 bg-[rgba(7,28,28,0.78)] p-3 shadow-[0_24px_70px_rgba(15,23,42,0.28)] backdrop-blur-xl">
                   <div className="grid gap-2">
                     {governanceNavigation.map((item) => (
-                      <div key={item.href} className="rounded-[1.25rem] border border-border/60 bg-[#f8fbfb] p-3 text-right">
+                      <div key={item.href} className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-3 text-right transition-colors duration-300 hover:bg-white/[0.07]">
                         {item.children?.length ? (
-                          <div className="block text-sm font-bold text-foreground">{item.label}</div>
+                          <div className="flex justify-end">
+                            <span className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white">
+                              {item.label}
+                            </span>
+                          </div>
                         ) : (
-                          <Link href={item.href} className="block text-sm font-bold text-foreground transition-colors hover:text-primary">
-                            {item.label}
-                          </Link>
+                          <div className="flex justify-end">
+                            <Link href={item.href} className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 text-sm font-bold text-white transition-colors hover:border-accent/50 hover:bg-white/[0.12] hover:text-accent">
+                              {item.label}
+                            </Link>
+                          </div>
                         )}
                         {item.children?.length ? (
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
@@ -105,7 +111,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                               <Link
                                 key={child.href}
                                 href={child.href}
-                                className="rounded-full border border-primary/10 bg-white px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:border-primary/30 hover:bg-primary/5"
+                                className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 text-xs font-medium text-white/88 transition-colors hover:border-accent/50 hover:bg-white/[0.12] hover:text-white"
                               >
                                 {child.label}
                               </Link>
@@ -152,10 +158,10 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </Link>
             ))}
 
-            <div className="mt-2 rounded-[1.5rem] border border-border/50 bg-[#f8fbfb] p-2">
+            <div className="mt-2 rounded-[1.5rem] border border-white/15 bg-[rgba(7,28,28,0.82)] p-2 shadow-[0_20px_50px_rgba(15,23,42,0.2)] backdrop-blur-xl">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-foreground transition-all duration-300 hover:bg-primary/5 hover:text-primary"
+                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-white"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
                 <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
@@ -165,28 +171,34 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
                 <div className="mt-2 space-y-2 px-2 pb-2">
                   {governanceNavigation.map((item) => (
-                    <div key={item.href} className="rounded-[1.25rem] border border-border/50 bg-white p-3">
+                    <div key={item.href} className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-3">
                       {item.children?.length ? (
-                        <div className="block font-semibold text-foreground">{item.label}</div>
+                        <div className="flex justify-end">
+                          <span className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 font-semibold text-white">
+                            {item.label}
+                          </span>
+                        </div>
                       ) : (
-                        <Link
-                          href={item.href}
-                          className="block font-semibold text-foreground transition-colors hover:text-primary"
-                          onClick={() => {
-                            setIsMenuOpen(false)
-                            setIsMobileGovernanceOpen(false)
-                          }}
-                        >
-                          {item.label}
-                        </Link>
+                        <div className="flex justify-end">
+                          <Link
+                            href={item.href}
+                            className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 font-semibold text-white transition-colors hover:border-accent/50 hover:bg-white/[0.12] hover:text-accent"
+                            onClick={() => {
+                              setIsMenuOpen(false)
+                              setIsMobileGovernanceOpen(false)
+                            }}
+                          >
+                            {item.label}
+                          </Link>
+                        </div>
                       )}
                       {item.children?.length ? (
-                        <div className="mt-2 space-y-1 pr-3">
+                        <div className="mt-2 flex flex-wrap justify-end gap-2">
                           {item.children.map((child) => (
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="block rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                              className="inline-flex items-center rounded-full border border-white/12 bg-white/[0.08] px-4 py-2 text-sm text-white/80 transition-colors hover:border-accent/50 hover:bg-white/[0.12] hover:text-white"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)

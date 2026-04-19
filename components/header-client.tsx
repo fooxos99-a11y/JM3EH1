@@ -100,14 +100,13 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 }`}
                 onClick={() => setIsGovernanceOpen((current) => !current)}
               >
-                <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
                 <span>الحوكمة</span>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
                 <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </button>
 
-              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[430px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
-                <div className="rounded-[1.75rem] border border-primary/20 bg-[#173f40] p-3 shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
-                  <div className="space-y-2 rounded-[1.35rem] border border-white/10 bg-[#173f40] p-2 text-right">
+              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[360px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
+                <div className="space-y-2 rounded-[1.75rem] border border-primary/20 bg-[#173f40] p-3 text-right shadow-[0_24px_70px_rgba(15,23,42,0.3)]">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)
                       const isExpanded = expandedGovernanceHref === item.href
@@ -120,8 +119,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                               className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
-                              <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                               <span>{item.label}</span>
+                              <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                             </button>
                           ) : (
                             <Link
@@ -129,8 +128,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                               className="flex items-center justify-between rounded-full bg-transparent px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:bg-white/10"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
-                              <span className="opacity-0">.</span>
                               <span>{item.label}</span>
+                              <span className="opacity-0">.</span>
                             </Link>
                           )}
 
@@ -143,8 +142,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                                   className="flex items-center justify-between rounded-full px-5 py-2 text-sm font-medium text-white/90 transition-all duration-300 hover:bg-white/10 hover:text-white"
                                   onClick={() => setIsGovernanceOpen(false)}
                                 >
-                                  <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                                   <span>{child.label}</span>
+                                  <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                                 </Link>
                               ))}
                             </div>
@@ -152,7 +151,6 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         </div>
                       )
                     })}
-                  </div>
                 </div>
               </div>
             </div>
@@ -196,8 +194,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-white transition-all duration-300 hover:bg-white/10 hover:text-white"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
-                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
                 <span>الحوكمة</span>
+                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
               </button>
 
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
@@ -210,8 +208,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           className={`flex w-full items-center justify-between rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
-                          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
                           <span>{item.label}</span>
+                          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
                         </button>
                       ) : (
                         <div className="flex justify-end">
@@ -239,8 +237,8 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                                 setIsMobileGovernanceOpen(false)
                               }}
                             >
-                              <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                               {child.label}
+                              <ChevronDown className="h-3.5 w-3.5 rotate-90 opacity-80" />
                             </Link>
                           ))}
                         </div>

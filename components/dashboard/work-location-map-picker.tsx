@@ -1,11 +1,9 @@
 "use client"
 
-import { ExternalLink, MapPinned } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 type Coordinates = {
   latitude: number
@@ -185,7 +183,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
         </Button>
         <div className="text-right">
           <p className="font-semibold text-foreground">اختيار موقع العمل</p>
-          <p className="text-xs text-muted-foreground">انقر على الخريطة أو حرّك المؤشر لتحديد الموقع، ثم احفظ الإعدادات.</p>
+          <p className="text-xs text-muted-foreground">انقر على الخريطة أو حرّك المؤشر لتحديد الموقع, او أدخل الرابط من قوقل ماب</p>
         </div>
       </div>
 
@@ -210,33 +208,6 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
         ) : null}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2 text-right">
-          <Label htmlFor="work-location-latitude">خط العرض</Label>
-          <Input
-            id="work-location-latitude"
-            type="number"
-            step="0.000001"
-            value={coordinates.latitude}
-            onChange={(event) => onChange({ latitude: Number(event.target.value) || 0, longitude: coordinates.longitude })}
-          />
-        </div>
-        <div className="space-y-2 text-right">
-          <Label htmlFor="work-location-longitude">خط الطول</Label>
-          <Input
-            id="work-location-longitude"
-            type="number"
-            step="0.000001"
-            value={coordinates.longitude}
-            onChange={(event) => onChange({ latitude: coordinates.latitude, longitude: Number(event.target.value) || 0 })}
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-2 rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-right text-sm text-primary">
-        <span>{radiusMeters} متر</span>
-        <MapPinned className="h-4 w-4" />
-      </div>
     </div>
   )
 }

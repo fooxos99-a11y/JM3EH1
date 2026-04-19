@@ -9,8 +9,8 @@ import { getSiteSectionContent, upsertSiteSectionContent } from "@/lib/site-cont
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const adminUserSchema = z.object({
-  name: z.string().trim().min(2),
-  title: z.string().trim().min(2),
+  name: z.string().trim().min(1),
+  title: z.string().trim().min(1),
   phone: z.string().trim().min(8),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   password: z.string().min(8),
@@ -18,21 +18,21 @@ const adminUserSchema = z.object({
   birthDate: z.string().trim().min(8),
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
-  jobRank: z.string().trim().min(2),
+  jobRank: z.string().trim().min(1),
   permissions: z.array(z.string()),
 })
 
 const updateAdminUserSchema = z.object({
   userId: z.string().uuid(),
-  name: z.string().trim().min(2).optional(),
-  title: z.string().trim().min(2),
+  name: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(1),
   email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   password: z.string().min(8).optional(),
   nationalId: z.string().trim().min(1),
   birthDate: z.string().trim().min(8),
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
-  jobRank: z.string().trim().min(2),
+  jobRank: z.string().trim().min(1),
   permissions: z.array(z.string()),
 })
 

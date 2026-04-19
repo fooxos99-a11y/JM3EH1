@@ -93,7 +93,7 @@ const patchSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("configure_work_location"),
-    name: z.string().trim().min(1),
+    name: z.string().trim(),
     address: z.string().trim(),
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
@@ -690,8 +690,9 @@ export async function PATCH(request: Request) {
     }
 
     const currentRow = await getLatestWorkLocation()
+    const normalizedName = parsed.data.name || currentRow?.name || "موقع العمل الرئيسي"
     const payload = {
-      name: parsed.data.name,
+      name: normalizedName,
       address: parsed.data.address,
       latitude: parsed.data.latitude,
       longitude: parsed.data.longitude,

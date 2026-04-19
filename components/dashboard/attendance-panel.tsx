@@ -234,14 +234,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               ))}
             </TableBody>
           </Table>
-
-          {data.isManager ? (
-            <div className="mt-4 flex justify-end">
-              <Button asChild variant="ghost" className="rounded-xl px-0 text-primary hover:text-primary">
-                <Link href="/dashboard/preparation-history">سجل التحضير الكامل</Link>
-              </Button>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </div>

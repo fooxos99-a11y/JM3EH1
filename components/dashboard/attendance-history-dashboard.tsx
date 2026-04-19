@@ -150,6 +150,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
         const parsedCoordinates = parseCoordinatesFromGoogleMapsUrl(locationForm.googleMapsUrl)
         const latitude = parsedCoordinates?.latitude ?? locationForm.latitude
         const longitude = parsedCoordinates?.longitude ?? locationForm.longitude
+        const name = locationForm.name.trim() || payload?.workLocation.name || "موقع العمل الرئيسي"
         const address = locationForm.address.trim() || (locationForm.googleMapsUrl.trim() ? "تم تحديد الموقع عبر الرابط" : "")
 
         const response = await fetch("/api/admin/administrative-requests", {
@@ -157,7 +158,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "configure_work_location",
-            name: locationForm.name,
+            name,
             address,
             latitude,
             longitude,
@@ -220,10 +221,6 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
       <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
         <CardContent className="grid gap-4 p-6 md:grid-cols-2">
           <div className="space-y-2 text-right">
-            <Label htmlFor="attendance-history-date">التاريخ</Label>
-            <Input id="attendance-history-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="text-right" />
-          </div>
-          <div className="space-y-2 text-right">
             <Label>الموظف</Label>
             <Select value={selectedUserName} onValueChange={setSelectedUserName}>
               <SelectTrigger className="w-full text-right">
@@ -237,6 +234,10 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2 text-right">
+            <Label htmlFor="attendance-history-date">التاريخ</Label>
+            <Input id="attendance-history-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="text-right" />
+          </div>
         </CardContent>
       </Card>
 
@@ -244,7 +245,6 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
         <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
           <CardHeader className="text-right">
             <CardTitle>موقع التحضير</CardTitle>
-            <CardDescription>ضع موقع التحضير هنا في السجل الكامل، بينما تبقى صفحة التحضير اليومية مخصصة لتسجيل الحضور والانصراف لجميع الإداريين بما فيهم المدير.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">

@@ -292,7 +292,6 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
                   </AccordionItem>
                 </Accordion>
               )}
-            </div>
           </CardContent>
         </Card>
         )}

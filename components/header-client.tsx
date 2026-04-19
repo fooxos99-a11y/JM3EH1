@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Menu, X } from "lucide-react"
+import { Menu, ShoppingCart, X } from "lucide-react"
 
 import { AuthDialog } from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -70,6 +70,11 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
           </nav>
 
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" className={`rounded-xl ${isScrolled ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"}`}>
+              <Link href="/cart" aria-label="السلة">
+                <ShoppingCart className="h-5 w-5" />
+              </Link>
+            </Button>
             <AuthDialog isScrolled={isScrolled} />
 
             <Button

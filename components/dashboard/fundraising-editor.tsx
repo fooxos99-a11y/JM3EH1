@@ -234,11 +234,13 @@ export function FundraisingEditor({ initialContent, sectionKey, sectionLabel, it
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <FileUploadField label={`صورة ${itemLabel}`} value={item.image} onChange={(value) => updateItemField(index, "image", value)} />
+                <p className="mt-2 text-right text-xs text-muted-foreground">تظهر هذه الصورة داخل البطاقة وفي صفحة التفاصيل الخاصة بهذا العنصر.</p>
               </div>
 
               <div className="space-y-2 text-right">
                 <Label htmlFor={`${sectionKey}-title-${item.id}`}>العنوان</Label>
                 <Input id={`${sectionKey}-title-${item.id}`} value={item.title} onChange={(event) => updateItemField(index, "title", event.target.value)} />
+                <p className="text-xs text-muted-foreground">يظهر العنوان في البطاقة وتحت الصورة داخل صفحة التفاصيل.</p>
               </div>
 
               <div className="space-y-2 text-right">
@@ -322,8 +324,9 @@ export function FundraisingEditor({ initialContent, sectionKey, sectionLabel, it
               </div>
 
               <div className="space-y-2 text-right md:col-span-2">
-                <Label htmlFor={`${sectionKey}-description-${item.id}`}>الوصف</Label>
+                <Label htmlFor={`${sectionKey}-description-${item.id}`}>الوصف المختصر</Label>
                 <Textarea id={`${sectionKey}-description-${item.id}`} rows={4} value={item.description} onChange={(event) => updateItemField(index, "description", event.target.value)} />
+                <p className="text-xs text-muted-foreground">يستخدم هذا الوصف في البطاقة وفي صفحة التفاصيل لهذا {itemLabel}.</p>
               </div>
             </div>
 

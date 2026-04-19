@@ -11,6 +11,7 @@ create table if not exists public.app_users (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique,
   full_name text not null,
+  supporter_account_type text not null default 'individual',
   phone text not null unique,
   email text unique,
   password_hash text not null,
@@ -22,6 +23,7 @@ create table if not exists public.app_users (
 
 alter table public.app_users add column if not exists auth_user_id uuid;
 alter table public.app_users add column if not exists phone_verified_at timestamptz;
+alter table public.app_users add column if not exists supporter_account_type text not null default 'individual';
 create unique index if not exists app_users_auth_user_id_key on public.app_users(auth_user_id) where auth_user_id is not null;
 
 create table if not exists public.app_sessions (
@@ -152,6 +154,7 @@ create table if not exists public.attendance_records (
 create table if not exists public.supporter_contacts (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
+  account_type text not null default 'individual',
   phone text not null,
   email text,
   notes text,
@@ -159,6 +162,8 @@ create table if not exists public.supporter_contacts (
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.supporter_contacts add column if not exists account_type text not null default 'individual';
 
 create table if not exists public.gifting_requests (
   id uuid primary key default gen_random_uuid(),

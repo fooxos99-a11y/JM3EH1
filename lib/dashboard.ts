@@ -2,10 +2,11 @@ import type { DashboardPermissionKey } from "@/lib/dashboard-permissions"
 import { governancePages } from "@/lib/governance"
 
 type DashboardItem = {
-  slug: DashboardPermissionKey
+  slug: string
   label: string
   description: string
   permission: DashboardPermissionKey
+  managerOnly?: boolean
 }
 
 type DashboardGroup = {
@@ -22,6 +23,13 @@ export const dashboardSections: DashboardGroup[] = [
         label: "التحضير",
         description: "نقطة البداية لترتيب بيانات الإدارة قبل نشر أي تحديثات.",
         permission: "preparation",
+      },
+      {
+        slug: "preparation-history",
+        label: "سجل التحضير الكامل",
+        description: "عرض سجل الحضور والانصراف الكامل في صفحة مستقلة مخصصة لمدير النظام.",
+        permission: "preparation",
+        managerOnly: true,
       },
       {
         slug: "tasks",
@@ -168,7 +176,7 @@ export const dashboardSections: DashboardGroup[] = [
   },
 ]
 
-export type DashboardSectionSlug = DashboardPermissionKey
+export type DashboardSectionSlug = string
 
 export function getDashboardSection(slug: string) {
   for (const group of dashboardSections) {
@@ -189,7 +197,7 @@ export function filterDashboardSections(permissions: Array<DashboardPermissionKe
   return dashboardSections
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => permissions.includes(item.permission)),
+      items: group.items.filter((item) => !item.managerOnly && permissions.includes(item.permission)),
     }))
     .filter((group) => group.items.length > 0)
 }

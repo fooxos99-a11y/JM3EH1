@@ -68,7 +68,7 @@ function BalanceMetric({ label, value, hint }: { label: string; value: number; h
   )
 }
 
-export function AdministrativeRequestsDashboard({ initialTab = "submit" }: { initialTab?: string } = {}) {
+export function AdministrativeRequestsDashboard({ initialTab = "submit", attendanceOnly = false }: { initialTab?: string; attendanceOnly?: boolean } = {}) {
   const [data, setData] = useState<AdministrativeDashboardData | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -208,6 +208,29 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit" }: { ini
   const allowanceRemaining = data.leaveBalance.allowanceTotalDays - data.leaveBalance.allowanceUsedDays
   const permissionRemaining = data.leaveBalance.permissionQuotaCount - data.leaveBalance.permissionUsedCount
   const requestedLeaveDays = requestForm.startDate && requestForm.endDate ? calculateLeaveDays(requestForm.startDate, requestForm.endDate) : 0
+
+  if (attendanceOnly) {
+    return (
+      <section className="space-y-6 text-right">
+        <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+          <h1 className="text-2xl font-bold text-foreground">قسم التحضير</h1>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            تسجيل الحضور والانصراف والاستئذان بسرعة، مع عرض سجل الأسبوع الحالي فقط، وبقاء إعداد موقع التحضير مخصصًا لمدير النظام وحده.
+          </p>
+        </div>
+
+        {error ? (
+          <Alert variant="destructive" className="rounded-[1.5rem] border-red-200 bg-red-50/80 text-right">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>يوجد تنبيه</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <AttendancePanel data={data} onRefresh={loadData} compact />
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-6 text-right">

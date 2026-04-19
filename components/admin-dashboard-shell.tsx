@@ -56,12 +56,12 @@ function SidebarContent({ permissions, logoUrl, logoAlt }: { permissions: Array<
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 text-right">
+      <div className="flex-1 overflow-y-auto px-4 py-4 text-right">
         {sections.map((group) => {
           const isOpen = isMounted ? (openGroups[group.title] ?? true) : true
 
           return (
-            <section key={group.title} className="border-b border-border/50 py-3 last:border-b-0">
+            <section key={group.title} className="border-b border-border/50 py-2 last:border-b-0">
               <button
                 type="button"
                 onClick={() => {
@@ -71,15 +71,15 @@ function SidebarContent({ permissions, logoUrl, logoAlt }: { permissions: Array<
 
                   setOpenGroups((current) => ({ ...current, [group.title]: !isOpen }))
                 }}
-                className="flex w-full items-center justify-between rounded-xl px-2 py-3 text-sm font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-[13px] font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
               >
                 <span>{group.title}</span>
-                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
+                <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
               </button>
 
               <div className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-out ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-70"}`}>
                 <div className="min-h-0 overflow-hidden">
-                  <div className="space-y-1 pb-1 pt-2">
+                  <div className="space-y-1 pb-1 pt-1.5">
                   {group.items.map((item) => {
                     const href = `/dashboard/${item.slug}`
                     const isActive = isMounted && pathname === href
@@ -88,14 +88,14 @@ function SidebarContent({ permissions, logoUrl, logoAlt }: { permissions: Array<
                       <Link
                         key={item.slug}
                         href={href}
-                        className={`flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 ${
+                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-300 ${
                           isActive
                             ? "bg-primary text-white shadow-lg shadow-primary/20"
                             : "text-foreground hover:bg-primary/5 hover:text-primary"
                         }`}
                       >
                         <span>{item.label}</span>
-                        <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-white" : "bg-primary/20"}`} />
+                        <span className={`h-2 w-2 rounded-full ${isActive ? "bg-white" : "bg-primary/20"}`} />
                       </Link>
                     )
                   })}

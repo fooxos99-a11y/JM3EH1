@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Cairo } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from '@/components/ui/toaster'
 import { getSiteSectionContent } from '@/lib/site-content'
 import './globals.css'
 
@@ -37,6 +38,7 @@ export default async function RootLayout({
         }}
       >
         {children}
+        <Toaster />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

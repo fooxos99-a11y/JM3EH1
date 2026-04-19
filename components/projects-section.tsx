@@ -7,6 +7,7 @@ export async function ProjectsSection() {
   return (
     <DonationCardsClient
       content={content}
+      contentType="projects"
       sectionId="projects"
       emptyTitle="لا توجد مشاريع ظاهرة حالياً"
       emptyDescription="يمكنك إظهار المشاريع من لوحة التحكم عند الحاجة."

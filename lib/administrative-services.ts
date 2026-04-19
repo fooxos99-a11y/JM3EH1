@@ -103,6 +103,28 @@ export type WeeklyAttendanceSummary = {
   workedMinutes: number
 }
 
+export function getWeekdayLabel(value: string) {
+  const date = new Date(`${value}T00:00:00Z`)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat("ar-SA", {
+    timeZone: SAUDI_TIME_ZONE,
+    weekday: "long",
+  }).format(date)
+}
+
+export function toSaudiTimeInputValue(date = new Date()) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: SAUDI_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)
+}
+
 export type AdministrativeDashboardData = {
   currentUserId: string
   currentUserName: string

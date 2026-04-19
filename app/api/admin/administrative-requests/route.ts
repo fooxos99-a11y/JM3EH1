@@ -191,14 +191,20 @@ function schemaResponse() {
   )
 }
 
-async function requireAdministrativeAccess() {
+async function requireAdministrativeAccess(scope: "attendance" | "administrative" = "administrative") {
   const user = await getCurrentUser()
 
   if (!user || user.role !== "admin") {
     return { user: null, response: NextResponse.json({ error: "غير مصرح" }, { status: 401 }) }
   }
 
-  if (!hasPermission(user, "administrative_requests")) {
+  const hasAttendanceAccess = hasPermission(user, "administrative_requests") || hasPermission(user, "preparation")
+
+  if (scope === "attendance" && !hasAttendanceAccess) {
+    return { user, response: NextResponse.json({ error: "ليس لديك صلاحية للوصول إلى قسم التحضير" }, { status: 403 }) }
+  }
+
+  if (scope === "administrative" && !hasPermission(user, "administrative_requests")) {
     return { user, response: NextResponse.json({ error: "ليس لديك صلاحية للوصول إلى الطلبات الإدارية" }, { status: 403 }) }
   }
 
@@ -365,15 +371,17 @@ function getSaudiDateKey(date = new Date()) {
 }
 
 function getWeekDateKeys() {
-  const days: string[] = []
+  const todayKey = getSaudiDateKey()
+  const todayDate = new Date(`${todayKey}T00:00:00Z`)
+  const currentWeekday = todayDate.getUTCDay()
+  const startOfWeek = new Date(todayDate)
+  startOfWeek.setUTCDate(todayDate.getUTCDate() - currentWeekday)
 
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const date = new Date()
-    date.setUTCDate(date.getUTCDate() - offset)
-    days.push(getSaudiDateKey(date))
-  }
-
-  return days
+  return Array.from({ length: 7 }, (_, index) => {
+    const nextDate = new Date(startOfWeek)
+    nextDate.setUTCDate(startOfWeek.getUTCDate() + index)
+    return getSaudiDateKey(nextDate)
+  })
 }
 
 function buildWeeklyAttendance(records: AttendanceRecord[]): WeeklyAttendanceSummary[] {
@@ -626,7 +634,7 @@ async function handleClockAttendance(userId: string, eventType: "clock_in" | "cl
 }
 
 export async function GET() {
-  const { user, response } = await requireAdministrativeAccess()
+  const { user, response } = await requireAdministrativeAccess("attendance")
   if (response || !user) return response
 
   try {
@@ -638,7 +646,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, response } = await requireAdministrativeAccess()
+  const { user, response } = await requireAdministrativeAccess("attendance")
   if (response || !user) return response
 
   const body = await request.json()
@@ -665,7 +673,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { user, response } = await requireAdministrativeAccess()
+  const { user, response } = await requireAdministrativeAccess("attendance")
   if (response || !user) return response
 
   const body = await request.json()

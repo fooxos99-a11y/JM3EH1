@@ -1,25 +1,17 @@
 "use client"
 
-import { File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, RefreshCcw, SendHorizontal } from "lucide-react"
+import { ChevronLeft, ChevronRight, File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Minimize2, Paperclip, RefreshCcw, SendHorizontal, X } from "lucide-react"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import type { AdminChatAttachment, AdminChatData, AdminChatMessage } from "@/lib/admin-chat"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 
 type AdminChatPanelProps = {
   iconOnly?: boolean
   triggerClassName?: string
+  side?: "left" | "right"
 }
 
 function formatTime(value: string) {
@@ -68,7 +60,7 @@ function MessageItem({ currentUserId, message }: { currentUserId: string; messag
   )
 }
 
-export function AdminChatPanel({ iconOnly = false, triggerClassName = "" }: AdminChatPanelProps) {
+export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side = "left" }: AdminChatPanelProps) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<AdminChatData | null>(null)
   const [messageText, setMessageText] = useState("")
@@ -79,6 +71,10 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "" }: Admi
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const sidePositionClass = side === "left" ? "left-0" : "right-0"
+  const sideBorderClass = side === "left" ? "border-r" : "border-l"
+  const closedTransformClass = side === "left" ? "-translate-x-[calc(100%+1.5rem)]" : "translate-x-[calc(100%+1.5rem)]"
+  const panelWidthClass = "w-[min(380px,calc(100vw-1rem))] sm:w-[360px] lg:w-[400px]"
 
   async function loadChat() {
     setIsLoading(true)
@@ -191,33 +187,50 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "" }: Admi
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size={iconOnly ? "icon" : "default"}
-          className={`${iconOnly ? "rounded-full" : "rounded-2xl"} ${triggerClassName}`.trim()}
-          aria-label="المحادثة الإدارية"
-        >
-          <MessageCircleMore className="h-4 w-4" />
-          {iconOnly ? null : "المحادثة"}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-4xl rounded-[2rem] border-white/80 bg-white/95 p-0 text-right shadow-[0_25px_80px_rgba(15,23,42,0.18)] sm:max-w-4xl" showCloseButton={false}>
-        <div className="flex h-[80vh] min-h-[620px] flex-col overflow-hidden">
-          <DialogHeader className="border-b border-border/60 px-6 py-5 text-right">
-            <div className="flex items-center justify-between gap-3">
-              <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => void loadChat()} disabled={isLoading || isPending}>
-                {isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-              </Button>
-              <div>
-                <DialogTitle className="text-right text-xl">المحادثة الإدارية العامة</DialogTitle>
-                <DialogDescription className="mt-1 text-right">محادثة مشتركة بين جميع الإداريين، مع إرسال نصوص وصور وملفات وظهور اسم الموظف فوق رسالته.</DialogDescription>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size={iconOnly ? "icon" : "default"}
+        className={`${iconOnly ? "rounded-full" : "rounded-2xl"} ${triggerClassName}`.trim()}
+        aria-label={open ? "إغلاق المحادثة الإدارية" : "فتح المحادثة الإدارية"}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <MessageCircleMore className="h-4 w-4" />
+        {iconOnly ? null : open ? "إغلاق المحادثة" : "المحادثة"}
+      </Button>
+
+      <aside
+        className={`pointer-events-none fixed bottom-4 top-4 z-40 ${sidePositionClass} ${panelWidthClass} max-w-[calc(100vw-1rem)] transition-transform duration-300 ease-out ${open ? "translate-x-0" : closedTransformClass}`}
+        aria-hidden={!open}
+      >
+        <div className={`pointer-events-auto flex h-full flex-col overflow-hidden rounded-[2rem] border-white/80 bg-white/95 text-right shadow-[0_25px_80px_rgba(15,23,42,0.18)] backdrop-blur-sm ${side === "left" ? "ml-4" : "mr-4"}`}>
+          <div className={`border-border/60 ${sideBorderClass} border-b px-5 py-5`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => setOpen(false)} aria-label="إغلاق الشات">
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => setOpen(false)} aria-label="تصغير الشات">
+                  <Minimize2 className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => void loadChat()} disabled={isLoading || isPending} aria-label="تحديث المحادثة">
+                  {isLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-end gap-2">
+                  <p className="text-lg font-bold text-foreground">المحادثة الإدارية العامة</p>
+                  {side === "left" ? <ChevronLeft className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
+                </div>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">شات جانبي سريع داخل الصفحة لجميع الإداريين، بدون تعطيل التصفح أو تغطية الشاشة بالكامل.</p>
               </div>
             </div>
-          </DialogHeader>
+          </div>
 
-          <ScrollArea className="flex-1 bg-[linear-gradient(180deg,#f9fbfb,#f2f7f7)] px-6 py-5">
+          <ScrollArea className="flex-1 bg-[linear-gradient(180deg,#f9fbfb,#f2f7f7)] px-5 py-5">
             <div className="space-y-4">
               {!data && isLoading ? (
                 <div className="flex justify-center py-16"><LoaderCircle className="h-6 w-6 animate-spin text-primary" /></div>
@@ -232,7 +245,7 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "" }: Admi
             </div>
           </ScrollArea>
 
-          <div className="border-t border-border/60 bg-white px-6 py-5">
+          <div className="border-t border-border/60 bg-white px-5 py-5">
             {message ? <p className="mb-3 text-sm text-red-600">{message}</p> : null}
 
             {attachments.length > 0 ? (
@@ -247,25 +260,27 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "" }: Admi
               </div>
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-[auto,1fr,auto]">
-              <div className="flex items-end gap-2">
-                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void uploadSelectedFiles(event.target.files)} />
-                <Button type="button" variant="outline" className="rounded-2xl" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isPending}>
-                  {isUploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                  إرفاق
-                </Button>
-              </div>
+            <div className="grid gap-3">
               <Textarea rows={4} value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="اكتب رسالة للإداريين أو أرسل ملفًا وصورة..." className="min-h-[110px] rounded-[1.5rem] border-border/70 bg-muted/10 text-right" />
-              <div className="flex items-end justify-end">
+
+              <div className="flex items-center justify-between gap-3">
                 <Button type="button" className="rounded-2xl" onClick={handleSend} disabled={isPending || isUploading || (!messageText.trim() && attachments.length === 0)}>
                   {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
                   إرسال
                 </Button>
+
+                <div className="flex items-center gap-2">
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void uploadSelectedFiles(event.target.files)} />
+                  <Button type="button" variant="outline" className="rounded-2xl" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isPending}>
+                    {isUploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                    إرفاق
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </aside>
+    </>
   )
 }

@@ -1,6 +1,7 @@
 "use client"
 
-import { AlertCircle, CheckCircle2, Clock3, History, LoaderCircle, LogIn, LogOut, MapPin } from "lucide-react"
+import Link from "next/link"
+import { AlertCircle, BriefcaseBusiness, CheckCircle2, LoaderCircle, LogIn, LogOut, MapPin } from "lucide-react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { WorkLocationMapPicker } from "@/components/dashboard/work-location-map-picker"
@@ -12,18 +13,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import {
   formatDate,
-  formatDateTime,
   formatTime,
   formatWorkedHours,
+  getWeekdayLabel,
   toSaudiDateInputValue,
+  toSaudiTimeInputValue,
   type AdministrativeDashboardData,
 } from "@/lib/administrative-services"
 
 type AttendancePanelProps = {
   data: AdministrativeDashboardData
   onRefresh: () => Promise<void>
+  compact?: boolean
 }
 
 type Coordinates = {
@@ -36,11 +40,24 @@ const defaultRiyadhCoordinates: Coordinates = {
   longitude: 46.6753,
 }
 
-export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
+function getInitialPermissionForm() {
+  const fromTime = toSaudiTimeInputValue(new Date())
+  const toTime = toSaudiTimeInputValue(new Date(Date.now() + 60 * 60 * 1000))
+
+  return {
+    subject: "استئذان سريع",
+    details: "استئذان عاجل",
+    requestDate: toSaudiDateInputValue(new Date()),
+    fromTime,
+    toTime,
+  }
+}
+
+export function AttendancePanel({ data, onRefresh, compact = false }: AttendancePanelProps) {
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [filterDate, setFilterDate] = useState("")
+  const [advancedPermissionOpen, setAdvancedPermissionOpen] = useState(false)
+  const [permissionForm, setPermissionForm] = useState(getInitialPermissionForm)
   const [locationForm, setLocationForm] = useState({
     name: data.workLocation.name,
     address: data.workLocation.address,
@@ -61,13 +78,23 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
     })
   }, [data.workLocation])
 
-  const filteredHistory = useMemo(() => {
-    if (!filterDate) {
-      return data.attendanceHistory
-    }
+  useEffect(() => {
+    let currentSaudiDate = toSaudiDateInputValue(new Date())
 
-    return data.attendanceHistory.filter((record) => record.workDate === filterDate)
-  }, [data.attendanceHistory, filterDate])
+    const interval = window.setInterval(() => {
+      const nextSaudiDate = toSaudiDateInputValue(new Date())
+      if (nextSaudiDate === currentSaudiDate) {
+        return
+      }
+
+      currentSaudiDate = nextSaudiDate
+      setFeedback(null)
+      setPermissionForm(getInitialPermissionForm())
+      void onRefresh()
+    }, 30000)
+
+    return () => window.clearInterval(interval)
+  }, [onRefresh])
 
   async function getCurrentCoordinates() {
     return new Promise<Coordinates>((resolve, reject) => {
@@ -123,6 +150,64 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
     })
   }
 
+  function handlePermissionRequest() {
+    runRequest(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_request",
+          requestType: "permission",
+          subject: permissionForm.subject.trim() || "استئذان",
+          details: permissionForm.details,
+          requestDate: permissionForm.requestDate,
+          fromTime: permissionForm.fromTime,
+          toTime: permissionForm.toTime,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "تعذر تسجيل الاستئذان")
+      }
+
+      setFeedback({ type: "success", text: "تم تسجيل الاستئذان بنجاح" })
+      setPermissionForm(getInitialPermissionForm())
+      setAdvancedPermissionOpen(false)
+      await onRefresh()
+    })
+  }
+
+  function handleQuickPermissionRequest() {
+    const quickForm = getInitialPermissionForm()
+    setPermissionForm(quickForm)
+
+    runRequest(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_request",
+          requestType: "permission",
+          subject: quickForm.subject,
+          details: quickForm.details,
+          requestDate: quickForm.requestDate,
+          fromTime: quickForm.fromTime,
+          toTime: quickForm.toTime,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "تعذر تسجيل الاستئذان")
+      }
+
+      setFeedback({ type: "success", text: "تم إرسال الاستئذان السريع مباشرة" })
+      setPermissionForm(getInitialPermissionForm())
+      await onRefresh()
+    })
+  }
+
   function handleSaveLocation() {
     runRequest(async () => {
       const response = await fetch("/api/admin/administrative-requests", {
@@ -151,13 +236,15 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
   }
 
   const todayRecord = data.todayAttendance
-  const todayStateLabel = !todayRecord
-    ? "لم يتم تسجيل الحضور اليوم"
-    : todayRecord.clockOutAt
-      ? "اكتمل حضور اليوم"
-      : "تم تسجيل الحضور وبانتظار الانصراف"
   const canClockIn = data.workLocation.isConfigured && !todayRecord?.clockInAt
   const canClockOut = data.workLocation.isConfigured && Boolean(todayRecord?.clockInAt) && !todayRecord?.clockOutAt
+  const attendanceAction = canClockIn ? "clock_in" : canClockOut ? "clock_out" : null
+  const attendanceButtonLabel = canClockIn ? "تسجيل حضور" : canClockOut ? "تسجيل انصراف" : "اكتمل تسجيل اليوم"
+  const attendanceSummary = todayRecord?.clockOutAt
+    ? `عدد ساعات عمل اليوم: ${formatWorkedHours(todayRecord.workedMinutes)}`
+    : todayRecord?.clockInAt
+      ? `تم تسجيل الحضور الساعة: ${formatTime(todayRecord.clockInAt)}`
+      : "لم يتم تسجيل حضور اليوم بعد"
 
   return (
     <div className="space-y-4">
@@ -169,99 +256,113 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardHeader>
-            <CardTitle>تسجيل الحضور والانصراف</CardTitle>
-            <CardDescription>يعتمد التسجيل على موقعك الحالي، ولا يتم القبول إلا داخل نطاق موقع العمل المحدد من المدير.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-right">
-                <p className="text-xs text-muted-foreground">حالة اليوم</p>
-                <p className="mt-2 font-semibold text-foreground">{todayStateLabel}</p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-right">
-                <p className="text-xs text-muted-foreground">أول حضور اليوم</p>
-                <p className="mt-2 font-semibold text-foreground">{formatTime(todayRecord?.clockInAt ?? null)}</p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-right">
-                <p className="text-xs text-muted-foreground">آخر انصراف اليوم</p>
-                <p className="mt-2 font-semibold text-foreground">{formatTime(todayRecord?.clockOutAt ?? null)}</p>
-              </div>
+      <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+        <CardHeader>
+          <CardTitle>{compact ? "التحضير اليومي" : "تسجيل الحضور والانصراف"}</CardTitle>
+          <CardDescription>يعتمد التسجيل على موقعك الحالي، ويتحول زر الحضور تلقائيًا إلى زر انصراف عند تسجيل بداية الدوام.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-[1.25rem] border border-primary/15 bg-primary/5 px-5 py-4 text-right">
+            <p className="text-xs text-muted-foreground">ملخص اليوم</p>
+            <p className="mt-2 text-lg font-bold text-foreground">{attendanceSummary}</p>
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+              <span>{formatDate(toSaudiDateInputValue(new Date()))}</span>
+              <span>•</span>
+              <span>الحضور: {formatTime(todayRecord?.clockInAt ?? null)}</span>
+              <span>•</span>
+              <span>الانصراف: {formatTime(todayRecord?.clockOutAt ?? null)}</span>
             </div>
+          </div>
 
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button type="button" className="rounded-xl" disabled={isPending || !canClockIn} onClick={() => handleClock("clock_in")}>
-                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                تسجيل الحضور
-              </Button>
-              <Button type="button" variant="outline" className="rounded-xl" disabled={isPending || !canClockOut} onClick={() => handleClock("clock_out")}>
-                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-                تسجيل الانصراف
-              </Button>
-              <Button type="button" variant="secondary" className="rounded-xl" onClick={() => setHistoryOpen((current) => !current)}>
-                <History className="h-4 w-4" />
-                عرض سجلات الحضور
-              </Button>
-            </div>
-
-            {!data.workLocation.isConfigured ? (
-              <Alert variant="destructive" className="rounded-[1.25rem] text-right">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>لم يتم تفعيل موقع العمل</AlertTitle>
-                <AlertDescription>لن يتمكن الموظفون من تسجيل الحضور حتى يحدد المدير موقع العمل ونطاقه المسموح.</AlertDescription>
-              </Alert>
-            ) : (
-              <div className="rounded-[1.25rem] border border-primary/20 bg-primary/5 p-4 text-right">
-                <div className="flex items-center justify-between gap-3">
-                  <Badge variant="secondary" className="rounded-full">{data.workLocation.radiusMeters} متر</Badge>
-                  <div>
-                    <p className="font-semibold text-foreground">{data.workLocation.name}</p>
-                    <p className="text-sm text-muted-foreground">{data.workLocation.address}</p>
-                  </div>
+          {!data.workLocation.isConfigured ? (
+            <Alert variant="destructive" className="rounded-[1.25rem] text-right">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>لم يتم تفعيل موقع التحضير</AlertTitle>
+              <AlertDescription>لن يتمكن الموظفون من تسجيل الحضور حتى يحدد المدير موقع العمل ونطاقه المسموح.</AlertDescription>
+            </Alert>
+          ) : (
+            <div className="rounded-[1.25rem] border border-primary/20 bg-primary/5 p-4 text-right">
+              <div className="flex items-center justify-between gap-3">
+                <Badge variant="secondary" className="rounded-full">{data.workLocation.radiusMeters} متر</Badge>
+                <div>
+                  <p className="font-semibold text-foreground">{data.workLocation.name}</p>
+                  <p className="text-sm text-muted-foreground">{data.workLocation.address}</p>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
 
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardHeader>
-            <CardTitle>السجل اليومي</CardTitle>
-            <CardDescription>تفاصيل حضور اليوم الحالي حسب توقيت السعودية.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-right">
-            <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
-              <p className="text-xs text-muted-foreground">تاريخ اليوم</p>
-              <p className="mt-2 font-semibold text-foreground">{formatDate(toSaudiDateInputValue(new Date()))}</p>
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={isPending || !attendanceAction}
+              onClick={() => attendanceAction && handleClock(attendanceAction)}
+            >
+              {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : attendanceAction === "clock_out" ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+              {attendanceButtonLabel}
+            </Button>
+            <Button type="button" variant="outline" className="rounded-xl" onClick={handleQuickPermissionRequest} disabled={isPending}>
+              <BriefcaseBusiness className="h-4 w-4" />
+              تسجيل استئذان
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            {data.isManager ? (
+              <Button asChild variant="ghost" className="rounded-xl px-0 text-primary hover:text-primary">
+                <Link href="/dashboard/preparation-history">سجل التحضير الكامل</Link>
+              </Button>
+            ) : <span />}
+            <Button type="button" variant="ghost" className="rounded-xl px-0 text-muted-foreground hover:text-foreground" onClick={() => setAdvancedPermissionOpen((current) => !current)}>
+              {advancedPermissionOpen ? "إخفاء النموذج التفصيلي" : "تحتاج استئذانًا بتفاصيل أكثر؟"}
+            </Button>
+          </div>
+
+          {advancedPermissionOpen ? (
+            <div className="grid gap-4 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2">
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label htmlFor="permission-subject">عنوان الاستئذان</Label>
+                <Input id="permission-subject" value={permissionForm.subject} onChange={(event) => setPermissionForm((current) => ({ ...current, subject: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label htmlFor="permission-details">التفاصيل</Label>
+                <Textarea id="permission-details" rows={3} value={permissionForm.details} onChange={(event) => setPermissionForm((current) => ({ ...current, details: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="permission-date">تاريخ الاستئذان</Label>
+                <Input id="permission-date" type="date" value={permissionForm.requestDate} onChange={(event) => setPermissionForm((current) => ({ ...current, requestDate: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="permission-from-time">من الساعة</Label>
+                <Input id="permission-from-time" type="time" value={permissionForm.fromTime} onChange={(event) => setPermissionForm((current) => ({ ...current, fromTime: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="permission-to-time">إلى الساعة</Label>
+                <Input id="permission-to-time" type="time" value={permissionForm.toTime} onChange={(event) => setPermissionForm((current) => ({ ...current, toTime: event.target.value }))} />
+              </div>
+              <div className="flex items-end justify-start">
+                <Button type="button" className="rounded-xl" disabled={isPending} onClick={handlePermissionRequest}>
+                  {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  إرسال الاستئذان
+                </Button>
+              </div>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-white p-4 shadow-sm">
-              <p className="text-xs text-muted-foreground">الحضور</p>
-              <p className="mt-2 text-lg font-bold text-foreground">{formatDateTime(todayRecord?.clockInAt ?? null)}</p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-white p-4 shadow-sm">
-              <p className="text-xs text-muted-foreground">الانصراف</p>
-              <p className="mt-2 text-lg font-bold text-foreground">{formatDateTime(todayRecord?.clockOutAt ?? null)}</p>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-white p-4 shadow-sm">
-              <p className="text-xs text-muted-foreground">صافي ساعات العمل</p>
-              <p className="mt-2 text-lg font-bold text-primary">{formatWorkedHours(todayRecord?.workedMinutes ?? 0)}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
         <CardHeader>
           <CardTitle>السجل الأسبوعي</CardTitle>
-          <CardDescription>يلخص أول حضور وآخر انصراف وصافي ساعات العمل خلال آخر 7 أيام.</CardDescription>
+          <CardDescription>يعرض الأسبوع الحالي فقط من الأحد إلى السبت حسب توقيت السعودية.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="text-right">اليوم</TableHead>
+                <TableHead className="text-right">التاريخ</TableHead>
                 <TableHead className="text-right">أول حضور</TableHead>
                 <TableHead className="text-right">آخر انصراف</TableHead>
                 <TableHead className="text-right">عدد ساعات العمل</TableHead>
@@ -270,6 +371,7 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
             <TableBody>
               {data.weeklyAttendance.map((entry) => (
                 <TableRow key={entry.workDate}>
+                  <TableCell className="text-right font-medium">{getWeekdayLabel(entry.workDate)}</TableCell>
                   <TableCell className="text-right">{formatDate(entry.workDate)}</TableCell>
                   <TableCell className="text-right">{formatTime(entry.firstClockInAt)}</TableCell>
                   <TableCell className="text-right">{formatTime(entry.lastClockOutAt)}</TableCell>
@@ -280,55 +382,6 @@ export function AttendancePanel({ data, onRefresh }: AttendancePanelProps) {
           </Table>
         </CardContent>
       </Card>
-
-      {historyOpen ? (
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardHeader>
-            <CardTitle>سجلات الحضور الكاملة</CardTitle>
-            <CardDescription>يمكنك اختيار تاريخ ميلادي معين لمعرفة هل كنت حاضرًا، ومتى سجلت الحضور والانصراف، وصافي ساعات العمل.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-end justify-end gap-3">
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => setFilterDate("")}>إزالة الفلتر</Button>
-              <div className="w-full max-w-xs space-y-2 text-right">
-                <Label htmlFor="attendance-filter-date">تصفية حسب التاريخ الميلادي</Label>
-                <Input id="attendance-filter-date" type="date" value={filterDate} onChange={(event) => setFilterDate(event.target.value)} />
-              </div>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">التاريخ</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">الحضور</TableHead>
-                  <TableHead className="text-right">الانصراف</TableHead>
-                  <TableHead className="text-right">صافي ساعات العمل</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredHistory.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد سجلات مطابقة.</TableCell>
-                  </TableRow>
-                ) : (
-                  filteredHistory.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="text-right">{formatDate(record.workDate)}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={record.clockOutAt ? "default" : "secondary"}>{record.clockOutAt ? "مكتمل" : "غير مكتمل"}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{formatDateTime(record.clockInAt)}</TableCell>
-                      <TableCell className="text-right">{formatDateTime(record.clockOutAt)}</TableCell>
-                      <TableCell className="text-right font-medium text-foreground">{formatWorkedHours(record.workedMinutes)}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ) : null}
 
       {data.isManager ? (
         <Card className="rounded-[1.5rem] border-white/80 bg-white/95">

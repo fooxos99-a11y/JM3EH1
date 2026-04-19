@@ -7,6 +7,7 @@ export async function DonationCards() {
   return (
     <DonationCardsClient
       content={content}
+      contentType="donations"
       sectionId="donation"
       emptyTitle="لا توجد فرص تبرع ظاهرة حالياً"
       emptyDescription="يمكنك إظهار الفرص من لوحة التحكم عند الحاجة."

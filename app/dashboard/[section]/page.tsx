@@ -1,8 +1,9 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
 import { AboutEditor } from "@/components/dashboard/about-editor"
 import { AchievementsEditor } from "@/components/dashboard/achievements-editor"
 import { AdministrativeRequestsDashboard } from "@/components/dashboard/administrative-requests-dashboard"
+import { AttendanceHistoryDashboard } from "@/components/dashboard/attendance-history-dashboard"
 import { AchievementsPageClient } from "@/components/achievements-page-client"
 import { ColorsEditor } from "@/components/dashboard/colors-editor"
 import { DonationsEditor } from "@/components/dashboard/donations-editor"
@@ -34,10 +35,18 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     notFound()
   }
 
-  await requireAdminUser(currentSection.permission)
+  const currentUser = await requireAdminUser(currentSection.permission)
+
+  if (currentSection.managerOnly && !currentUser.permissions.includes("*")) {
+    redirect("/dashboard")
+  }
 
   if (section === "preparation") {
-    return <AdministrativeRequestsDashboard initialTab="attendance" />
+    return <AdministrativeRequestsDashboard initialTab="attendance" attendanceOnly />
+  }
+
+  if (section === "preparation-history") {
+    return <AttendanceHistoryDashboard />
   }
 
   if (section === "administrative_requests") {

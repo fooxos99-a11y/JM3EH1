@@ -20,6 +20,10 @@ const defaultRiyadhCoordinates = {
   longitude: 46.6753,
 }
 
+function buildGoogleMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+}
+
 function parseCoordinatesFromGoogleMapsUrl(url: string) {
   const normalizedUrl = url.trim()
 
@@ -30,6 +34,8 @@ function parseCoordinatesFromGoogleMapsUrl(url: string) {
   const patterns = [
     /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
     /[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]center=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
     /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
   ]
 
@@ -164,8 +170,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
             latitude,
             longitude,
             radiusMeters: locationForm.radiusMeters,
-            googleMapsUrl:
-              locationForm.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+            googleMapsUrl: locationForm.googleMapsUrl || buildGoogleMapsUrl(latitude, longitude),
           }),
         })
 
@@ -201,6 +206,26 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
       return matchesUser && matchesDate
     })
   }, [payload, selectedDate, selectedUserName])
+
+  function handleMapLocationChange(coordinates: { latitude: number; longitude: number }) {
+    setLocationForm((current) => ({
+      ...current,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      googleMapsUrl: buildGoogleMapsUrl(coordinates.latitude, coordinates.longitude),
+    }))
+  }
+
+  function handleGoogleMapsUrlChange(nextUrl: string) {
+    const parsedCoordinates = parseCoordinatesFromGoogleMapsUrl(nextUrl)
+
+    setLocationForm((current) => ({
+      ...current,
+      googleMapsUrl: nextUrl,
+      latitude: parsedCoordinates?.latitude ?? current.latitude,
+      longitude: parsedCoordinates?.longitude ?? current.longitude,
+    }))
+  }
 
   return (
     <section className="space-y-6">
@@ -242,55 +267,6 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
         </CardContent>
       </Card>
 
-      {canConfigureLocation ? (
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardHeader className="text-right">
-            <CardTitle>موقع التحضير</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 text-right">
-                <Label htmlFor="attendance-history-location-name">اسم الموقع</Label>
-                <Input id="attendance-history-location-name" value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="attendance-history-location-address">العنوان</Label>
-                <Input id="attendance-history-location-address" value={locationForm.address} onChange={(event) => setLocationForm((current) => ({ ...current, address: event.target.value }))} />
-              </div>
-            </div>
-
-            <WorkLocationMapPicker
-              value={{ latitude: locationForm.latitude, longitude: locationForm.longitude }}
-              radiusMeters={locationForm.radiusMeters}
-              onChange={(coordinates) => setLocationForm((current) => ({ ...current, ...coordinates }))}
-            />
-
-            <div className="space-y-3 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-right">
-                  <p className="font-semibold text-foreground">نطاق الحضور المسموح</p>
-                  <p className="text-xs text-muted-foreground">اسحب المؤشر لتعديل نصف القطر المسموح به لتسجيل الحضور.</p>
-                </div>
-                <span className="text-sm font-semibold text-primary">{locationForm.radiusMeters} متر</span>
-              </div>
-              <Slider value={[locationForm.radiusMeters]} min={50} max={1000} step={10} onValueChange={([value]) => setLocationForm((current) => ({ ...current, radiusMeters: value }))} />
-            </div>
-
-            <div className="space-y-2 text-right">
-              <Label htmlFor="attendance-history-location-url">رابط Google Maps</Label>
-              <Input id="attendance-history-location-url" value={locationForm.googleMapsUrl} onChange={(event) => setLocationForm((current) => ({ ...current, googleMapsUrl: event.target.value }))} placeholder="https://www.google.com/maps/..." />
-            </div>
-
-            <div className="flex justify-end">
-              <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
-                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                حفظ موقع التحضير
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
         <CardContent>
           {isLoading ? (
@@ -327,6 +303,55 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
           )}
         </CardContent>
       </Card>
+
+      {canConfigureLocation ? (
+        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+          <CardHeader className="text-right">
+            <CardTitle>موقع التحضير</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 text-right">
+                <Label htmlFor="attendance-history-location-name">اسم الموقع</Label>
+                <Input id="attendance-history-location-name" value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="attendance-history-location-address">العنوان</Label>
+                <Input id="attendance-history-location-address" value={locationForm.address} onChange={(event) => setLocationForm((current) => ({ ...current, address: event.target.value }))} />
+              </div>
+            </div>
+
+            <WorkLocationMapPicker
+              value={{ latitude: locationForm.latitude, longitude: locationForm.longitude }}
+              radiusMeters={locationForm.radiusMeters}
+              onChange={handleMapLocationChange}
+            />
+
+            <div className="space-y-3 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-right">
+                  <p className="font-semibold text-foreground">نطاق الحضور المسموح</p>
+                  <p className="text-xs text-muted-foreground">اسحب المؤشر لتعديل نصف القطر المسموح به لتسجيل الحضور.</p>
+                </div>
+                <span className="text-sm font-semibold text-primary">{locationForm.radiusMeters} متر</span>
+              </div>
+              <Slider value={[locationForm.radiusMeters]} min={50} max={1000} step={10} onValueChange={([value]) => setLocationForm((current) => ({ ...current, radiusMeters: value }))} />
+            </div>
+
+            <div className="space-y-2 text-right">
+              <Label htmlFor="attendance-history-location-url">رابط Google Maps</Label>
+              <Input id="attendance-history-location-url" value={locationForm.googleMapsUrl} onChange={(event) => handleGoogleMapsUrlChange(event.target.value)} placeholder="https://www.google.com/maps/..." />
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
+                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                حفظ موقع التحضير
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </section>
   )
 }

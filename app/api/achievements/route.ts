@@ -150,7 +150,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireCurrentUser()
-    const payload = postSchema.parse(await request.json())
+    const parsed = postSchema.safeParse(await request.json())
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "بيانات الإنجاز غير صحيحة" },
+        { status: 400 },
+      )
+    }
+
+    const payload = parsed.data
     const { weekStartDate, weekEndDate } = getWeekRangeFromStartDate(payload.weekStartDate)
     const currentWeekStartDate = formatDateInput(startOfWeekMonday(new Date()))
 

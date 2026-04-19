@@ -29,6 +29,65 @@ const coordinateSchema = z.object({
   longitude: z.number().min(-180).max(180),
 })
 
+function parseCoordinatesFromGoogleMapsUrl(url: string) {
+  const normalizedUrl = url.trim()
+
+  if (!normalizedUrl) {
+    return null
+  }
+
+  const patterns = [
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]center=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+  ]
+
+  for (const pattern of patterns) {
+    const match = normalizedUrl.match(pattern)
+    if (!match) {
+      continue
+    }
+
+    const latitude = Number.parseFloat(match[1])
+    const longitude = Number.parseFloat(match[2])
+
+    if (!Number.isNaN(latitude) && !Number.isNaN(longitude)) {
+      return { latitude, longitude }
+    }
+  }
+
+  return null
+}
+
+async function resolveCoordinatesFromGoogleMapsUrl(url: string) {
+  const directCoordinates = parseCoordinatesFromGoogleMapsUrl(url)
+
+  if (directCoordinates) {
+    return directCoordinates
+  }
+
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+      },
+      cache: "no-store",
+    })
+
+    return parseCoordinatesFromGoogleMapsUrl(response.url)
+  } catch {
+    return null
+  }
+}
+
+function buildGoogleMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+}
+
 const createRequestSchema = z
   .object({
     action: z.literal("create_request"),
@@ -690,14 +749,27 @@ export async function PATCH(request: Request) {
     }
 
     const currentRow = await getLatestWorkLocation()
+    const resolvedCoordinates = parsed.data.googleMapsUrl
+      ? await resolveCoordinatesFromGoogleMapsUrl(parsed.data.googleMapsUrl)
+      : null
+
+    if (parsed.data.googleMapsUrl && !resolvedCoordinates) {
+      return NextResponse.json(
+        { error: "تعذر قراءة الإحداثيات من رابط Google Maps. استخدم رابطًا مباشرًا للموقع أو حدده من الخريطة." },
+        { status: 400 },
+      )
+    }
+
     const normalizedName = parsed.data.name || currentRow?.name || "موقع العمل الرئيسي"
+    const finalLatitude = resolvedCoordinates?.latitude ?? parsed.data.latitude
+    const finalLongitude = resolvedCoordinates?.longitude ?? parsed.data.longitude
     const payload = {
       name: normalizedName,
       address: parsed.data.address,
-      latitude: parsed.data.latitude,
-      longitude: parsed.data.longitude,
+      latitude: finalLatitude,
+      longitude: finalLongitude,
       radius_meters: parsed.data.radiusMeters,
-      google_maps_url: parsed.data.googleMapsUrl,
+      google_maps_url: buildGoogleMapsUrl(finalLatitude, finalLongitude),
       updated_by: user.id,
     }
 

@@ -57,14 +57,10 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-border/60 px-5 py-5 text-right">
         {logoUrl ? (
-          <div className="flex items-center justify-end gap-3">
-            <div className="text-right">
-              <p className={`text-sm ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
-              <p className={`mt-1 text-[11px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
-            </div>
-            <div className="flex h-[64px] w-[64px] items-center justify-center">
-              <img src={logoUrl} alt={logoAlt} className="h-full w-full object-contain" />
-            </div>
+          <div className="space-y-1 text-right">
+            <p className={`text-base leading-tight ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
+            <p className={`text-[11px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
+            <p className="pt-1 text-[11px] font-medium text-muted-foreground">لوحة التحكم</p>
           </div>
         ) : (
           <h2 className="text-lg font-bold text-foreground">لوحة التحكم</h2>
@@ -128,8 +124,8 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 export function AdminDashboardShell({ userId, userName, userTitle, userPermissions, logoUrl, logoAlt, logoArabicName, logoEnglishName, logoTextColor, logoArabicFontWeight, logoEnglishFontWeight, children }: AdminDashboardShellProps) {
   return (
     <div dir="rtl" className="min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="hidden w-[320px] shrink-0 border-r border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
+      <div className="mx-auto flex min-h-screen max-w-[1600px] items-start">
+        <aside className="sticky top-0 hidden h-screen w-[320px] shrink-0 border-r border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
           <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
         </aside>
 

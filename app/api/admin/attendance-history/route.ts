@@ -34,6 +34,10 @@ type WorkLocationRow = {
   updated_by: string | null
 }
 
+function buildGoogleMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+}
+
 function getWorkedMinutes(clockInAt: string | null, clockOutAt: string | null) {
   if (!clockInAt || !clockOutAt) {
     return 0
@@ -94,7 +98,7 @@ function mapWorkLocation(row: WorkLocationRow | null, namesById: Map<string, str
     latitude: row.latitude,
     longitude: row.longitude,
     radiusMeters: row.radius_meters,
-    googleMapsUrl: row.google_maps_url ?? "",
+    googleMapsUrl: buildGoogleMapsUrl(row.latitude, row.longitude),
     updatedAt: row.updated_at,
     updatedByName: row.updated_by ? (namesById.get(row.updated_by) ?? null) : null,
     isConfigured: true,

@@ -116,7 +116,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           {hasChildren ? (
                             <button
                               type="button"
-                              className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
+                              className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
                               <span>{item.label}</span>
@@ -125,11 +125,10 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           ) : (
                             <Link
                               href={item.href}
-                              className="flex items-center justify-between rounded-full bg-transparent px-4 py-2.5 text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
+                              className="flex w-full items-center justify-end rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
                               <span>{item.label}</span>
-                              <span className="opacity-0">.</span>
                             </Link>
                           )}
 
@@ -139,7 +138,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  className="flex items-center justify-end rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
+                                  className="flex w-full items-center justify-end rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
                                   onClick={() => setIsGovernanceOpen(false)}
                                 >
                                   <span>{child.label}</span>
@@ -190,7 +189,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             <div className="mt-2 rounded-[1.35rem] border border-slate-200/90 bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 font-medium text-slate-900 transition-all duration-300 hover:bg-slate-100/90"
+                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-right font-medium text-slate-900 transition-all duration-300 hover:bg-slate-100/90"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
@@ -204,7 +203,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                       {item.children?.length ? (
                         <button
                           type="button"
-                          className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
+                          className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
                           <span>{item.label}</span>
@@ -214,7 +213,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         <div className="flex justify-end">
                           <Link
                             href={item.href}
-                            className="inline-flex items-center rounded-full bg-transparent px-4 py-2.5 text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-white/90"
+                            className="inline-flex w-full items-center justify-end rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-white/90"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -230,7 +229,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="flex items-center justify-end rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950"
+                              className="flex w-full items-center justify-end rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)

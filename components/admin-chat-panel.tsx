@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, ChevronRight, File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, SendHorizontal, X } from "lucide-react"
+import { File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, SendHorizontal, X } from "lucide-react"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import type { AdminChatAttachment, AdminChatData, AdminChatMessage } from "@/lib/admin-chat"
@@ -206,21 +206,18 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
         aria-hidden={!open}
       >
         <div className={`pointer-events-auto flex h-full flex-col overflow-hidden rounded-[2rem] border-white/80 bg-white/95 text-right shadow-[0_25px_80px_rgba(15,23,42,0.18)] backdrop-blur-sm ${side === "left" ? "ml-4" : "mr-4"}`}>
-          <div className={`border-border/60 ${sideBorderClass} border-b px-5 py-5`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="icon" className="rounded-2xl" onClick={() => setOpen(false)} aria-label="إغلاق الشات">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-end gap-2">
-                  <p className="text-lg font-bold text-foreground">المحادثة الإدارية العامة</p>
-                  {side === "left" ? <ChevronLeft className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
-                </div>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">شات جانبي سريع داخل الصفحة لجميع الإداريين، بدون تعطيل التصفح أو تغطية الشاشة بالكامل.</p>
-              </div>
+          <div className={`border-border/60 ${sideBorderClass} border-b px-5 py-4`}>
+            <div className="flex justify-start">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-auto w-auto rounded-none p-0 text-foreground shadow-none hover:bg-transparent"
+                onClick={() => setOpen(false)}
+                aria-label="إغلاق الشات"
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 

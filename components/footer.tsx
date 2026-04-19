@@ -14,7 +14,7 @@ export async function Footer() {
           <div className="lg:col-span-1">
             <div className="mb-6 flex items-center">
               {logo.logo ? (
-                <div className="flex h-20 items-center rounded-2xl bg-white/90 px-4 py-3 shadow-sm backdrop-blur-sm">
+                <div className="flex h-20 items-center px-4 py-3">
                   <img src={logo.logo} alt={logo.alt} className="h-full w-auto max-w-[220px] object-contain" />
                 </div>
               ) : (

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { toSaudiDateInputValue, type AttendanceRecord } from "@/lib/administrative-services"
+import { toSaudiDateInputValue, type AttendanceRecord, type WorkLocationSettings } from "@/lib/administrative-services"
 import { getCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
@@ -20,6 +20,18 @@ type AttendanceRow = {
 type UserRow = {
   id: string
   full_name: string
+}
+
+type WorkLocationRow = {
+  id: string
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+  radius_meters: number
+  google_maps_url: string | null
+  updated_at: string
+  updated_by: string | null
 }
 
 function getWorkedMinutes(clockInAt: string | null, clockOutAt: string | null) {
@@ -52,6 +64,40 @@ function mapAttendance(row: AttendanceRow, namesById: Map<string, string>): Atte
     workedMinutes: getWorkedMinutes(row.clock_in_at, row.clock_out_at),
     status: row.clock_in_at && row.clock_out_at ? "present" : "incomplete",
     notes: row.notes,
+  }
+}
+
+function createEmptyWorkLocation(): WorkLocationSettings {
+  return {
+    id: null,
+    name: "",
+    address: "",
+    latitude: null,
+    longitude: null,
+    radiusMeters: 100,
+    googleMapsUrl: "",
+    updatedAt: null,
+    updatedByName: null,
+    isConfigured: false,
+  }
+}
+
+function mapWorkLocation(row: WorkLocationRow | null, namesById: Map<string, string>): WorkLocationSettings {
+  if (!row) {
+    return createEmptyWorkLocation()
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    radiusMeters: row.radius_meters,
+    googleMapsUrl: row.google_maps_url ?? "",
+    updatedAt: row.updated_at,
+    updatedByName: row.updated_by ? (namesById.get(row.updated_by) ?? null) : null,
+    isConfigured: true,
   }
 }
 
@@ -88,10 +134,22 @@ export async function GET() {
     return NextResponse.json({ error: recordsError.message }, { status: 400 })
   }
 
+  const { data: workLocationRow, error: workLocationError } = await supabase
+    .from("work_location_settings")
+    .select("id,name,address,latitude,longitude,radius_meters,google_maps_url,updated_at,updated_by")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<WorkLocationRow>()
+
+  if (workLocationError && workLocationError.code !== "PGRST116") {
+    return NextResponse.json({ error: workLocationError.message }, { status: 400 })
+  }
+
   const attendanceHistory = ((records ?? []) as AttendanceRow[]).map((row) => mapAttendance(row, namesById))
   const todayKey = toSaudiDateInputValue(new Date())
 
   return NextResponse.json({
+    workLocation: mapWorkLocation(workLocationRow ?? null, namesById),
     records: attendanceHistory,
     summary: {
       totalRecords: attendanceHistory.length,

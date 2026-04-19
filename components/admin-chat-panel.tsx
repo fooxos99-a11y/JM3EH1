@@ -1,6 +1,6 @@
 "use client"
 
-import { File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, SendHorizontal, X } from "lucide-react"
+import { File, Image as ImageIcon, LoaderCircle, MessageCircleMore, Paperclip, SendHorizontal } from "lucide-react"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import type { AdminChatAttachment, AdminChatData, AdminChatMessage } from "@/lib/admin-chat"
@@ -14,13 +14,6 @@ type AdminChatPanelProps = {
   side?: "left" | "right"
 }
 
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("ar-SA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
-}
-
 function isImageAttachment(attachment: AdminChatAttachment) {
   return attachment.mimeType.startsWith("image/")
 }
@@ -30,11 +23,11 @@ function MessageItem({ currentUserId, message }: { currentUserId: string; messag
 
   return (
     <div className={`flex ${isOwn ? "justify-start" : "justify-end"}`}>
-      <div className={`max-w-[82%] rounded-[1.5rem] border px-4 py-3 text-right shadow-sm ${isOwn ? "border-primary/20 bg-primary/10" : "border-border/60 bg-white"}`}>
-        <p className="text-xs font-bold text-primary">{message.senderName}</p>
-        {message.messageText ? <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-foreground">{message.messageText}</p> : null}
+      <div className={`max-w-[74%] rounded-[1.2rem] border px-3 py-2.5 text-right shadow-sm ${isOwn ? "border-primary/20 bg-primary/10" : "border-border/60 bg-white"}`}>
+        <p className="text-[11px] font-bold text-primary">{message.senderName}</p>
+        {message.messageText ? <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-6 text-foreground">{message.messageText}</p> : null}
         {message.attachments.length > 0 ? (
-          <div className="mt-3 space-y-3">
+          <div className="mt-2.5 space-y-2.5">
             {message.attachments.map((attachment) => (
               <div key={`${message.id}-${attachment.url}`} className="overflow-hidden rounded-[1rem] border border-border/60 bg-white/80">
                 {isImageAttachment(attachment) ? (
@@ -42,7 +35,7 @@ function MessageItem({ currentUserId, message }: { currentUserId: string; messag
                     <img src={attachment.url} alt={attachment.name} className="max-h-64 w-full object-contain bg-muted/10" />
                   </a>
                 ) : (
-                  <a href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-foreground hover:bg-muted/20">
+                  <a href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs text-foreground hover:bg-muted/20">
                     <File className="h-4 w-4 shrink-0" />
                     <div className="min-w-0 flex-1 text-right">
                       <p className="truncate font-medium">{attachment.name}</p>
@@ -54,7 +47,6 @@ function MessageItem({ currentUserId, message }: { currentUserId: string; messag
             ))}
           </div>
         ) : null}
-        <p className="mt-2 text-[11px] text-muted-foreground">{formatTime(message.createdAt)}</p>
       </div>
     </div>
   )
@@ -201,27 +193,14 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
         {iconOnly ? null : open ? "إغلاق المحادثة" : "المحادثة"}
       </Button>
 
+      {open ? <div className="fixed inset-0 z-30 bg-transparent" onClick={() => setOpen(false)} aria-hidden="true" /> : null}
+
       <aside
         className={`pointer-events-none fixed bottom-4 top-4 z-40 ${sidePositionClass} ${panelWidthClass} max-w-[calc(100vw-1rem)] transition-transform duration-300 ease-out ${open ? "translate-x-0" : closedTransformClass}`}
         aria-hidden={!open}
       >
-        <div className={`pointer-events-auto flex h-full flex-col overflow-hidden rounded-[2rem] border-white/80 bg-white/95 text-right shadow-[0_25px_80px_rgba(15,23,42,0.18)] backdrop-blur-sm ${side === "left" ? "ml-4" : "mr-4"}`}>
-          <div className={`border-border/60 ${sideBorderClass} border-b px-5 py-4`}>
-            <div className="flex justify-start">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-auto w-auto rounded-none p-0 text-foreground shadow-none hover:bg-transparent"
-                onClick={() => setOpen(false)}
-                aria-label="إغلاق الشات"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-
-          <ScrollArea className="flex-1 bg-[linear-gradient(180deg,#f9fbfb,#f2f7f7)] px-5 py-5">
+        <div className={`pointer-events-auto flex h-full flex-col overflow-hidden rounded-[2rem] border-white/80 bg-white/95 text-right shadow-[0_25px_80px_rgba(15,23,42,0.18)] backdrop-blur-sm ${side === "left" ? "ml-4" : "mr-4"}`} onClick={(event) => event.stopPropagation()}>
+          <ScrollArea className="flex-1 bg-[linear-gradient(180deg,#f9fbfb,#f2f7f7)] px-4 py-4">
             <div className="space-y-4">
               {!data && isLoading ? (
                 <div className="flex justify-center py-16"><LoaderCircle className="h-6 w-6 animate-spin text-primary" /></div>

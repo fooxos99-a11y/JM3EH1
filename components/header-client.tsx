@@ -60,7 +60,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
         <div className={`flex items-center justify-between rounded-[1.75rem] px-3 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "border border-white/15 bg-black/10 py-3 backdrop-blur-md"}`}>
           <Link href="/" className="group flex items-center">
             {logo.logo ? (
-              <div className={`flex h-16 items-center rounded-2xl px-3 py-2 shadow-sm transition-transform duration-300 group-hover:scale-[1.02] ${useSolidHeader ? "bg-white" : "bg-white/95"}`}>
+              <div className="flex h-16 items-center px-3 py-2 transition-transform duration-300 group-hover:scale-[1.02]">
                 <img src={logo.logo} alt={logo.alt} className="h-full w-auto max-w-[180px] object-contain" />
               </div>
             ) : (

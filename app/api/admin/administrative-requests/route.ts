@@ -93,8 +93,8 @@ const patchSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("configure_work_location"),
-    name: z.string().trim().min(3),
-    address: z.string().trim().min(3),
+    name: z.string().trim().min(1),
+    address: z.string().trim(),
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     radiusMeters: z.number().int().min(10).max(5000),

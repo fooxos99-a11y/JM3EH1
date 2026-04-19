@@ -1,17 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { AlertCircle, BriefcaseBusiness, CheckCircle2, LoaderCircle, LogIn, LogOut, MapPin } from "lucide-react"
+import { AlertCircle, BriefcaseBusiness, CheckCircle2, LoaderCircle } from "lucide-react"
 import { useEffect, useState, useTransition } from "react"
 
-import { WorkLocationMapPicker } from "@/components/dashboard/work-location-map-picker"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   formatDate,
@@ -34,11 +30,6 @@ type Coordinates = {
   longitude: number
 }
 
-const defaultRiyadhCoordinates: Coordinates = {
-  latitude: 24.7136,
-  longitude: 46.6753,
-}
-
 function getInitialPermissionForm() {
   const fromTime = toSaudiTimeInputValue(new Date())
   const toTime = toSaudiTimeInputValue(new Date(Date.now() + 60 * 60 * 1000))
@@ -55,25 +46,6 @@ function getInitialPermissionForm() {
 export function AttendancePanel({ data, onRefresh, compact = false }: AttendancePanelProps) {
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [locationForm, setLocationForm] = useState({
-    name: data.workLocation.name,
-    address: data.workLocation.address,
-    radiusMeters: data.workLocation.radiusMeters,
-    latitude: data.workLocation.latitude ?? defaultRiyadhCoordinates.latitude,
-    longitude: data.workLocation.longitude ?? defaultRiyadhCoordinates.longitude,
-    googleMapsUrl: data.workLocation.googleMapsUrl,
-  })
-
-  useEffect(() => {
-    setLocationForm({
-      name: data.workLocation.name,
-      address: data.workLocation.address,
-      radiusMeters: data.workLocation.radiusMeters,
-      latitude: data.workLocation.latitude ?? defaultRiyadhCoordinates.latitude,
-      longitude: data.workLocation.longitude ?? defaultRiyadhCoordinates.longitude,
-      googleMapsUrl: data.workLocation.googleMapsUrl,
-    })
-  }, [data.workLocation])
 
   useEffect(() => {
     let currentSaudiDate = toSaudiDateInputValue(new Date())
@@ -174,33 +146,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
     })
   }
 
-  function handleSaveLocation() {
-    runRequest(async () => {
-      const response = await fetch("/api/admin/administrative-requests", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "configure_work_location",
-          name: locationForm.name,
-          address: locationForm.address,
-          latitude: locationForm.latitude,
-          longitude: locationForm.longitude,
-          radiusMeters: locationForm.radiusMeters,
-          googleMapsUrl:
-            locationForm.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${locationForm.latitude},${locationForm.longitude}`,
-        }),
-      })
-
-      const payload = (await response.json()) as { error?: string }
-      if (!response.ok) {
-        throw new Error(payload.error ?? "تعذر حفظ موقع العمل")
-      }
-
-      setFeedback({ type: "success", text: "تم حفظ موقع العمل ونطاق الحضور" })
-      await onRefresh()
-    })
-  }
-
   const todayRecord = data.todayAttendance
   const hasClockedIn = Boolean(todayRecord?.clockInAt)
   const hasClockedOut = Boolean(todayRecord?.clockOutAt)
@@ -250,7 +195,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               disabled={isPending || !attendanceAction}
               onClick={() => attendanceAction && handleClock(attendanceAction)}
             >
-              {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : attendanceAction === "clock_out" ? <LogOut className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
               {attendanceButtonLabel}
             </Button>
             {showPermissionButton ? (
@@ -300,56 +244,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
           ) : null}
         </CardContent>
       </Card>
-
-      {data.isManager ? (
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardHeader>
-            <CardTitle>إعداد موقع العمل</CardTitle>
-            <CardDescription>مدير النظام فقط يمكنه تحديد الموقع عبر الخريطة التفاعلية وتعديل النطاق المسموح لتسجيل الحضور والانصراف.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 text-right">
-                <Label htmlFor="work-location-name">اسم الموقع</Label>
-                <Input id="work-location-name" value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right">
-                <Label htmlFor="work-location-address">العنوان</Label>
-                <Input id="work-location-address" value={locationForm.address} onChange={(event) => setLocationForm((current) => ({ ...current, address: event.target.value }))} />
-              </div>
-            </div>
-
-            <WorkLocationMapPicker
-              value={{ latitude: locationForm.latitude, longitude: locationForm.longitude }}
-              radiusMeters={locationForm.radiusMeters}
-              onChange={(coordinates) => setLocationForm((current) => ({ ...current, ...coordinates }))}
-            />
-
-            <div className="space-y-3 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-primary">{locationForm.radiusMeters} متر</span>
-                <div className="text-right">
-                  <p className="font-semibold text-foreground">نطاق الحضور المسموح</p>
-                  <p className="text-xs text-muted-foreground">اسحب المؤشر لتعديل نصف القطر المسموح به للموظفين.</p>
-                </div>
-              </div>
-              <Slider value={[locationForm.radiusMeters]} min={50} max={1000} step={10} onValueChange={([value]) => setLocationForm((current) => ({ ...current, radiusMeters: value }))} />
-            </div>
-
-            <div className="space-y-2 text-right">
-              <Label htmlFor="work-location-google-url">رابط Google Maps</Label>
-              <Input id="work-location-google-url" value={locationForm.googleMapsUrl} onChange={(event) => setLocationForm((current) => ({ ...current, googleMapsUrl: event.target.value }))} placeholder="https://www.google.com/maps/..." />
-            </div>
-
-            <div className="flex justify-end">
-              <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
-                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                حفظ موقع العمل
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
     </div>
   )
 }

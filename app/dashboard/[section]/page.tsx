@@ -49,7 +49,7 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
   }
 
   if (section === "preparation-history") {
-    return <AttendanceHistoryDashboard />
+    return <AttendanceHistoryDashboard canConfigureLocation={currentUser.permissions.includes("*")} />
   }
 
   if (section === "administrative_requests") {

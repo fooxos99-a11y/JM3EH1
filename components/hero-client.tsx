@@ -58,14 +58,10 @@ export function HeroClient({ content }: HeroClientProps) {
       {slides.map((slide, index) => (
         <div key={slide.id} className={`absolute inset-0 transition-all duration-1000 ease-out ${index === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}>
           <div className="absolute inset-0 bg-cover bg-center transition-transform duration-100 blur-sm" style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY}px) scale(1.12)` }} />
-          <div className="absolute inset-0 flex items-center justify-center px-4 py-24 md:px-8">
-            <img
-              src={slide.image}
-              alt={slide.title}
-              className="h-auto max-h-full w-full max-w-[2400px] object-contain"
-              style={{ transform: `translateY(${scrollY * 0.35}px)` }}
-            />
-          </div>
+          <div
+            className="absolute inset-0 bg-contain bg-center bg-no-repeat transition-transform duration-100"
+            style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY * 0.35}px)` }}
+          />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(7,24,22,0.36),rgba(18,88,78,0.14),rgba(7,24,22,0.4))]" />
         </div>
       ))}

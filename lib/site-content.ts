@@ -322,8 +322,10 @@ export const colorsContentSchema = z.object({
 })
 
 export const logoContentSchema = z.object({
-  logo: imageSchema,
-  alt: z.string(),
+  logo: imageSchema.default(""),
+  alt: z.string().default("شعار الجمعية"),
+  arabicName: z.string().default("العناية بالمسلمين الجدد"),
+  englishName: z.string().default("New Muslims Care Association"),
 })
 
 export const adminAccountSchema = z.object({
@@ -732,6 +734,8 @@ export const defaultColorsContent: ColorsContent = {
 export const defaultLogoContent: LogoContent = {
   logo: "",
   alt: "شعار الجمعية",
+  arabicName: "العناية بالمسلمين الجدد",
+  englishName: "New Muslims Care Association",
 }
 
 export const defaultPermissionsContent: PermissionsContent = {

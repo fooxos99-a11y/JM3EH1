@@ -6,25 +6,33 @@ import { getSiteSectionContent } from "@/lib/site-content"
 export async function Footer() {
   const content = await getSiteSectionContent("footer")
   const logo = await getSiteSectionContent("logo")
+  const arabicName = logo.arabicName.trim() || content.organizationName
+  const englishName = logo.englishName.trim() || "New Muslims Care Association"
 
   return (
     <footer className="relative border-t border-border/50 bg-gradient-to-b from-[#f8fafa] to-white">
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
-            <div className="mb-6 flex items-center">
+            <div className="mb-6 flex items-center gap-3">
               {logo.logo ? (
-                <div className="flex h-20 items-center px-4 py-3">
-                  <img src={logo.logo} alt={logo.alt} className="h-full w-auto max-w-[220px] object-contain" />
-                </div>
+                <>
+                  <div className="flex h-[84px] w-[84px] items-center justify-center px-1 py-3">
+                    <img src={logo.logo} alt={logo.alt} className="h-full w-full object-contain" />
+                  </div>
+                  <div className="text-right">
+                    <h3 className="text-lg font-extrabold text-foreground">{arabicName}</h3>
+                    <p className="mt-1 text-xs font-semibold tracking-[0.02em] text-muted-foreground" dir="ltr">{englishName}</p>
+                  </div>
+                </>
               ) : (
                 <div className="flex items-center gap-3">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[#01b5b2] shadow-lg shadow-primary/20">
                     <span className="text-xl font-bold text-white">ع</span>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground">{content.organizationName}</h3>
-                    <p className="text-xs text-muted-foreground">{content.city}</p>
+                  <div className="text-right">
+                    <h3 className="text-lg font-bold text-foreground">{arabicName}</h3>
+                    <p className="text-xs text-muted-foreground" dir="ltr">{englishName}</p>
                   </div>
                 </div>
               )}

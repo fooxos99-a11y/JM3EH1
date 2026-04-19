@@ -50,6 +50,9 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
     setExpandedGovernanceHref((current) => (current === href ? null : href))
   }
 
+  const arabicName = logo.arabicName.trim() || "العناية بالمسلمين الجدد"
+  const englishName = logo.englishName.trim() || "New Muslims Care Association"
+
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-50 transition-all duration-500 ${
@@ -58,19 +61,25 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
     >
       <div className="container mx-auto px-4">
         <div className={`flex items-center justify-between rounded-[1.75rem] px-3 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "border border-white/15 bg-black/10 py-3 backdrop-blur-md"}`}>
-          <Link href="/" className="group flex items-center">
+          <Link href="/" className="group flex items-center gap-3">
             {logo.logo ? (
-              <div className="flex h-16 items-center px-3 py-2 transition-transform duration-300 group-hover:scale-[1.02]">
-                <img src={logo.logo} alt={logo.alt} className="h-full w-auto max-w-[180px] object-contain" />
-              </div>
+              <>
+                <div className="flex h-[72px] w-[72px] items-center justify-center px-1 py-2 transition-transform duration-300 group-hover:scale-[1.02]">
+                  <img src={logo.logo} alt={logo.alt} className="h-full w-full object-contain" />
+                </div>
+                <div className={`text-right transition-colors duration-300 ${useSolidHeader ? "text-foreground" : "text-white"}`}>
+                  <h1 className="text-base font-extrabold leading-tight md:text-lg">{arabicName}</h1>
+                  <p className={`mt-1 text-[10px] font-semibold tracking-[0.02em] md:text-xs ${useSolidHeader ? "text-muted-foreground" : "text-white/70"}`} dir="ltr">{englishName}</p>
+                </div>
+              </>
             ) : (
               <div className={`flex items-center gap-3 transition-colors duration-300 ${useSolidHeader ? "text-foreground" : "text-white"}`}>
                 <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${useSolidHeader ? "bg-primary" : "bg-white/10 backdrop-blur-sm"}`}>
                   <span className={`text-xl font-bold ${useSolidHeader ? "text-primary-foreground" : "text-white"}`}>ع</span>
                 </div>
-                <div>
-                  <h1 className="text-lg font-bold leading-tight">العناية بالمسلمين الجدد</h1>
-                  <p className={`text-xs ${useSolidHeader ? "text-muted-foreground" : "text-white/70"}`}>بريدة - القصيم</p>
+                <div className="text-right">
+                  <h1 className="text-lg font-bold leading-tight">{arabicName}</h1>
+                  <p className={`text-xs ${useSolidHeader ? "text-muted-foreground" : "text-white/70"}`} dir="ltr">{englishName}</p>
                 </div>
               </div>
             )}

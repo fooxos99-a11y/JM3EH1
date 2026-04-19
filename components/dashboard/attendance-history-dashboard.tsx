@@ -7,6 +7,7 @@ import { WorkLocationMapPicker } from "@/components/dashboard/work-location-map-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DatePickerField } from "@/components/ui/date-picker-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -236,7 +237,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
           </div>
           <div className="space-y-2 text-right">
             <Label htmlFor="attendance-history-date">التاريخ</Label>
-            <Input id="attendance-history-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="text-right" />
+            <DatePickerField id="attendance-history-date" value={selectedDate} onChange={setSelectedDate} className="text-right" placeholder="اختر التاريخ" />
           </div>
         </CardContent>
       </Card>

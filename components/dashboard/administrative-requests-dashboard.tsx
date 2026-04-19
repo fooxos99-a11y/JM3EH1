@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DatePickerField } from "@/components/ui/date-picker-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -309,11 +310,11 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                     </div>
                     <div className="space-y-2 text-right">
                       <Label htmlFor="request-start-date">من تاريخ</Label>
-                      <Input id="request-start-date" type="date" value={requestForm.startDate} onChange={(event) => setRequestForm((current) => ({ ...current, startDate: event.target.value }))} />
+                      <DatePickerField id="request-start-date" value={requestForm.startDate} onChange={(value) => setRequestForm((current) => ({ ...current, startDate: value }))} placeholder="اختر تاريخ البداية" />
                     </div>
                     <div className="space-y-2 text-right">
                       <Label htmlFor="request-end-date">إلى تاريخ</Label>
-                      <Input id="request-end-date" type="date" value={requestForm.endDate} onChange={(event) => setRequestForm((current) => ({ ...current, endDate: event.target.value }))} />
+                      <DatePickerField id="request-end-date" value={requestForm.endDate} onChange={(value) => setRequestForm((current) => ({ ...current, endDate: value }))} placeholder="اختر تاريخ النهاية" />
                     </div>
                     <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-right">
                       <p className="text-xs text-muted-foreground">عدد الأيام المحتسبة</p>
@@ -326,7 +327,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                   <>
                     <div className="space-y-2 text-right">
                       <Label htmlFor="request-date">تاريخ الإذن</Label>
-                      <Input id="request-date" type="date" value={requestForm.requestDate} onChange={(event) => setRequestForm((current) => ({ ...current, requestDate: event.target.value }))} />
+                      <DatePickerField id="request-date" value={requestForm.requestDate} onChange={(value) => setRequestForm((current) => ({ ...current, requestDate: value }))} placeholder="اختر تاريخ الإذن" />
                     </div>
                     <div className="space-y-2 text-right">
                       <Label htmlFor="request-from-time">من الساعة</Label>

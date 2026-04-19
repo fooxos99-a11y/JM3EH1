@@ -1,13 +1,11 @@
 "use client"
 
-import Link from "next/link"
 import { AlertCircle, BriefcaseBusiness, CheckCircle2, LoaderCircle } from "lucide-react"
 import { useEffect, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   formatDate,
@@ -28,6 +26,7 @@ type AttendancePanelProps = {
 type Coordinates = {
   latitude: number
   longitude: number
+  accuracy?: number
 }
 
 function getInitialPermissionForm() {
@@ -76,6 +75,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
           })
         },
         () => reject(new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح")),
@@ -176,16 +176,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               <AlertTitle>لم يتم تفعيل موقع التحضير</AlertTitle>
               <AlertDescription>لن يتمكن الموظفون من تسجيل الحضور حتى يحدد المدير موقع العمل ونطاقه المسموح.</AlertDescription>
             </Alert>
-          ) : (
-            <div className="rounded-[1.25rem] border border-primary/20 bg-primary/5 p-4 text-right">
-              <div className="flex items-center justify-between gap-3">
-                <Badge variant="secondary" className="rounded-full">{data.workLocation.radiusMeters} متر</Badge>
-                <div>
-                  <p className="font-semibold text-foreground">{data.workLocation.name}</p>
-                  <p className="text-sm text-muted-foreground">{data.workLocation.address}</p>
-                </div>
-              </div>
-            </div>
           )}
 
           <div className="flex flex-wrap justify-center gap-3">

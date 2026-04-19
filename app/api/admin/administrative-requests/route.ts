@@ -27,6 +27,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server"
 const coordinateSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  accuracy: z.number().min(0).max(5000).optional(),
 })
 
 function parseCoordinatesFromGoogleMapsUrl(url: string) {
@@ -606,7 +607,7 @@ async function insertAdministrativeRequest(userId: string, payload: z.infer<type
   return error
 }
 
-async function handleClockAttendance(userId: string, eventType: "clock_in" | "clock_out", coordinates: { latitude: number; longitude: number }) {
+async function handleClockAttendance(userId: string, eventType: "clock_in" | "clock_out", coordinates: { latitude: number; longitude: number; accuracy?: number }) {
   const supabase = createSupabaseAdminClient()
   const workLocation = await getLatestWorkLocation()
 
@@ -621,8 +622,19 @@ async function handleClockAttendance(userId: string, eventType: "clock_in" | "cl
     workLocation.longitude,
   )
 
-  if (distance > workLocation.radius_meters) {
-    return NextResponse.json({ error: "لا يمكنك تسجيل الحضور خارج نطاق موقع العمل" }, { status: 400 })
+  const gpsAccuracyBuffer = Math.min(Math.max(coordinates.accuracy ?? 0, 0), 150)
+  const allowedDistance = workLocation.radius_meters + gpsAccuracyBuffer
+
+  if (distance > allowedDistance) {
+    return NextResponse.json(
+      {
+        error:
+          gpsAccuracyBuffer > 0
+            ? `لا يمكنك تسجيل الحضور خارج نطاق موقع العمل. المسافة الحالية تقريبًا ${Math.round(distance)} متر، ودقة موقع الجهاز ${Math.round(gpsAccuracyBuffer)} متر.`
+            : "لا يمكنك تسجيل الحضور خارج نطاق موقع العمل",
+      },
+      { status: 400 },
+    )
   }
 
   const workDate = getSaudiDateKey()

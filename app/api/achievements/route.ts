@@ -128,7 +128,8 @@ export async function GET(request: Request) {
     const user = await requireCurrentUser()
     const { searchParams } = new URL(request.url)
     const weekStartDate = searchParams.get("weekStartDate") ?? undefined
-    return NextResponse.json(await loadAchievementsPageData(user.id, user.role === "admin", weekStartDate))
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, weekStartDate))
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -166,7 +167,8 @@ export async function POST(request: Request) {
       throw new Error(error.message)
     }
 
-    return NextResponse.json(await loadAchievementsPageData(user.id, user.role === "admin", weekStartDate))
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, weekStartDate))
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()

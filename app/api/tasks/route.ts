@@ -226,7 +226,8 @@ async function loadTasksPageData(currentUserId: string, isManager: boolean): Pro
 export async function GET() {
   try {
     const user = await requireCurrentUser()
-    return NextResponse.json(await loadTasksPageData(user.id, user.role === "admin"))
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+    return NextResponse.json(await loadTasksPageData(user.id, isManager))
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -239,7 +240,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireCurrentUser()
-    if (user.role !== "admin") {
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+
+    if (!isManager) {
       return NextResponse.json({ error: "غير مصرح بإضافة المهام" }, { status: 403 })
     }
 
@@ -290,6 +293,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const user = await requireCurrentUser()
+    const isManager = user.role === "admin" && user.permissions.includes("*")
     const payload = patchSchema.parse(await request.json())
     const supabase = createSupabaseAdminClient()
 
@@ -306,7 +310,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "المهمة غير موجودة" }, { status: 404 })
       }
 
-      if (user.role !== "admin" && task.assigned_to_user_id !== user.id) {
+      if (!isManager && task.assigned_to_user_id !== user.id) {
         return NextResponse.json({ error: "غير مصرح بتعديل هذه المهمة" }, { status: 403 })
       }
 
@@ -331,7 +335,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return NextResponse.json(await loadTasksPageData(user.id, user.role === "admin"))
+    return NextResponse.json(await loadTasksPageData(user.id, isManager))
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()

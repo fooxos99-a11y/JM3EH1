@@ -142,13 +142,8 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
             </div>
 
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="relative h-10 w-10 rounded-full border-primary/15 bg-white/80" aria-label="الإشعارات">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
                 <Bell className="h-5 w-5" />
-                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-500" />
-              </Button>
-              <div className="text-right">
-                <p className="text-xs font-medium text-muted-foreground">{userTitle ?? "حساب إداري"}</p>
-                <p className="text-sm font-bold text-foreground">لوحة التحكم</p>
               </div>
             </div>
           </div>

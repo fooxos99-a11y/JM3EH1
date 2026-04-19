@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
+import { Check, ChevronDown, LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { calculateAge, employeeGenderValues, maritalStatusValues } from "@/lib/administrative-services"
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { dashboardPermissionKeys, type DashboardPermissionKey } from "@/lib/dashboard-permissions"
+import type { DashboardPermissionKey } from "@/lib/dashboard-permissions"
 import { dashboardSections } from "@/lib/dashboard"
 
 type AdminAccount = {
@@ -29,28 +29,42 @@ type AdminAccount = {
 type PermissionBundle = {
   id: string
   title: string
+  items: Array<{ label: string; permission: DashboardPermissionKey }>
   permissions: DashboardPermissionKey[]
   count: number
 }
 
 const permissionBundles: PermissionBundle[] = dashboardSections
   .map((group) => {
-    const permissions = Array.from(
-      new Set(group.items.filter((item) => !item.managerOnly).map((item) => item.permission)),
+    const items = Array.from(
+      group.items
+        .filter((item) => !item.managerOnly && !item.autoAccess)
+        .reduce((map, item) => {
+          if (!map.has(item.permission)) {
+            map.set(item.permission, { label: item.label, permission: item.permission })
+          }
+
+          return map
+        }, new Map<DashboardPermissionKey, { label: string; permission: DashboardPermissionKey }>())
+        .values(),
     )
 
     return {
       id: group.title,
       title: group.title,
-      permissions,
-      count: permissions.length,
+      items,
+      permissions: items.map((item) => item.permission),
+      count: items.length,
     }
   })
   .filter((bundle) => bundle.permissions.length > 0)
 
+const allSelectablePermissions = Array.from(new Set(permissionBundles.flatMap((bundle) => bundle.permissions)))
+
 function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissionKey | "*">; onChange: (value: Array<DashboardPermissionKey | "*">) => void }) {
   const isAll = value.includes("*")
   const selectedPermissions = value.filter((permission): permission is DashboardPermissionKey => permission !== "*")
+  const [expandedBundles, setExpandedBundles] = useState<string[]>([])
 
   function getBundleState(bundle: PermissionBundle) {
     if (isAll) {
@@ -78,7 +92,7 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
     const bundleState = getBundleState(bundle)
 
     if (isAll) {
-      onChange(bundle.permissions)
+      onChange(allSelectablePermissions.filter((permission) => !bundle.permissions.includes(permission)))
       return
     }
 
@@ -90,48 +104,103 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
     onChange(Array.from(new Set([...selectedPermissions, ...bundle.permissions])))
   }
 
+  function toggleBundleExpansion(bundle: PermissionBundle) {
+    setExpandedBundles((current) =>
+      current.includes(bundle.id) ? current.filter((entry) => entry !== bundle.id) : [...current, bundle.id],
+    )
+
+    if (!isAll && getBundleState(bundle) === "none") {
+      onChange(Array.from(new Set([...selectedPermissions, ...bundle.permissions])))
+    }
+  }
+
+  function toggleSinglePermission(permission: DashboardPermissionKey) {
+    if (isAll) {
+      onChange(allSelectablePermissions.filter((entry) => entry !== permission))
+      return
+    }
+
+    onChange(
+      selectedPermissions.includes(permission)
+        ? selectedPermissions.filter((entry) => entry !== permission)
+        : [...selectedPermissions, permission],
+    )
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <button
         type="button"
         onClick={toggleAllPermissions}
-        className={`flex w-full items-center justify-between rounded-[1.4rem] border px-5 py-4 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_16px_35px_rgba(1,154,151,0.12)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+        className={`flex w-full items-center justify-between rounded-[1.15rem] border px-4 py-3 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_12px_25px_rgba(1,154,151,0.1)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
       >
-        <span className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
-          <Check className="h-4 w-4" />
+        <span className={`flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
+          <Check className="h-3.5 w-3.5" />
         </span>
-        <div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{allSelectablePermissions.length}</span>
           <p className="font-bold text-foreground">كل الصلاحيات</p>
-          <p className="text-sm text-muted-foreground">يشمل جميع أقسام لوحة التحكم دفعة واحدة.</p>
         </div>
       </button>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {permissionBundles.map((bundle) => {
           const state = getBundleState(bundle)
           const isSelected = state !== "none"
+          const isExpanded = expandedBundles.includes(bundle.id)
 
           return (
-            <button
+            <div
               key={bundle.id}
-              type="button"
-              onClick={() => toggleBundle(bundle)}
-              className={`flex min-h-24 items-start justify-between rounded-[1.4rem] border px-5 py-4 text-right transition-all duration-300 ${isSelected ? "border-primary/30 bg-primary/10 shadow-[0_14px_30px_rgba(1,154,151,0.1)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
+              className={`rounded-[1.15rem] border px-3 py-3 text-right transition-all duration-300 ${isSelected ? "border-primary/30 bg-primary/10 shadow-[0_12px_25px_rgba(1,154,151,0.08)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
             >
-              <span className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}>
-                <Check className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="font-bold text-foreground">{bundle.title}</p>
-                <p className="text-sm text-muted-foreground">يشمل {bundle.count} قسم{bundle.count > 1 ? "ًا" : ""} رئيسي{bundle.count > 1 ? "ة" : ""}.</p>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleBundle(bundle)}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}
+                  aria-label={`تحديد ${bundle.title}`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+
+                <button type="button" onClick={() => toggleBundleExpansion(bundle)} className="flex flex-1 items-center justify-between gap-3">
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{bundle.count}</span>
+                    <p className="font-bold text-foreground">{bundle.title}</p>
+                  </div>
+                </button>
               </div>
-            </button>
+
+              {isExpanded ? (
+                <div className="mt-3 space-y-1 border-t border-border/50 pt-3">
+                  {bundle.items.map((item) => {
+                    const isChecked = isAll || selectedPermissions.includes(item.permission)
+
+                    return (
+                      <button
+                        key={`${bundle.id}-${item.permission}`}
+                        type="button"
+                        onClick={() => toggleSinglePermission(item.permission)}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors hover:bg-white/60"
+                      >
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${isChecked ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
+                          <Check className="h-3 w-3" />
+                        </span>
+                        <span className="font-medium text-foreground">{item.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           )
         })}
       </div>
 
       {selectedPermissions.length === 0 && !isAll ? (
-        <p className="text-sm text-muted-foreground">اختر صلاحية رئيسية واحدة على الأقل لهذا الحساب.</p>
+        <p className="text-sm text-muted-foreground">يمكن ترك الصلاحيات الإضافية فارغة، وستبقى له أدواته الأساسية تلقائيًا.</p>
       ) : null}
     </div>
   )

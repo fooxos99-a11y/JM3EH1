@@ -7,6 +7,7 @@ type DashboardItem = {
   description: string
   permission: DashboardPermissionKey
   managerOnly?: boolean
+  autoAccess?: boolean
 }
 
 type DashboardGroup = {
@@ -41,6 +42,7 @@ export const dashboardSections: DashboardGroup[] = [
         label: "التحضير",
         description: "نقطة البداية لترتيب بيانات الإدارة قبل نشر أي تحديثات.",
         permission: "preparation",
+          autoAccess: true,
       },
     ],
   },
@@ -59,12 +61,14 @@ export const dashboardSections: DashboardGroup[] = [
         label: "إنجازات الموظفين",
         description: "متابعة إنجازات الموظفين الأسبوعية وعرض جميع المدخلات للمدير حسب الأسبوع المحدد.",
         permission: "staff_achievements",
+          autoAccess: true,
       },
       {
         slug: "tasks",
         label: "المهام",
         description: "إضافة المهام من المدير ومتابعة جميع المهام أو المهام الموكلة داخل لوحة التحكم.",
         permission: "tasks",
+          autoAccess: true,
       },
     ],
   },
@@ -226,7 +230,7 @@ export function filterDashboardSections(permissions: Array<DashboardPermissionKe
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => !item.managerOnly && permissions.includes(item.permission))
+          .filter((item) => item.autoAccess || (!item.managerOnly && permissions.includes(item.permission)))
         .map((item) => getContextualDashboardItem(item, isManager)),
     }))
     .filter((group) => group.items.length > 0)

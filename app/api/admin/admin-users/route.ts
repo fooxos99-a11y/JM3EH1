@@ -19,7 +19,7 @@ const adminUserSchema = z.object({
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
   jobRank: z.string().trim().min(2),
-  permissions: z.array(z.string()).min(1),
+  permissions: z.array(z.string()),
 })
 
 const updateAdminUserSchema = z.object({
@@ -33,7 +33,7 @@ const updateAdminUserSchema = z.object({
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
   jobRank: z.string().trim().min(2),
-  permissions: z.array(z.string()).min(1),
+  permissions: z.array(z.string()),
 })
 
 type ProfileRow = {
@@ -143,7 +143,7 @@ export async function GET() {
       phone: account.phone,
       email: account.email,
       title: config?.title ?? "مدير النظام",
-      permissions: config?.permissions.length ? config.permissions : ["*"],
+      permissions: config ? config.permissions : ["*"],
       nationalId: profile?.national_id ?? "",
       birthDate: profile?.birth_date ?? "",
       gender: profile?.gender ?? "male",

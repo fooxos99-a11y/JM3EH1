@@ -93,7 +93,7 @@ async function mapUser(user: UserRow): Promise<AuthUser> {
     email: user.email,
     role: user.role,
     title: matchedAccount?.title ?? "مدير النظام",
-    permissions: matchedAccount?.permissions.length ? matchedAccount.permissions : getDefaultAdminPermissions(),
+    permissions: matchedAccount ? matchedAccount.permissions : getDefaultAdminPermissions(),
   }
 }
 

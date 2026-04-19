@@ -4,6 +4,7 @@ import { LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { calculateAge, employeeGenderValues, maritalStatusValues } from "@/lib/administrative-services"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -100,17 +101,30 @@ const initialForm = {
 
 export function PermissionsEditor() {
   const [accounts, setAccounts] = useState<AdminAccount[]>([])
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState(initialForm)
 
   async function loadAccounts() {
     setIsLoading(true)
-    const response = await fetch("/api/admin/admin-users", { cache: "no-store" })
-    const payload = (await response.json()) as { accounts?: AdminAccount[] }
-    setAccounts(payload.accounts ?? [])
-    setIsLoading(false)
+    try {
+      const response = await fetch("/api/admin/admin-users", { cache: "no-store" })
+      const payload = (await response.json()) as { accounts?: AdminAccount[]; error?: string }
+
+      if (!response.ok) {
+        setMessage({ type: "error", text: payload.error ?? "تعذر تحميل الحسابات الإدارية" })
+        setAccounts([])
+        return
+      }
+
+      setAccounts(payload.accounts ?? [])
+    } catch {
+      setMessage({ type: "error", text: "تعذر الاتصال بالخادم أثناء تحميل الحسابات" })
+      setAccounts([])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -122,21 +136,26 @@ export function PermissionsEditor() {
   function handleCreate() {
     setMessage(null)
     startTransition(async () => {
-      const response = await fetch("/api/admin/admin-users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      })
+      try {
+        const response = await fetch("/api/admin/admin-users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        })
 
-      if (!response.ok) {
-        const payload = await response.json()
-        setMessage(payload.error ?? "تعذر إنشاء الحساب الإداري")
-        return
+        const payload = (await response.json()) as { error?: string }
+
+        if (!response.ok) {
+          setMessage({ type: "error", text: payload.error ?? "تعذر إنشاء الحساب الإداري" })
+          return
+        }
+
+        setForm(initialForm)
+        setMessage({ type: "success", text: "تم إنشاء الحساب الإداري بنجاح" })
+        await loadAccounts()
+      } catch {
+        setMessage({ type: "error", text: "تعذر الاتصال بالخادم أثناء إنشاء الحساب" })
       }
-
-      setForm(initialForm)
-      setMessage("تم إنشاء الحساب الإداري")
-      await loadAccounts()
     })
   }
 
@@ -147,25 +166,36 @@ export function PermissionsEditor() {
   function saveAccount(account: AdminAccount) {
     setMessage(null)
     startTransition(async () => {
-      const response = await fetch("/api/admin/admin-users", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: account.id,
-          name: account.name,
-          title: account.title,
-          email: account.email ?? "",
-          nationalId: account.nationalId,
-          birthDate: account.birthDate,
-          gender: account.gender,
-          maritalStatus: account.maritalStatus,
-          jobRank: account.jobRank,
-          permissions: account.permissions,
-        }),
-      })
-      setMessage(response.ok ? "تم تحديث الحساب" : "تعذر تحديث الحساب")
-      if (response.ok) {
-        await loadAccounts()
+      try {
+        const response = await fetch("/api/admin/admin-users", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: account.id,
+            name: account.name,
+            title: account.title,
+            email: account.email ?? "",
+            nationalId: account.nationalId,
+            birthDate: account.birthDate,
+            gender: account.gender,
+            maritalStatus: account.maritalStatus,
+            jobRank: account.jobRank,
+            permissions: account.permissions,
+          }),
+        })
+
+        const payload = (await response.json()) as { error?: string }
+        setMessage(
+          response.ok
+            ? { type: "success", text: "تم تحديث الحساب" }
+            : { type: "error", text: payload.error ?? "تعذر تحديث الحساب" },
+        )
+
+        if (response.ok) {
+          await loadAccounts()
+        }
+      } catch {
+        setMessage({ type: "error", text: "تعذر الاتصال بالخادم أثناء تحديث الحساب" })
       }
     })
   }
@@ -173,14 +203,25 @@ export function PermissionsEditor() {
   function deleteAccount(userId: string) {
     setMessage(null)
     startTransition(async () => {
-      const response = await fetch("/api/admin/admin-users", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      })
-      setMessage(response.ok ? "تم حذف الحساب الإداري" : "تعذر حذف الحساب")
-      if (response.ok) {
-        await loadAccounts()
+      try {
+        const response = await fetch("/api/admin/admin-users", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        })
+
+        const payload = (await response.json()) as { error?: string }
+        setMessage(
+          response.ok
+            ? { type: "success", text: "تم حذف الحساب الإداري" }
+            : { type: "error", text: payload.error ?? "تعذر حذف الحساب" },
+        )
+
+        if (response.ok) {
+          await loadAccounts()
+        }
+      } catch {
+        setMessage({ type: "error", text: "تعذر الاتصال بالخادم أثناء حذف الحساب" })
       }
     })
   }
@@ -206,7 +247,7 @@ export function PermissionsEditor() {
           <div className="space-y-2 text-right md:col-span-2"><Label htmlFor="admin-password">كلمة المرور</Label><Input id="admin-password" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></div>
           <div className="space-y-2 text-right md:col-span-2"><Label>الصلاحيات</Label><PermissionPicker value={form.permissions} onChange={(permissions) => setForm((current) => ({ ...current, permissions }))} /></div>
         </div>
-        <div className="mt-6 flex justify-start"><Button type="button" className="rounded-xl" onClick={handleCreate} disabled={isPending}><Plus className="h-4 w-4" />إنشاء الحساب</Button></div>
+        <div className="mt-6 flex justify-end"><Button type="button" className="rounded-xl" onClick={handleCreate} disabled={isPending}><Plus className="h-4 w-4" />إنشاء الحساب</Button></div>
       </div>
 
       <div className="space-y-4">
@@ -231,7 +272,12 @@ export function PermissionsEditor() {
         ))}
       </div>
 
-      {message ? <div className="rounded-[1.25rem] border border-border/70 bg-white/95 px-4 py-3 text-sm text-muted-foreground shadow-[0_18px_45px_rgba(15,23,42,0.05)]">{message}</div> : null}
+      {message ? (
+        <Alert className={message.type === "success" ? "rounded-[1.25rem] border-emerald-200 bg-emerald-50/85 text-emerald-900" : "rounded-[1.25rem] border-red-200 bg-red-50/85 text-red-900"}>
+          <AlertTitle>{message.type === "success" ? "تمت العملية بنجاح" : "تعذر تنفيذ العملية"}</AlertTitle>
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      ) : null}
     </section>
   )
 }

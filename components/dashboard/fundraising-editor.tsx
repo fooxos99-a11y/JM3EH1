@@ -213,7 +213,7 @@ export function FundraisingEditor({ initialContent, sectionKey, sectionLabel, it
         </div>
       </div>
 
-      <div className="flex justify-start">
+      <div className="flex justify-end">
         <Button type="button" variant="outline" className="rounded-xl" onClick={addItem}>
           <Plus className="h-4 w-4" />
           {addItemLabel}

@@ -129,7 +129,7 @@ export function GiftingsEditor({ initialContent }: { initialContent: GiftingsCon
         </div>
       </div>
 
-      <div className="flex justify-start"><Button type="button" variant="outline" className="rounded-xl" onClick={addItem}><Plus className="h-4 w-4" />إضافة إهداء</Button></div>
+      <div className="flex justify-end"><Button type="button" variant="outline" className="rounded-xl" onClick={addItem}><Plus className="h-4 w-4" />إضافة إهداء</Button></div>
 
       <div className="space-y-4">
         {content.items.map((item, index) => (

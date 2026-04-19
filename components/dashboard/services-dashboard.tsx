@@ -544,7 +544,7 @@ export function ServicesDashboard() {
       </div>
 
       <Tabs defaultValue="image_to_pdf" className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
+        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
           <TabsTrigger value="image_to_pdf" className="rounded-xl px-4 py-2">تحويل صورة إلى PDF</TabsTrigger>
           <TabsTrigger value="pdf_to_images" className="rounded-xl px-4 py-2">تحويل PDF إلى صور</TabsTrigger>
           <TabsTrigger value="pdf_editor" className="rounded-xl px-4 py-2">التعديل على PDF</TabsTrigger>
@@ -569,7 +569,7 @@ export function ServicesDashboard() {
                   {imageToPdfFiles.map((file) => <div key={`${file.name}-${file.size}`} className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3 text-sm text-foreground">{file.name}</div>)}
                 </div>
               ) : null}
-              <div className="flex justify-start"><Button type="button" className="rounded-xl" onClick={() => runTask(handleImageToPdf)} disabled={isPending}><FileImage className="h-4 w-4" />تحويل وتنزيل PDF</Button></div>
+              <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handleImageToPdf)} disabled={isPending}><FileImage className="h-4 w-4" />تحويل وتنزيل PDF</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -616,7 +616,7 @@ export function ServicesDashboard() {
                 <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={pdfEditColor} onChange={(event) => setPdfEditColor(event.target.value)} /></div>
               </div>
               <div className="space-y-2"><Label>النص</Label><Textarea rows={4} value={pdfEditText} onChange={(event) => setPdfEditText(event.target.value)} /></div>
-              <div className="flex justify-start"><Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfTextEdit)} disabled={isPending}><FilePenLine className="h-4 w-4" />تعديل الملف وتنزيله</Button></div>
+              <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfTextEdit)} disabled={isPending}><FilePenLine className="h-4 w-4" />تعديل الملف وتنزيله</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -729,7 +729,7 @@ export function ServicesDashboard() {
                   <div className="space-y-2"><Label>عنوان القالب</Label><Input value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} /></div>
                   <div className="space-y-2"><Label>وصف مختصر</Label><Input value={templateDescription} onChange={(event) => setTemplateDescription(event.target.value)} /></div>
                 </div>
-                <div className="flex flex-wrap justify-start gap-2 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
+                <div className="flex flex-wrap justify-end gap-2 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
                   <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("bold")}><strong>B</strong></Button>
                   <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("italic")}><em>I</em></Button>
                   <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("underline")}><span className="underline">U</span></Button>

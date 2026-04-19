@@ -240,11 +240,6 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
   const canClockOut = data.workLocation.isConfigured && Boolean(todayRecord?.clockInAt) && !todayRecord?.clockOutAt
   const attendanceAction = canClockIn ? "clock_in" : canClockOut ? "clock_out" : null
   const attendanceButtonLabel = canClockIn ? "تسجيل حضور" : canClockOut ? "تسجيل انصراف" : "اكتمل تسجيل اليوم"
-  const attendanceSummary = todayRecord?.clockOutAt
-    ? `عدد ساعات عمل اليوم: ${formatWorkedHours(todayRecord.workedMinutes)}`
-    : todayRecord?.clockInAt
-      ? `تم تسجيل الحضور الساعة: ${formatTime(todayRecord.clockInAt)}`
-      : "لم يتم تسجيل حضور اليوم بعد"
 
   return (
     <div className="space-y-4">
@@ -259,21 +254,8 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
       <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
         <CardHeader>
           <CardTitle>{compact ? "التحضير اليومي" : "تسجيل الحضور والانصراف"}</CardTitle>
-          <CardDescription>يعتمد التسجيل على موقعك الحالي، ويتحول زر الحضور تلقائيًا إلى زر انصراف عند تسجيل بداية الدوام.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-[1.25rem] border border-primary/15 bg-primary/5 px-5 py-4 text-right">
-            <p className="text-xs text-muted-foreground">ملخص اليوم</p>
-            <p className="mt-2 text-lg font-bold text-foreground">{attendanceSummary}</p>
-            <div className="mt-3 flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
-              <span>{formatDate(toSaudiDateInputValue(new Date()))}</span>
-              <span>•</span>
-              <span>الحضور: {formatTime(todayRecord?.clockInAt ?? null)}</span>
-              <span>•</span>
-              <span>الانصراف: {formatTime(todayRecord?.clockOutAt ?? null)}</span>
-            </div>
-          </div>
-
           {!data.workLocation.isConfigured ? (
             <Alert variant="destructive" className="rounded-[1.25rem] text-right">
               <AlertCircle className="h-4 w-4" />
@@ -292,7 +274,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
             </div>
           )}
 
-          <div className="flex flex-wrap justify-end gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             <Button
               type="button"
               className="rounded-xl"
@@ -341,7 +323,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
                 <Label htmlFor="permission-to-time">إلى الساعة</Label>
                 <Input id="permission-to-time" type="time" value={permissionForm.toTime} onChange={(event) => setPermissionForm((current) => ({ ...current, toTime: event.target.value }))} />
               </div>
-              <div className="flex items-end justify-start">
+              <div className="flex items-end justify-end">
                 <Button type="button" className="rounded-xl" disabled={isPending} onClick={handlePermissionRequest}>
                   {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                   إرسال الاستئذان
@@ -387,7 +369,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
         <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
           <CardHeader>
             <CardTitle>إعداد موقع العمل</CardTitle>
-            <CardDescription>مدير النظام فقط يمكنه تحديد الموقع عبر Google Maps وتعديل النطاق المسموح لتسجيل الحضور والانصراف.</CardDescription>
+            <CardDescription>مدير النظام فقط يمكنه تحديد الموقع عبر الخريطة التفاعلية وتعديل النطاق المسموح لتسجيل الحضور والانصراف.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -423,7 +405,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               <Input id="work-location-google-url" value={locationForm.googleMapsUrl} onChange={(event) => setLocationForm((current) => ({ ...current, googleMapsUrl: event.target.value }))} placeholder="https://www.google.com/maps/..." />
             </div>
 
-            <div className="flex justify-start">
+            <div className="flex justify-end">
               <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
                 {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
                 حفظ موقع العمل

@@ -112,13 +112,13 @@ function SidebarContent({ permissions, logoUrl, logoAlt }: { permissions: Array<
 
 export function AdminDashboardShell({ userId, userName, userTitle, userPermissions, logoUrl, logoAlt, children }: AdminDashboardShellProps) {
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)]">
+    <div dir="rtl" className="min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="hidden w-[320px] shrink-0 border-r border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
           <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} />
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-4 md:px-6 lg:px-8 lg:py-8 lg:pl-0">
+        <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8 lg:pl-0">
           <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
               <Button variant="outline" size="icon" className="relative h-9 w-9 rounded-full border-primary/15 bg-white/80" aria-label="الإشعارات">

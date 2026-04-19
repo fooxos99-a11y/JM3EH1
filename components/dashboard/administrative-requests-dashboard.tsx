@@ -212,13 +212,6 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
   if (attendanceOnly) {
     return (
       <section className="space-y-6 text-right">
-        <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-          <h1 className="text-2xl font-bold text-foreground">قسم التحضير</h1>
-          <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            تسجيل الحضور والانصراف والاستئذان بسرعة، مع عرض سجل الأسبوع الحالي فقط، وبقاء إعداد موقع التحضير مخصصًا لمدير النظام وحده.
-          </p>
-        </div>
-
         {error ? (
           <Alert variant="destructive" className="rounded-[1.5rem] border-red-200 bg-red-50/80 text-right">
             <AlertCircle className="h-4 w-4" />
@@ -258,7 +251,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
       ) : null}
 
       <Tabs defaultValue={initialTab} className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
+        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
           <TabsTrigger value="submit" className="rounded-xl px-4 py-2">تقديم طلب</TabsTrigger>
           <TabsTrigger value="attendance" className="rounded-xl px-4 py-2">الحضور والانصراف</TabsTrigger>
           <TabsTrigger value="internal" className="rounded-xl px-4 py-2">المعاملات الداخلية</TabsTrigger>
@@ -559,7 +552,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                   <Label htmlFor="permission-quota">رصيد الأذونات</Label>
                   <Input id="permission-quota" type="number" min="0" value={balanceForm.permissionQuotaCount} onChange={(event) => setBalanceForm((current) => ({ ...current, permissionQuotaCount: event.target.value }))} />
                 </div>
-                <div className="flex items-end justify-start">
+                <div className="flex items-end justify-end">
                   <Button
                     type="button"
                     className="rounded-xl"

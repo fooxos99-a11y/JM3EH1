@@ -45,6 +45,40 @@ type ProfileRow = {
   job_rank: string
 }
 
+function getReadableDatabaseError(error: { code?: string; message?: string; details?: string | null } | null | undefined) {
+  if (!error) {
+    return "حدث خطأ غير متوقع أثناء حفظ البيانات"
+  }
+
+  if (error.code === "23505") {
+    const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
+
+    if (message.includes("phone")) {
+      return "رقم الجوال مستخدم مسبقًا"
+    }
+
+    if (message.includes("email")) {
+      return "البريد الإلكتروني مستخدم مسبقًا"
+    }
+
+    if (message.includes("national")) {
+      return "رقم الهوية مستخدم مسبقًا"
+    }
+
+    return "توجد بيانات مكررة تمنع إنشاء الحساب"
+  }
+
+  if (error.code === "23503") {
+    return "تعذر ربط الحساب ببياناته الوظيفية، تحقق من سلامة قاعدة البيانات"
+  }
+
+  if (error.code === "23514") {
+    return "بعض القيم المدخلة غير متوافقة مع قيود النظام"
+  }
+
+  return error.message ?? "حدث خطأ أثناء إنشاء الحساب الإداري"
+}
+
 function isSchemaMissing(error: { code?: string; message?: string } | null | undefined) {
   if (!error) {
     return false
@@ -159,7 +193,7 @@ export async function POST(request: Request) {
     .single<{ id: string; full_name: string; phone: string; email: string | null }>()
 
   if (error || !insertedUser) {
-    return NextResponse.json({ error: error?.message ?? "تعذر إنشاء الحساب الإداري" }, { status: 400 })
+    return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
   }
 
   const { error: profileError } = await supabase.from("employee_profiles").upsert(
@@ -177,7 +211,8 @@ export async function POST(request: Request) {
   )
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 400 })
+    await supabase.from("app_users").delete().eq("id", insertedUser.id)
+    return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
   }
 
   const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
@@ -189,7 +224,7 @@ export async function POST(request: Request) {
   )
 
   if (balanceError && !isSchemaMissing(balanceError)) {
-    return NextResponse.json({ error: balanceError.message }, { status: 400 })
+    return NextResponse.json({ error: getReadableDatabaseError(balanceError) }, { status: 400 })
   }
 
   const permissionsContent = await getSiteSectionContent("permissions")
@@ -248,7 +283,7 @@ export async function PATCH(request: Request) {
   if (Object.keys(updates).length > 0) {
     const { error } = await supabase.from("app_users").update(updates).eq("id", parsed.data.userId).eq("role", "admin")
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
     }
   }
 
@@ -266,7 +301,7 @@ export async function PATCH(request: Request) {
   )
 
   if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 400 })
+    return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
   }
 
   const permissionsContent = await getSiteSectionContent("permissions")
@@ -309,7 +344,7 @@ export async function DELETE(request: Request) {
   const { error } = await supabase.from("app_users").delete().eq("id", userId).eq("role", "admin")
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ error: getReadableDatabaseError(error) }, { status: 400 })
   }
 
   const permissionsContent = await getSiteSectionContent("permissions")

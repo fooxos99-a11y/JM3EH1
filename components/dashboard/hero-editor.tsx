@@ -73,7 +73,7 @@ export function HeroEditor({ initialContent }: { initialContent: HeroContent }) 
         </div>
       </div>
 
-      <div className="flex justify-start">
+      <div className="flex justify-end">
         <Button type="button" variant="outline" className="rounded-xl" onClick={addSlide}>
           <Plus className="h-4 w-4" />
           إضافة شريحة

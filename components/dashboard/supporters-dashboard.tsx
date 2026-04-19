@@ -497,7 +497,7 @@ export function SupportersDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as DashboardTab)} className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.5rem] bg-white/90 p-2">
+        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
           <TabsTrigger value="accounts" className="rounded-xl px-4 py-2">حسابات الداعمين</TabsTrigger>
           <TabsTrigger value="database" className="rounded-xl px-4 py-2">قاعدة بيانات الداعمين</TabsTrigger>
         </TabsList>
@@ -566,7 +566,7 @@ export function SupportersDashboard() {
                   <Label htmlFor="supporter-email">البريد الإلكتروني</Label>
                   <Input id="supporter-email" dir="ltr" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="اختياري" />
                 </div>
-                <div className="flex justify-start">
+                <div className="flex justify-end">
                   <Button type="button" className="rounded-xl" disabled={isPending} onClick={handleAddManualSupporter}>
                     {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     إضافة

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowLeft, BadgeInfo, ChevronLeft, ShoppingCart } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ShoppingCart } from "lucide-react"
 import { notFound } from "next/navigation"
 
 import { FundraisingPaymentDialog } from "@/components/fundraising-payment-dialog"
@@ -76,35 +76,6 @@ export async function FundraisingDetailPage({ contentType, itemId }: Fundraising
             </div>
 
             <div className="px-5 py-6 text-right md:px-8 md:py-8">
-              <div className="mb-6 grid gap-4 border-b border-border/60 pb-6 md:grid-cols-3">
-                <div className="rounded-[1.5rem] border border-primary/10 bg-primary/[0.05] px-5 py-4">
-                  <div className="flex items-center justify-end gap-2 text-primary">
-                    <BadgeInfo className="h-4 w-4" />
-                    <span className="text-sm font-semibold">معلومات مختصرة</span>
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm">
-                    {!item.hideTotalAmount && item.totalAmount > 0 ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-semibold text-foreground">{item.totalAmount} ريال</span>
-                        <span className="text-muted-foreground">الإجمالي</span>
-                      </div>
-                    ) : null}
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-foreground">{item.labels.length}</span>
-                      <span className="text-muted-foreground">خيارات الدعم</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border border-border/60 bg-[#f8fbfb] px-5 py-4">
-                  <p className="text-sm font-semibold text-foreground">آلية الدعم</p>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{dialogDescription}</p>
-                </div>
-                <div className="rounded-[1.5rem] border border-border/60 bg-[#f8fbfb] px-5 py-4">
-                  <p className="text-sm font-semibold text-foreground">التحديث من لوحة التحكم</p>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">الصورة والعنوان والوصف وخيارات المبلغ مترابطة مباشرة مع لوحة التحكم.</p>
-                </div>
-              </div>
-
               <div className="grid gap-6 lg:grid-cols-[1fr,320px]">
                 <div className="rounded-[1.75rem] border border-border/60 bg-[linear-gradient(180deg,#ffffff_0%,#f6fbfb_100%)] p-6">
                   <h2 className="text-lg font-bold text-foreground">نبذة عن {contentType === "donations" ? "فرصة التبرع" : "المشروع"}</h2>
@@ -113,29 +84,15 @@ export async function FundraisingDetailPage({ contentType, itemId }: Fundraising
                   </p>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-primary/10 bg-[linear-gradient(180deg,#0f766e_0%,#0c4f4d_100%)] p-5 text-white shadow-sm">
-                  <h2 className="text-lg font-bold text-foreground">خيارات سريعة</h2>
-                  <p className="mt-2 text-sm leading-7 text-white/80">
-                    يمكنك تعديل الصورة والاسم والوصف من لوحة التحكم، وسيتم تحديث هذه الصفحة مباشرة بعد الحفظ.
-                  </p>
-                  <div className="mt-5 space-y-3">
-                    <FundraisingPaymentDialog item={item} dialogDescription={dialogDescription} triggerLabel={item.buttonLabel} triggerClassName="h-11 w-full rounded-2xl border-0 bg-white text-primary hover:bg-[#f4fffe]" fullWidthTrigger />
-                    <Button asChild variant="outline" className="h-11 w-full rounded-2xl border-white/20 bg-black/10 text-white hover:bg-white/10 hover:text-white">
+                <div className="rounded-[1.75rem] border border-primary/10 bg-[linear-gradient(180deg,#ffffff_0%,#f6fbfb_100%)] p-5 shadow-sm">
+                  <div className="grid grid-cols-1 gap-3">
+                    <FundraisingPaymentDialog item={item} dialogDescription={dialogDescription} triggerLabel={item.buttonLabel} triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]" fullWidthTrigger />
+                    <Button asChild variant="outline" className="h-11 rounded-2xl border-primary/15 bg-white text-foreground transition-all duration-300 hover:scale-[1.02] hover:border-primary/35 hover:bg-primary/5 hover:text-primary">
                       <Link href="/cart">
                         <ShoppingCart className="h-4 w-4" />
                         عرض السلة
                       </Link>
                     </Button>
-                  </div>
-                  <div className="mt-5 space-y-3">
-                    {item.labels.slice(0, 3).map((label) => (
-                      <div key={label.id} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 text-sm">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-semibold text-white">{label.amount} ريال</span>
-                          <span className="text-white/75">{label.label}</span>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </div>

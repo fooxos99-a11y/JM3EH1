@@ -28,7 +28,6 @@ export function DonationCardsClient({
   emptyTitle = "لا توجد عناصر ظاهرة حالياً",
   emptyDescription = "يمكنك إظهار العناصر من لوحة التحكم عند الحاجة.",
   dialogDescription = "اختر المسمى المناسب وحدد مبلغ الدعم حسب الطريقة المتاحة.",
-  totalLabel = "إجمالي المبلغ",
 }: DonationCardsClientProps) {
   const router = useRouter()
   const donations = useMemo(() => content.items.filter((item) => !item.hideDonation), [content.items])
@@ -152,30 +151,12 @@ export function DonationCardsClient({
                           <div className="relative h-48 overflow-hidden">
                             <img src={donation.image} alt={donation.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#083433]/90 via-[#0d6d69]/35 to-transparent" />
-                            <div className="absolute right-4 top-4 rounded-full bg-white/92 px-3 py-1 text-xs font-bold text-primary shadow-sm">
-                              {donation.badge}
-                            </div>
                             <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                               <h3 className="text-xl font-bold leading-8 drop-shadow-sm">{donation.title}</h3>
-                              <p className="mt-2 text-sm leading-6 text-white/90 line-clamp-2">{donation.description}</p>
                             </div>
                           </div>
 
                           <div className="flex flex-1 flex-col bg-[linear-gradient(180deg,#ffffff_0%,#f6fbfb_100%)] p-5 text-right text-foreground">
-                            <div className="mb-4 flex items-start justify-between gap-3 rounded-[1.5rem] border border-primary/10 bg-primary/[0.05] px-4 py-3">
-                              <div className="text-left">
-                                {!donation.hideTotalAmount && donation.totalAmount > 0 ? (
-                                  <p className="text-lg font-bold text-primary">{donation.totalAmount} ريال</p>
-                                ) : (
-                                  <p className="text-lg font-bold text-primary">دعم مفتوح</p>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs font-medium text-muted-foreground">{totalLabel}</p>
-                                <p className="mt-1 text-sm font-semibold text-foreground">{donation.labels.length} خيارات متاحة</p>
-                              </div>
-                            </div>
-
                             <div className="mb-5 flex flex-wrap gap-2.5">
                               {donation.labels.slice(0, 2).map((label) => (
                                 <button
@@ -192,15 +173,6 @@ export function DonationCardsClient({
                             </div>
 
                             <div className="mt-auto grid grid-cols-2 gap-3">
-                              <div onClick={(event) => event.stopPropagation()}>
-                                <FundraisingPaymentDialog
-                                  item={donation}
-                                  dialogDescription={dialogDescription}
-                                  triggerLabel={donation.buttonLabel}
-                                  triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]"
-                                  fullWidthTrigger
-                                />
-                              </div>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -213,6 +185,15 @@ export function DonationCardsClient({
                                 <ShoppingCart className="h-4 w-4" />
                                 أضف للسلة
                               </Button>
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <FundraisingPaymentDialog
+                                  item={donation}
+                                  dialogDescription={dialogDescription}
+                                  triggerLabel={donation.buttonLabel}
+                                  triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]"
+                                  fullWidthTrigger
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>

@@ -227,6 +227,34 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
     }))
   }
 
+  function handleUseCurrentLocation() {
+    setFeedback(null)
+
+    if (!("geolocation" in navigator)) {
+      setFeedback({ type: "error", text: "المتصفح الحالي لا يدعم خدمات الموقع" })
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
+
+        setLocationForm((current) => ({
+          ...current,
+          latitude,
+          longitude,
+          googleMapsUrl: buildGoogleMapsUrl(latitude, longitude),
+        }))
+        setFeedback({ type: "success", text: "تم التقاط موقعك الحالي. احفظ التغييرات لتحديث موقع التحضير." })
+      },
+      () => {
+        setFeedback({ type: "error", text: "تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح." })
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
+
   return (
     <section className="space-y-6">
       {feedback ? (
@@ -343,7 +371,11 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
               <Input id="attendance-history-location-url" value={locationForm.googleMapsUrl} onChange={(event) => handleGoogleMapsUrlChange(event.target.value)} placeholder="https://www.google.com/maps/..." />
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={handleUseCurrentLocation} disabled={isPending}>
+                <MapPin className="h-4 w-4" />
+                استخدام موقعي الحالي
+              </Button>
               <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
                 {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
                 حفظ موقع التحضير

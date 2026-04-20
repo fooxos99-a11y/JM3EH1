@@ -28,6 +28,16 @@ const postSchema = z.object({
   weekStartDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
 })
 
+const patchSchema = z.object({
+  entryId: z.string().uuid(),
+  achievementText: z.string().trim().min(3, "أدخل نص الإنجاز"),
+  imageUrl: z.string().url("رابط الصورة غير صالح").nullable().optional(),
+})
+
+const deleteSchema = z.object({
+  entryId: z.string().uuid(),
+})
+
 function isSchemaMissing(error: { code?: string; message?: string } | null | undefined) {
   if (!error) {
     return false
@@ -192,5 +202,119 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: error instanceof Error ? error.message : "تعذر حفظ الإنجاز" }, { status: 400 })
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requireCurrentUser()
+    const parsed = patchSchema.safeParse(await request.json())
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات الإنجاز غير صحيحة" }, { status: 400 })
+    }
+
+    const supabase = createSupabaseAdminClient()
+    const { data: currentEntry, error: currentEntryError } = await supabase
+      .from("weekly_achievement_entries")
+      .select("id,user_id,week_start_date")
+      .eq("id", parsed.data.entryId)
+      .maybeSingle<{ id: string; user_id: string; week_start_date: string }>()
+
+    if (currentEntryError) {
+      if (isSchemaMissing(currentEntryError)) {
+        return schemaResponse()
+      }
+
+      throw new Error(currentEntryError.message)
+    }
+
+    if (!currentEntry || currentEntry.user_id !== user.id) {
+      return NextResponse.json({ error: "لا يمكنك تعديل هذا الإنجاز" }, { status: 403 })
+    }
+
+    const currentWeekStartDate = formatDateInput(startOfWeekMonday(new Date()))
+    if (currentEntry.week_start_date !== currentWeekStartDate) {
+      return NextResponse.json({ error: "يمكن تعديل إنجازات الأسبوع الحالي فقط" }, { status: 400 })
+    }
+
+    const { error } = await supabase
+      .from("weekly_achievement_entries")
+      .update({
+        achievement_text: parsed.data.achievementText,
+        image_url: parsed.data.imageUrl ?? null,
+      })
+      .eq("id", parsed.data.entryId)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      throw new Error(error.message)
+    }
+
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, currentWeekStartDate))
+  } catch (error) {
+    if (error instanceof Error && error.message === "SCHEMA_MISSING") {
+      return schemaResponse()
+    }
+
+    return NextResponse.json({ error: error instanceof Error ? error.message : "تعذر تعديل الإنجاز" }, { status: 400 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const user = await requireCurrentUser()
+    const parsed = deleteSchema.safeParse(await request.json())
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات الحذف غير صحيحة" }, { status: 400 })
+    }
+
+    const supabase = createSupabaseAdminClient()
+    const { data: currentEntry, error: currentEntryError } = await supabase
+      .from("weekly_achievement_entries")
+      .select("id,user_id,week_start_date")
+      .eq("id", parsed.data.entryId)
+      .maybeSingle<{ id: string; user_id: string; week_start_date: string }>()
+
+    if (currentEntryError) {
+      if (isSchemaMissing(currentEntryError)) {
+        return schemaResponse()
+      }
+
+      throw new Error(currentEntryError.message)
+    }
+
+    if (!currentEntry || currentEntry.user_id !== user.id) {
+      return NextResponse.json({ error: "لا يمكنك حذف هذا الإنجاز" }, { status: 403 })
+    }
+
+    const currentWeekStartDate = formatDateInput(startOfWeekMonday(new Date()))
+    if (currentEntry.week_start_date !== currentWeekStartDate) {
+      return NextResponse.json({ error: "يمكن حذف إنجازات الأسبوع الحالي فقط" }, { status: 400 })
+    }
+
+    const { error } = await supabase.from("weekly_achievement_entries").delete().eq("id", parsed.data.entryId)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      throw new Error(error.message)
+    }
+
+    const isManager = user.role === "admin" && user.permissions.includes("*")
+    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, currentWeekStartDate))
+  } catch (error) {
+    if (error instanceof Error && error.message === "SCHEMA_MISSING") {
+      return schemaResponse()
+    }
+
+    return NextResponse.json({ error: error instanceof Error ? error.message : "تعذر حذف الإنجاز" }, { status: 400 })
   }
 }

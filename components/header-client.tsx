@@ -169,7 +169,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
           <div className="flex items-center gap-2 sm:gap-3">
             <Button asChild variant="ghost" className={`h-12 rounded-full px-3 sm:h-14 sm:px-4 ${useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"}`}>
               <Link href="/cart" aria-label="السلة">
-                <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
+                <ShoppingCart className="h-7 w-7" />
               </Link>
             </Button>
             <AuthDialog isScrolled={useSolidHeader} />

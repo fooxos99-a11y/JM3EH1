@@ -626,12 +626,15 @@ async function handleClockAttendance(userId: string, eventType: "clock_in" | "cl
   const allowedDistance = workLocation.radius_meters + gpsAccuracyBuffer
 
   if (distance > allowedDistance) {
+    const isLikelyMisconfiguredLocation = distance > 10000
     return NextResponse.json(
       {
         error:
           gpsAccuracyBuffer > 0
-            ? `لا يمكنك تسجيل الحضور خارج نطاق موقع العمل. المسافة الحالية تقريبًا ${Math.round(distance)} متر، ودقة موقع الجهاز ${Math.round(gpsAccuracyBuffer)} متر.`
-            : "لا يمكنك تسجيل الحضور خارج نطاق موقع العمل",
+            ? `${isLikelyMisconfiguredLocation ? "يبدو أن موقع التحضير المحفوظ بعيد جدًا عن موقعك الحالي. راجع إعدادات موقع العمل أولًا. " : ""}لا يمكنك تسجيل الحضور خارج نطاق موقع العمل. المسافة الحالية تقريبًا ${Math.round(distance)} متر، ودقة موقع الجهاز ${Math.round(gpsAccuracyBuffer)} متر.`
+            : isLikelyMisconfiguredLocation
+              ? "يبدو أن موقع التحضير المحفوظ بعيد جدًا عن موقعك الحالي. راجع إعدادات موقع العمل أولًا."
+              : "لا يمكنك تسجيل الحضور خارج نطاق موقع العمل",
       },
       { status: 400 },
     )

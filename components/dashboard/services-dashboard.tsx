@@ -2,7 +2,7 @@
 
 import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -70,8 +70,13 @@ function downloadBlob(blob: Blob, fileName: string) {
   const anchor = document.createElement("a")
   anchor.href = url
   anchor.download = fileName
+  anchor.style.display = "none"
+  document.body.appendChild(anchor)
   anchor.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => {
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }, 1000)
 }
 
 function readFileAsArrayBuffer(file: File) {
@@ -183,6 +188,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [activeWriterTextLayerId, setActiveWriterTextLayerId] = useState<string | null>(null)
   const [draggingWriterTextLayerId, setDraggingWriterTextLayerId] = useState<string | null>(null)
   const [isPreparingWriterBackground, setIsPreparingWriterBackground] = useState(false)
+  const writerTemplateFileInputRef = useRef<HTMLInputElement>(null)
 
   const [imageToPdfFiles, setImageToPdfFiles] = useState<File[]>([])
   const [pdfToImagesFile, setPdfToImagesFile] = useState<File | null>(null)
@@ -365,6 +371,15 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     await prepareWriterBackground(file)
     setWriterTextLayers([])
     setActiveWriterTextLayerId(null)
+    setWriterTemplateTitle((current) => current.trim() ? current : file.name.replace(/\.[^.]+$/, ""))
+  }
+
+  function openWriterTemplatePicker(resetEditor: boolean) {
+    if (resetEditor) {
+      resetWriterTemplateEditor()
+    }
+
+    writerTemplateFileInputRef.current?.click()
   }
 
   function createWriterTextLayer(): EditableTextLayer {
@@ -1229,18 +1244,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
                 <CardTitle>مكتبة الأختام والتواقيع</CardTitle>
-                <CardDescription>احفظ صور الأختام والتواقيع مرة واحدة لتبقى جاهزة للاستخدام على الصور وملفات PDF.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 md:order-1"><Label>النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
-                  <div className="space-y-2 md:order-2"><Label>اسم الأصل</Label><Input value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
+                  <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
                 </div>
                 <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
-                  <Input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
+                  <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
                   {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}حفظ في المكتبة</Button>
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
                     <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={data.assets.length === 0}>عرض المحفوظات</Button>
                   </div>
                 </div>
@@ -1292,7 +1306,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                       {stampPreviewPages.map((page) => (
                         <div
                           key={page.pageNumber}
-                          className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${stampSelectedPage === page.pageNumber ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
+                          className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${(activePlacedAsset?.pageNumber === page.pageNumber) ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
                         >
                           <button
                             type="button"
@@ -1374,33 +1388,22 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 </DialogHeader>
                 {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {data.assets.map((asset) => (
-                    <div
+                    <button
                       key={asset.id}
+                      type="button"
                       className="rounded-[1.25rem] border border-border/60 p-4 text-right transition-colors hover:bg-muted/20"
+                      onClick={() => {
+                        const newPlacedAsset = createPlacedAsset(asset.id, 1)
+                        setPlacedAssets((current) => [...current, newPlacedAsset])
+                        setActivePlacedAssetId(newPlacedAsset.id)
+                        setIsAssetPickerOpen(false)
+                      }}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <Badge variant="secondary">{asset.kind === "stamp" ? "ختم" : "توقيع"}</Badge>
-                        <img src={asset.imageUrl} alt={asset.name} className="h-14 w-14 rounded-xl bg-white object-contain" />
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <img src={asset.imageUrl} alt={asset.name} className="h-24 w-24 rounded-2xl bg-white object-contain" />
+                        <p className="font-semibold text-foreground">{asset.name}</p>
                       </div>
-                      <p className="mt-3 font-semibold text-foreground">{asset.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(asset.updatedAt)}</p>
-                      <div className="mt-4 flex items-center justify-between gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-xl"
-                          onClick={() => {
-                            const newPlacedAsset = createPlacedAsset(asset.id, stampTargetFile?.type === "application/pdf" ? 1 : 1)
-                            setPlacedAssets((current) => [...current, newPlacedAsset])
-                            setActivePlacedAssetId(newPlacedAsset.id)
-                            setIsAssetPickerOpen(false)
-                          }}
-                        >
-                          إضافة
-                        </Button>
-                        <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" />حذف</Button>
-                      </div>
-                    </div>
+                    </button>
                   ))}
                 </div>}
               </div>
@@ -1409,8 +1412,23 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </TabsContent>
 
         <TabsContent value="writer" className="space-y-4">
+          <input
+            ref={writerTemplateFileInputRef}
+            type="file"
+            accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) {
+                void handleWriterBackgroundChange(file)
+              }
+
+              event.currentTarget.value = ""
+            }}
+          />
+
           <div className="flex items-center justify-start">
-            <Button type="button" className="rounded-xl" onClick={resetWriterTemplateEditor}><Plus className="h-4 w-4" />إضافة قالب</Button>
+            <Button type="button" className="rounded-xl" onClick={() => openWriterTemplatePicker(true)}><Plus className="h-4 w-4" />إضافة قالب</Button>
           </div>
 
           {data.templates.length > 0 ? (
@@ -1429,9 +1447,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           ) : null}
 
           <div className="space-y-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-            <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto]">
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
               <Input value={writerTemplateTitle} onChange={(event) => setWriterTemplateTitle(event.target.value)} placeholder="عنوان القالب" />
-              <Input type="file" accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleWriterBackgroundChange(file) } }} />
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => openWriterTemplatePicker(false)}>{writerBackgroundValue ? "تغيير ملف القالب" : "اختيار ملف القالب"}</Button>
               <Button type="button" variant="outline" className="rounded-xl" onClick={addWriterTextLayer} disabled={!writerBackgroundValue || isPreparingWriterBackground}><Plus className="h-4 w-4" />إضافة نص</Button>
             </div>
 

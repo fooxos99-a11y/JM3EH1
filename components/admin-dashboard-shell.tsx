@@ -57,11 +57,11 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-border/60 px-5 py-5 text-right">
         {logoUrl ? (
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-end gap-3">
             <div className="shrink-0">
               <img src={logoUrl} alt={logoAlt} className="h-14 w-14 object-contain" />
             </div>
-            <div className="flex-1 text-left">
+            <div className="text-right">
               <p className={`text-sm leading-tight ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
               <p className={`mt-1 text-[10px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
             </div>
@@ -86,7 +86,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 
                   setOpenGroups((current) => ({ ...current, [group.title]: !isOpen }))
                 }}
-                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-[13px] font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
+                className="flex w-full flex-row-reverse items-center justify-between rounded-lg px-2 py-2 text-[13px] font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
               >
                 <span>{group.title}</span>
                 <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
@@ -103,7 +103,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
                       <Link
                         key={item.slug}
                         href={href}
-                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-300 ${
+                        className={`flex flex-row-reverse items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-300 ${
                           isActive
                             ? "bg-primary text-white shadow-lg shadow-primary/20"
                             : "text-foreground hover:bg-primary/5 hover:text-primary"
@@ -127,15 +127,15 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 
 export function AdminDashboardShell({ userId, userName, userTitle, userPermissions, logoUrl, logoAlt, logoArabicName, logoEnglishName, logoTextColor, logoArabicFontWeight, logoEnglishFontWeight, children }: AdminDashboardShellProps) {
   return (
-    <div dir="rtl" className="min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
-      <div className="flex min-h-screen w-full items-start">
-        <aside className="sticky top-0 hidden h-screen w-[320px] shrink-0 border-l border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
+    <div dir="rtl" className="dashboard-rtl min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
+      <div className="flex min-h-screen w-full items-start lg:flex-row-reverse">
+        <aside className="sticky top-0 hidden h-screen w-[320px] shrink-0 border-r border-white/60 bg-white/95 shadow-[-10px_0_35px_rgba(15,23,42,0.04)] lg:block">
           <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1280px]">
-            <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+            <div className="mb-6 flex flex-row-reverse items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
               <div className="flex items-center gap-3">
                 <Sheet>
                   <SheetTrigger asChild>
@@ -143,7 +143,7 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
                       <Menu className="h-5 w-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[320px] border-l border-border/60 p-0 sm:max-w-[320px]">
+                  <SheetContent side="right" className="w-[320px] border-l border-border/60 p-0 text-right sm:max-w-[320px]">
                     <SheetHeader className="sr-only">
                       <SheetTitle>قائمة لوحة التحكم</SheetTitle>
                     </SheetHeader>
@@ -169,7 +169,7 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
             </div>
           </div>
 
-          <AdminChatPanel iconOnly triggerClassName="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full border-white/80 bg-white/95 shadow-[0_20px_45px_rgba(15,23,42,0.18)] backdrop-blur-sm" />
+          <AdminChatPanel iconOnly triggerClassName="fixed right-6 bottom-6 z-50 h-14 w-14 rounded-full border-white/80 bg-white/95 shadow-[0_20px_45px_rgba(15,23,42,0.18)] backdrop-blur-sm" />
         </main>
       </div>
     </div>

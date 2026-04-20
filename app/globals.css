@@ -121,6 +121,40 @@
   }
 }
 
+@layer components {
+  .dashboard-rtl {
+    direction: rtl;
+    text-align: right;
+  }
+
+  .dashboard-rtl :where(h1, h2, h3, h4, h5, h6, p, label, th, td, [role='alert']) {
+    text-align: right;
+  }
+
+  .dashboard-rtl [data-slot='button']:not([data-size='icon']):not([data-size='icon-sm']):not([data-size='icon-lg']) {
+    flex-direction: row-reverse;
+  }
+
+  .dashboard-rtl [data-slot='input']:not([dir='ltr']):not([type='email']):not([type='url']):not([type='tel']):not([type='number']),
+  .dashboard-rtl [data-slot='textarea']:not([dir='ltr']),
+  .dashboard-rtl [data-slot='select-trigger']:not([dir='ltr']) {
+    direction: rtl;
+    text-align: right;
+  }
+
+  .dashboard-rtl [data-slot='select-trigger']:not([dir='ltr']) {
+    flex-direction: row-reverse;
+  }
+
+  .dashboard-rtl [data-slot='select-value'] {
+    text-align: right;
+  }
+
+  .dashboard-rtl input[type='file'] {
+    text-align: right;
+  }
+}
+
 /* Custom Animations */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }

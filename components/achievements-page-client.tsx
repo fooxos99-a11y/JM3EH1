@@ -393,48 +393,48 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
         )}
 
         <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
-          <DialogContent className="h-[100svh] w-screen max-w-none translate-x-[-50%] translate-y-[-50%] rounded-none border-0 bg-[radial-gradient(circle_at_top,#27d3c3_0%,#11999b_30%,#0c6f75_62%,#0a4d57_100%)] p-0 text-white shadow-none" showCloseButton={false}>
+          <DialogContent className="w-[min(92vw,760px)] max-w-[760px] translate-x-[-50%] translate-y-[-50%] overflow-hidden rounded-[2rem] border-2 border-[#11b7b5]/45 bg-white p-0 text-slate-900 shadow-[0_28px_90px_rgba(17,183,181,0.18)]" showCloseButton={false}>
             {activeViewerEntry ? (
-              <div className="relative flex h-full items-center justify-center overflow-hidden p-4 sm:p-6 lg:p-8">
+              <div className="relative p-5 sm:p-6">
                 <div className="absolute left-4 top-4 z-30 flex items-center gap-2">
-                  <Button type="button" variant="ghost" size="icon" className="rounded-full bg-white/15 text-white hover:bg-white/25 hover:text-white" onClick={() => setIsViewerOpen(false)}>
+                  <Button type="button" variant="ghost" size="icon" className="rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72]" onClick={() => setIsViewerOpen(false)}>
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
 
-                <div className="absolute right-4 top-4 z-30 rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm text-white/95">
+                <div className="absolute right-4 top-4 z-30 rounded-full border border-[#11b7b5]/20 bg-[#ecfbfb] px-4 py-2 text-sm font-medium text-[#0f7f86]">
                   {viewerIndex + 1} / {viewerEntries.length}
                 </div>
 
-                <div className="relative flex h-[88svh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[2rem] border border-white/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] shadow-[0_30px_100px_rgba(2,41,48,0.28)]">
-                  <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-visible px-14 py-6 sm:px-20 sm:py-8 lg:px-24 lg:py-10">
-                    <div className="flex h-full w-full items-center justify-center rounded-[1.75rem] border border-white/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.1),rgba(255,255,255,0.04))] p-4 sm:p-6 lg:p-8">
+                <div className="relative mx-auto flex w-full max-w-[620px] flex-col overflow-hidden rounded-[1.75rem] border border-[#11b7b5]/18 bg-white">
+                  <div className="relative aspect-square w-full overflow-hidden bg-[linear-gradient(180deg,#f8fdfd,#eefafa)] px-14 py-14 sm:px-16 sm:py-16">
+                    <div className="flex h-full w-full items-center justify-center rounded-[1.6rem] border border-[#11b7b5]/16 bg-white p-4 sm:p-5">
                       {activeViewerEntry.imageUrl ? (
-                        <img src={activeViewerEntry.imageUrl} alt="Achievement" className="max-h-full w-full rounded-[1.5rem] object-contain shadow-[0_24px_80px_rgba(0,0,0,0.22)]" />
+                        <img src={activeViewerEntry.imageUrl} alt="Achievement" className="max-h-full w-full rounded-[1.35rem] object-contain shadow-[0_18px_45px_rgba(15,23,42,0.12)]" />
                       ) : (
-                        <div className="flex h-full min-h-[420px] w-full items-center justify-center rounded-[1.75rem] border border-white/20 bg-[linear-gradient(180deg,rgba(18,127,129,0.48),rgba(8,86,91,0.58))] text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+                        <div className="flex h-full min-h-[320px] w-full items-center justify-center rounded-[1.5rem] border border-dashed border-[#11b7b5]/30 bg-[#f7fcfc] text-center">
                           <div>
-                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-white/15">
-                              <Sparkles className="h-12 w-12 text-white/90" />
+                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#ecfbfb]">
+                              <Sparkles className="h-12 w-12 text-[#11b7b5]" />
                             </div>
-                            <p className="mt-5 text-lg font-semibold text-white/90">إنجاز بدون صورة</p>
+                            <p className="mt-5 text-lg font-semibold text-slate-700">إنجاز بدون صورة</p>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    <Button type="button" variant="ghost" size="icon" className="absolute left-2 top-1/2 z-20 h-14 w-14 -translate-y-1/2 rounded-full border border-white/20 bg-white/15 text-white hover:bg-white/25 hover:text-white disabled:opacity-30 sm:left-4 lg:left-6" onClick={showNextViewerEntry} disabled={viewerIndex === viewerEntries.length - 1}>
+                    <Button type="button" variant="ghost" size="icon" className="absolute left-3 top-1/2 z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:left-4" onClick={showNextViewerEntry} disabled={viewerIndex === viewerEntries.length - 1}>
                       <ChevronLeft className="h-6 w-6" />
                     </Button>
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-2 top-1/2 z-20 h-14 w-14 -translate-y-1/2 rounded-full border border-white/20 bg-white/15 text-white hover:bg-white/25 hover:text-white disabled:opacity-30 sm:right-4 lg:right-6" onClick={showPreviousViewerEntry} disabled={viewerIndex === 0}>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-3 top-1/2 z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:right-4" onClick={showPreviousViewerEntry} disabled={viewerIndex === 0}>
                       <ChevronRight className="h-6 w-6" />
                     </Button>
                   </div>
 
-                  <div className="border-t border-white/15 bg-[linear-gradient(180deg,rgba(6,71,76,0.22),rgba(4,50,54,0.36))] px-6 py-5 backdrop-blur-sm sm:px-8 lg:px-10">
+                  <div className="border-t border-[#11b7b5]/14 bg-white px-6 py-5 sm:px-7">
                     <div className="text-right">
-                      <h2 className="text-xl font-semibold leading-tight text-white sm:text-2xl">الإنجاز</h2>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-white/92 sm:text-base sm:leading-9">{activeViewerEntry.achievementText}</p>
+                      <h2 className="text-xl font-semibold leading-tight text-slate-900 sm:text-2xl">الإنجاز</h2>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-slate-600 sm:text-base sm:leading-9">{activeViewerEntry.achievementText}</p>
                     </div>
 
                     {viewerEntries.length > 1 ? (
@@ -444,7 +444,7 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
                             key={entry.id}
                             type="button"
                             onClick={() => setViewerIndex(index)}
-                            className={`h-2.5 rounded-full transition-all duration-300 ${index === viewerIndex ? "w-10 bg-white" : "w-2.5 bg-white/35 hover:bg-white/60"}`}
+                            className={`h-2.5 rounded-full transition-all duration-300 ${index === viewerIndex ? "w-10 bg-[#11b7b5]" : "w-2.5 bg-[#11b7b5]/25 hover:bg-[#11b7b5]/55"}`}
                             aria-label={`عرض الإنجاز ${index + 1}`}
                           />
                         ))}

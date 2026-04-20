@@ -1,0 +1,164 @@
+import { NextResponse } from "next/server"
+
+import { toSaudiDateInputValue, type AttendanceRecord, type WorkLocationSettings } from "@/lib/administrative-services"
+import { getCurrentUser } from "@/lib/auth"
+import { createSupabaseAdminClient } from "@/lib/supabase/server"
+
+type AttendanceRow = {
+  id: string
+  user_id: string
+  work_date: string
+  clock_in_at: string | null
+  clock_out_at: string | null
+  clock_in_latitude: number | null
+  clock_in_longitude: number | null
+  clock_out_latitude: number | null
+  clock_out_longitude: number | null
+  notes: string | null
+}
+
+type UserRow = {
+  id: string
+  full_name: string
+}
+
+type WorkLocationRow = {
+  id: string
+  name: string
+  address: string
+  latitude: number
+  longitude: number
+  radius_meters: number
+  google_maps_url: string | null
+  updated_at: string
+  updated_by: string | null
+}
+
+function buildGoogleMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+}
+
+function getWorkedMinutes(clockInAt: string | null, clockOutAt: string | null) {
+  if (!clockInAt || !clockOutAt) {
+    return 0
+  }
+
+  const start = new Date(clockInAt).getTime()
+  const end = new Date(clockOutAt).getTime()
+
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+    return 0
+  }
+
+  return Math.round((end - start) / (1000 * 60))
+}
+
+function mapAttendance(row: AttendanceRow, namesById: Map<string, string>): AttendanceRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: namesById.get(row.user_id) ?? "-",
+    workDate: row.work_date,
+    clockInAt: row.clock_in_at,
+    clockOutAt: row.clock_out_at,
+    clockInLatitude: row.clock_in_latitude,
+    clockInLongitude: row.clock_in_longitude,
+    clockOutLatitude: row.clock_out_latitude,
+    clockOutLongitude: row.clock_out_longitude,
+    workedMinutes: getWorkedMinutes(row.clock_in_at, row.clock_out_at),
+    status: row.clock_in_at && row.clock_out_at ? "present" : "incomplete",
+    notes: row.notes,
+  }
+}
+
+function createEmptyWorkLocation(): WorkLocationSettings {
+  return {
+    id: null,
+    name: "",
+    address: "",
+    latitude: null,
+    longitude: null,
+    radiusMeters: 100,
+    googleMapsUrl: "",
+    updatedAt: null,
+    updatedByName: null,
+    isConfigured: false,
+  }
+}
+
+function mapWorkLocation(row: WorkLocationRow | null, namesById: Map<string, string>): WorkLocationSettings {
+  if (!row) {
+    return createEmptyWorkLocation()
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    radiusMeters: row.radius_meters,
+    googleMapsUrl: buildGoogleMapsUrl(row.latitude, row.longitude),
+    updatedAt: row.updated_at,
+    updatedByName: row.updated_by ? (namesById.get(row.updated_by) ?? null) : null,
+    isConfigured: true,
+  }
+}
+
+export async function GET() {
+  const user = await getCurrentUser()
+
+  if (!user || user.role !== "admin") {
+    return NextResponse.json({ error: "غير مصرح" }, { status: 401 })
+  }
+
+  if (!user.permissions.includes("*")) {
+    return NextResponse.json({ error: "فقط مدير النظام يمكنه عرض السجل الكامل" }, { status: 403 })
+  }
+
+  const supabase = createSupabaseAdminClient()
+  const { data: users, error: usersError } = await supabase.from("app_users").select("id,full_name").eq("role", "admin")
+
+  if (usersError) {
+    return NextResponse.json({ error: usersError.message }, { status: 400 })
+  }
+
+  const userRows = (users ?? []) as UserRow[]
+  const userIds = userRows.map((entry) => entry.id)
+  const namesById = new Map(userRows.map((entry) => [entry.id, entry.full_name]))
+
+  const { data: records, error: recordsError } = await supabase
+    .from("attendance_records")
+    .select("id,user_id,work_date,clock_in_at,clock_out_at,clock_in_latitude,clock_in_longitude,clock_out_latitude,clock_out_longitude,notes")
+    .in("user_id", userIds)
+    .order("work_date", { ascending: false })
+    .order("clock_in_at", { ascending: false })
+
+  if (recordsError) {
+    return NextResponse.json({ error: recordsError.message }, { status: 400 })
+  }
+
+  const { data: workLocationRow, error: workLocationError } = await supabase
+    .from("work_location_settings")
+    .select("id,name,address,latitude,longitude,radius_meters,google_maps_url,updated_at,updated_by")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<WorkLocationRow>()
+
+  if (workLocationError && workLocationError.code !== "PGRST116") {
+    return NextResponse.json({ error: workLocationError.message }, { status: 400 })
+  }
+
+  const attendanceHistory = ((records ?? []) as AttendanceRow[]).map((row) => mapAttendance(row, namesById))
+  const todayKey = toSaudiDateInputValue(new Date())
+
+  return NextResponse.json({
+    workLocation: mapWorkLocation(workLocationRow ?? null, namesById),
+    records: attendanceHistory,
+    summary: {
+      totalRecords: attendanceHistory.length,
+      presentToday: attendanceHistory.filter((record) => record.workDate === todayKey && record.clockInAt).length,
+      incompleteToday: attendanceHistory.filter((record) => record.workDate === todayKey && record.status === "incomplete").length,
+    },
+  })
+}

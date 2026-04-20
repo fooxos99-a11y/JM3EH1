@@ -60,21 +60,19 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
 
   return (
     <header
-      className={`fixed left-0 right-0 top-0 z-50 transition-all duration-500 ${
-        useSolidHeader ? "bg-white/96 py-2.5 shadow-[0_14px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl" : "bg-transparent py-4"
-      }`}
+      className="fixed left-0 right-0 top-0 z-50 bg-transparent py-3 transition-all duration-500"
     >
-      <div className="container mx-auto px-4">
-        <div className={`flex items-center justify-between rounded-[1.75rem] px-2 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "bg-black/10 py-2.5 backdrop-blur-md"}`}>
-          <Link href="/" className="group flex items-center gap-3">
+      <div className="container mx-auto px-3 sm:px-4 lg:px-6">
+        <div className="flex items-center justify-between gap-3 rounded-[1.75rem] px-1 py-1 transition-all duration-500 sm:gap-4">
+          <Link href="/" className="group flex min-w-0 items-center gap-2 sm:gap-3">
             {logo.logo ? (
               <>
-                <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] md:h-[70px] md:w-[70px]">
-                  <img src={logo.logo} alt={logo.alt} className="h-[64px] w-[64px] object-contain md:h-[70px] md:w-[70px]" />
+                <div className="flex h-[56px] w-[56px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] sm:h-[62px] sm:w-[62px] lg:h-[70px] lg:w-[70px]">
+                  <img src={logo.logo} alt={logo.alt} className="h-[56px] w-[56px] object-contain sm:h-[62px] sm:w-[62px] lg:h-[70px] lg:w-[70px]" />
                 </div>
-                <div className={`flex min-h-[64px] flex-col justify-center text-right transition-colors duration-300 md:min-h-[70px] ${useSolidHeader ? "" : "text-white"}`}>
-                  <h1 className={`text-base leading-tight md:text-[1.3rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
-                  <p className={`mt-1 text-[10px] tracking-[0.02em] md:text-[0.82rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
+                <div className={`flex min-h-[56px] min-w-0 flex-col justify-center text-right transition-colors duration-300 sm:min-h-[62px] lg:min-h-[70px] ${useSolidHeader ? "" : "text-white"}`}>
+                  <h1 className={`text-[0.95rem] leading-tight sm:text-[1.05rem] lg:text-[1.15rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
+                  <p className={`mt-1 text-[9px] tracking-[0.02em] sm:text-[0.7rem] lg:text-[0.82rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
                 </div>
               </>
             ) : (
@@ -90,12 +88,12 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             )}
           </Link>
 
-          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
+          <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2 xl:flex">
             {navLinks.map((link, index) => (
               <Link
                 key={link.href + index}
                 href={link.href}
-                className={`group relative rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${
+                className={`group relative rounded-full px-6 py-3 text-lg font-semibold transition-all duration-300 2xl:px-7 2xl:text-[1.2rem] ${
                   useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"
                 }`}
               >
@@ -109,13 +107,13 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             >
               <button
                 type="button"
-                className={`group flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 ${
+                className={`group flex items-center gap-2 rounded-full px-6 py-3 text-lg font-semibold transition-all duration-300 2xl:px-7 2xl:text-[1.2rem] ${
                   useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"
                 }`}
                 onClick={() => setIsGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
-                <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
                 <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </button>
 
@@ -168,10 +166,10 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             </div>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" className={`rounded-full ${useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button asChild variant="ghost" className={`h-12 rounded-full px-3 sm:h-14 sm:px-4 ${useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"}`}>
               <Link href="/cart" aria-label="السلة">
-                <ShoppingCart className="h-5 w-5" />
+                <ShoppingCart className="h-6 w-6 sm:h-7 sm:w-7" />
               </Link>
             </Button>
             <AuthDialog isScrolled={useSolidHeader} />
@@ -179,21 +177,21 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             <Button
               variant="ghost"
               size="icon"
-              className={`rounded-full lg:hidden ${useSolidHeader ? "text-foreground" : "text-white"}`}
+              className={`size-12 rounded-full sm:size-14 xl:hidden ${useSolidHeader ? "text-foreground" : "text-white"}`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isMenuOpen ? <X className="h-7 w-7" /> : <Menu className="h-7 w-7" />}
             </Button>
           </div>
         </div>
 
-        <div className={`overflow-hidden transition-all duration-500 lg:hidden ${isMenuOpen ? "mt-4 max-h-[400px] opacity-100" : "max-h-0 opacity-0"}`}>
+        <div className={`overflow-hidden transition-all duration-500 xl:hidden ${isMenuOpen ? "mt-4 max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
           <nav className="rounded-[1.75rem] bg-card/95 p-4 shadow-xl backdrop-blur-lg">
             {navLinks.map((link, index) => (
               <Link
                 key={link.href + index}
                 href={link.href}
-                className="block rounded-2xl px-4 py-3 font-medium text-foreground transition-all duration-300 hover:bg-primary/5 hover:text-primary"
+                className="block rounded-2xl px-4 py-4 text-lg font-semibold text-foreground transition-all duration-300 hover:bg-primary/5 hover:text-primary sm:text-xl"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {link.label}
@@ -203,11 +201,11 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             <div className="mt-2 rounded-[1.35rem] bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-right font-medium text-slate-900 transition-all duration-300 hover:bg-slate-100/90"
+                className="flex w-full items-center justify-between rounded-2xl px-4 py-4 text-right text-lg font-semibold text-slate-900 transition-all duration-300 hover:bg-slate-100/90 sm:text-xl"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
-                <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-6 w-6 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
               </button>
 
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
@@ -217,17 +215,17 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                       {item.children?.length ? (
                         <button
                           type="button"
-                          className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-all duration-300 ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
+                          className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-right text-base font-semibold transition-all duration-300 sm:text-lg ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
                           <span>{item.label}</span>
-                          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
+                          <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
                         </button>
                       ) : (
                         <div className="flex justify-end">
                           <Link
                             href={item.href}
-                            className="inline-flex w-full items-center justify-end rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-white/90"
+                            className="inline-flex w-full items-center justify-end rounded-full bg-transparent px-4 py-3 text-right text-base font-semibold text-slate-800 transition-all duration-300 hover:bg-white/90 sm:text-lg"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -243,7 +241,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="flex w-full items-center justify-end rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950"
+                              className="flex w-full items-center justify-end rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)

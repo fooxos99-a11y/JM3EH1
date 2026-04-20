@@ -72,10 +72,11 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          const rawAccuracy = position.coords.accuracy
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
+            accuracy: Number.isFinite(rawAccuracy) && rawAccuracy >= 0 ? rawAccuracy : undefined,
           })
         },
         () => reject(new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح")),

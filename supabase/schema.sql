@@ -88,6 +88,8 @@ create table if not exists public.employee_profiles (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create unique index if not exists employee_profiles_national_id_key on public.employee_profiles(national_id);
+
 create table if not exists public.employee_leave_balances (
   user_id uuid primary key references public.app_users(id) on delete cascade,
   leave_quota_days integer not null default 0,

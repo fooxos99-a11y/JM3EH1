@@ -27,7 +27,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server"
 const coordinateSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  accuracy: z.number().min(0).max(5000).optional(),
+  accuracy: z.number().finite().nonnegative().optional(),
 })
 
 function parseCoordinatesFromGoogleMapsUrl(url: string) {

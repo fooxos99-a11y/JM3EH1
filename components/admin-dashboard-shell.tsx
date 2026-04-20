@@ -57,10 +57,15 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-border/60 px-5 py-5 text-right">
         {logoUrl ? (
-          <div className="space-y-1 text-right">
-            <p className={`text-base leading-tight ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
-            <p className={`text-[11px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
-            <p className="pt-1 text-[11px] font-medium text-muted-foreground">لوحة التحكم</p>
+          <div className="flex items-center justify-end gap-3">
+            <div className="text-right">
+              <p className={`text-sm leading-tight ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
+              <p className={`mt-1 text-[10px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
+              <p className="pt-1 text-[11px] font-medium text-muted-foreground">لوحة التحكم</p>
+            </div>
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+              <img src={logoUrl} alt={logoAlt} className="h-12 w-12 object-contain" />
+            </div>
           </div>
         ) : (
           <h2 className="text-lg font-bold text-foreground">لوحة التحكم</h2>
@@ -124,43 +129,45 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 export function AdminDashboardShell({ userId, userName, userTitle, userPermissions, logoUrl, logoAlt, logoArabicName, logoEnglishName, logoTextColor, logoArabicFontWeight, logoEnglishFontWeight, children }: AdminDashboardShellProps) {
   return (
     <div dir="rtl" className="min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] items-start">
-        <aside className="sticky top-0 hidden h-screen w-[320px] shrink-0 border-r border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
+      <div className="flex min-h-screen w-full items-start">
+        <aside className="sticky top-0 hidden h-screen w-[320px] shrink-0 border-l border-white/60 bg-white/95 shadow-[10px_0_35px_rgba(15,23,42,0.04)] lg:block">
           <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8 lg:pl-0">
-          <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="rounded-2xl lg:hidden">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[320px] border-l border-border/60 p-0 sm:max-w-[320px]">
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>قائمة لوحة التحكم</SheetTitle>
-                  </SheetHeader>
-                  <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
-                </SheetContent>
-              </Sheet>
+        <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-[1280px]">
+            <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="icon" className="rounded-2xl lg:hidden">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[320px] border-l border-border/60 p-0 sm:max-w-[320px]">
+                    <SheetHeader className="sr-only">
+                      <SheetTitle>قائمة لوحة التحكم</SheetTitle>
+                    </SheetHeader>
+                    <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
+                  </SheetContent>
+                </Sheet>
 
-              <div className="text-right">
-                <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
-                <p className="text-sm font-bold text-foreground">{userName}</p>
+                <div className="text-right">
+                  <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
+                  <p className="text-sm font-bold text-foreground">{userName}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
+                  <Bell className="h-5 w-5" />
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
-                <Bell className="h-5 w-5" />
-              </div>
+            <div className="px-1 md:px-2">
+              {children}
             </div>
-          </div>
-
-          <div className="px-1 md:px-2">
-            {children}
           </div>
 
           <AdminChatPanel iconOnly triggerClassName="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full border-white/80 bg-white/95 shadow-[0_20px_45px_rgba(15,23,42,0.18)] backdrop-blur-sm" />

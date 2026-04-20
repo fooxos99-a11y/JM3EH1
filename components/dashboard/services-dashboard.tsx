@@ -80,14 +80,151 @@ function downloadBlob(blob: Blob, fileName: string) {
   }, 1000)
 }
 
-function downloadPdfImagePages(pages: PdfImagePage[], baseFileName: string) {
-  pages.forEach((page, index) => {
-    window.setTimeout(() => {
-      if (page.blob) {
-        downloadBlob(page.blob, `${baseFileName}-page-${page.pageNumber}.png`)
-      }
-    }, index * 180)
-  })
+const crc32Table = (() => {
+  const table = new Uint32Array(256)
+  for (let index = 0; index < 256; index += 1) {
+    let crc = index
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) === 1 ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1)
+    }
+    table[index] = crc >>> 0
+  }
+  return table
+})()
+
+function calculateCrc32(data: Uint8Array) {
+  let crc = 0xffffffff
+  for (const value of data) {
+    crc = crc32Table[(crc ^ value) & 0xff] ^ (crc >>> 8)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function getZipDosDateParts(date: Date) {
+  const year = Math.max(1980, date.getFullYear())
+  const dosTime = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | Math.floor(date.getSeconds() / 2)
+  const dosDate = (((year - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f)
+  return { dosTime, dosDate }
+}
+
+function setUint16(view: DataView, offset: number, value: number) {
+  view.setUint16(offset, value, true)
+}
+
+function setUint32(view: DataView, offset: number, value: number) {
+  view.setUint32(offset, value >>> 0, true)
+}
+
+function createStoredZip(files: Array<{ name: string; data: Uint8Array }>) {
+  const encoder = new TextEncoder()
+  const zipDate = getZipDosDateParts(new Date())
+  const localParts: Uint8Array[] = []
+  const centralParts: Uint8Array[] = []
+  let offset = 0
+  let centralDirectorySize = 0
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name)
+    const crc32 = calculateCrc32(file.data)
+
+    const localHeader = new Uint8Array(30 + nameBytes.length)
+    const localView = new DataView(localHeader.buffer)
+    setUint32(localView, 0, 0x04034b50)
+    setUint16(localView, 4, 20)
+    setUint16(localView, 6, 0)
+    setUint16(localView, 8, 0)
+    setUint16(localView, 10, zipDate.dosTime)
+    setUint16(localView, 12, zipDate.dosDate)
+    setUint32(localView, 14, crc32)
+    setUint32(localView, 18, file.data.length)
+    setUint32(localView, 22, file.data.length)
+    setUint16(localView, 26, nameBytes.length)
+    setUint16(localView, 28, 0)
+    localHeader.set(nameBytes, 30)
+    localParts.push(localHeader, file.data)
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length)
+    const centralView = new DataView(centralHeader.buffer)
+    setUint32(centralView, 0, 0x02014b50)
+    setUint16(centralView, 4, 20)
+    setUint16(centralView, 6, 20)
+    setUint16(centralView, 8, 0)
+    setUint16(centralView, 10, 0)
+    setUint16(centralView, 12, zipDate.dosTime)
+    setUint16(centralView, 14, zipDate.dosDate)
+    setUint32(centralView, 16, crc32)
+    setUint32(centralView, 20, file.data.length)
+    setUint32(centralView, 24, file.data.length)
+    setUint16(centralView, 28, nameBytes.length)
+    setUint16(centralView, 30, 0)
+    setUint16(centralView, 32, 0)
+    setUint16(centralView, 34, 0)
+    setUint16(centralView, 36, 0)
+    setUint32(centralView, 38, 0)
+    setUint32(centralView, 42, offset)
+    centralHeader.set(nameBytes, 46)
+    centralParts.push(centralHeader)
+
+    offset += localHeader.length + file.data.length
+    centralDirectorySize += centralHeader.length
+  }
+
+  const endRecord = new Uint8Array(22)
+  const endView = new DataView(endRecord.buffer)
+  setUint32(endView, 0, 0x06054b50)
+  setUint16(endView, 4, 0)
+  setUint16(endView, 6, 0)
+  setUint16(endView, 8, files.length)
+  setUint16(endView, 10, files.length)
+  setUint32(endView, 12, centralDirectorySize)
+  setUint32(endView, 16, offset)
+  setUint16(endView, 20, 0)
+
+  return new Blob([...localParts, ...centralParts, endRecord], { type: "application/zip" })
+}
+
+async function downloadPdfImagePages(pages: PdfImagePage[], baseFileName: string) {
+  const zipFiles = await Promise.all(
+    pages.map(async (page) => ({
+      name: `${baseFileName}-page-${page.pageNumber}.png`,
+      data: new Uint8Array(await (page.blob ?? fetch(page.dataUrl).then((response) => response.blob())).arrayBuffer()),
+    })),
+  )
+
+  const zipBlob = createStoredZip(zipFiles)
+  downloadBlob(zipBlob, `${baseFileName}-images.zip`)
+}
+
+async function renderPdfPreviewPages(file: File, scale: number, errorMessage: string) {
+  const pdfjs = await loadPdfJs()
+  const bytes = await readFileAsArrayBuffer(file)
+  const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+  const nextPages: PdfImagePage[] = []
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber)
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+
+    if (!context) {
+      throw new Error(errorMessage)
+    }
+
+    canvas.width = Math.max(1, Math.floor(viewport.width))
+    canvas.height = Math.max(1, Math.floor(viewport.height))
+    context.fillStyle = "#ffffff"
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    await page.render({ canvasContext: context, viewport }).promise
+    const blob = await canvasToPngBlob(canvas)
+    nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
+  }
+
+  if (nextPages.length === 0) {
+    throw new Error("تعذر استخراج صفحات PDF للمعاينة")
+  }
+
+  return nextPages
 }
 
 function readFileAsArrayBuffer(file: File) {
@@ -749,32 +886,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
     setIsConvertingPdfPages(true)
     try {
-      const pdfjs = await loadPdfJs()
-      const bytes = await readFileAsArrayBuffer(pdfToImagesFile)
-      const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
-      const nextPages: PdfImagePage[] = []
-
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-        const page = await pdf.getPage(pageNumber)
-        const viewport = page.getViewport({ scale: 2 })
-        const canvas = document.createElement("canvas")
-        const context = canvas.getContext("2d")
-
-        if (!context) {
-          throw new Error("تعذر تجهيز الرسم للصفحة")
-        }
-
-        canvas.width = viewport.width
-        canvas.height = viewport.height
-        await page.render({ canvasContext: context, viewport }).promise
-        const blob = await canvasToPngBlob(canvas)
-        nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
-      }
+      const nextPages = await renderPdfPreviewPages(pdfToImagesFile, 2, "تعذر تجهيز الرسم للصفحة")
 
       revokePreviewUrls(pdfImagePages)
       setPdfImagePages(nextPages)
-      downloadPdfImagePages(nextPages, pdfToImagesFile.name.replace(/\.pdf$/i, ""))
-      setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة وتنزيلها` })
+      await downloadPdfImagePages(nextPages, pdfToImagesFile.name.replace(/\.pdf$/i, ""))
+      setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة وتنزيل ملف ZIP` })
     } finally {
       setIsConvertingPdfPages(false)
     }
@@ -881,13 +998,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("تعذر ضغط ملف PDF")
     }
 
-    if (bestSize >= bytes.byteLength) {
-      throw new Error("تعذر تقليل حجم ملف PDF هذا")
+    downloadBlob(new Blob([bestOutput], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
+    if (bestSize < bytes.byteLength) {
+      const reductionPercent = Math.max(1, Math.round((1 - (bestSize / bytes.byteLength)) * 100))
+      setMessage({ type: "success", text: `تم ضغط ملف PDF وتقليل حجمه بنسبة ${reductionPercent}%` })
+      return
     }
 
-    downloadBlob(new Blob([bestOutput], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
-    const reductionPercent = Math.max(1, Math.round((1 - (bestSize / bytes.byteLength)) * 100))
-    setMessage({ type: "success", text: `تم ضغط ملف PDF وتقليل حجمه بنسبة ${reductionPercent}%` })
+    setMessage({ type: "success", text: "تم تجهيز ملف PDF وتنزيله، لكن الحجم لم ينخفض بشكل ملحوظ" })
   }
 
   async function handleCompressFile() {
@@ -912,33 +1030,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     if (isPdfFile(file)) {
       setIsPreparingEditPreview(true)
       try {
-        const pdfjs = await loadPdfJs()
-        const bytes = await readFileAsArrayBuffer(file)
-        const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
-        const nextPages: PdfImagePage[] = []
-
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          const page = await pdf.getPage(pageNumber)
-          const viewport = page.getViewport({ scale: 1.3 })
-          const canvas = document.createElement("canvas")
-          const context = canvas.getContext("2d")
-
-          if (!context) {
-            throw new Error("تعذر تجهيز معاينة الملف")
-          }
-
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          await page.render({ canvasContext: context, viewport }).promise
-          const blob = await canvasToPngBlob(canvas)
-          nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
-        }
+        const nextPages = await renderPdfPreviewPages(file, 1.3, "تعذر تجهيز معاينة الملف")
 
         revokePreviewUrls(editPreviewPages)
         setEditPreviewPages(nextPages)
-        if (nextPages.length === 0) {
-          throw new Error("تعذر استخراج صفحات PDF للمعاينة")
-        }
       } finally {
         setIsPreparingEditPreview(false)
       }
@@ -1088,33 +1183,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     if (isPdfFile(file)) {
       setIsPreparingStampPreview(true)
       try {
-        const pdfjs = await loadPdfJs()
-        const bytes = await readFileAsArrayBuffer(file)
-        const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
-        const nextPages: PdfImagePage[] = []
-
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          const page = await pdf.getPage(pageNumber)
-          const viewport = page.getViewport({ scale: 1.25 })
-          const canvas = document.createElement("canvas")
-          const context = canvas.getContext("2d")
-
-          if (!context) {
-            throw new Error("تعذر تجهيز معاينة PDF")
-          }
-
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          await page.render({ canvasContext: context, viewport }).promise
-          const blob = await canvasToPngBlob(canvas)
-          nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
-        }
+        const nextPages = await renderPdfPreviewPages(file, 1.25, "تعذر تجهيز معاينة PDF")
 
         revokePreviewUrls(stampPreviewPages)
         setStampPreviewPages(nextPages)
-        if (nextPages.length === 0) {
-          throw new Error("تعذر استخراج صفحات PDF للمعاينة")
-        }
       } finally {
         setIsPreparingStampPreview(false)
       }
@@ -1324,7 +1396,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </div>
       )}
 
-      {message && !isCompactServiceView ? (
+      {message ? (
         <Alert className={message.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}>
           <AlertTitle>{message.type === "success" ? "تم تنفيذ العملية" : "يوجد تنبيه"}</AlertTitle>
           <AlertDescription>{message.text}</AlertDescription>
@@ -1655,7 +1727,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
                       <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
                         <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
-                        {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
+                        {assetImageUrl ? <p className="text-sm text-muted-foreground">تم اختيار الملف وجاهز للحفظ.</p> : null}
                         <div className="flex justify-end">
                           <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
                         </div>
@@ -1664,9 +1736,19 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   ) : null}
 
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">اضغط على العنصر لإضافته للمعاينة</p>
-                    {(assetDialogMode === "manager" ? data.assets.length === 0 : signatureAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {(assetDialogMode === "manager" ? data.assets : signatureAssets).map((asset) => (
+                    <p className="text-sm text-muted-foreground">{assetDialogMode === "manager" ? "العناصر المحفوظة متاحة للحذف فقط من هذه النافذة." : "اضغط على العنصر لإضافته للمعاينة"}</p>
+                    {(assetDialogMode === "manager" ? data.assets.length === 0 : signatureAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : assetDialogMode === "manager" ? <div className="space-y-3">
+                      {data.assets.map((asset) => (
+                        <div key={asset.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-white px-4 py-3">
+                          <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" />حذف</Button>
+                          <div className="text-right">
+                            <p className="font-semibold text-foreground">{asset.name}</p>
+                            <p className="text-sm text-muted-foreground">{asset.kind === "stamp" ? "ختم" : "توقيع"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {signatureAssets.map((asset) => (
                         <button
                           key={asset.id}
                           type="button"

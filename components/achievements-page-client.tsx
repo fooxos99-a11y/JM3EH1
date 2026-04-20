@@ -368,7 +368,7 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
               {!selectedUserId ? <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">لا يوجد موظفون متاحون للعرض حاليًا.</div> : !selectedTeamGroup ? <div className="rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center text-sm text-muted-foreground">لا توجد إنجازات مرفوعة لهذا الموظف في الأسبوع المحدد.</div> : (
                 <Accordion type="multiple" className="space-y-3">
                   <AccordionItem value={selectedTeamGroup.userId} className="overflow-hidden rounded-[1.5rem] border border-border/60 bg-muted/10 px-4">
-                    <AccordionTrigger className="flex-row-reverse text-right hover:no-underline [&_svg]:shrink-0"><div className="flex w-full items-center justify-between gap-4"><Badge variant="secondary">{selectedTeamGroup.entries.length} إنجاز</Badge><div className="text-right"><p className="font-bold text-foreground">{selectedTeamGroup.userName}</p></div></div></AccordionTrigger>
+                    <AccordionTrigger className="flex-row-reverse text-right hover:no-underline [&_svg]:shrink-0"><div className="flex w-full items-center justify-end gap-4"><div className="text-right"><p className="font-bold text-foreground">الإنجازات</p></div></div></AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-4 pt-2">
                         <div className="flex justify-start">

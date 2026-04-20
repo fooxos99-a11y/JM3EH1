@@ -288,6 +288,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
   }, [editPreviewPages])
 
+  useEffect(() => {
+    return () => {
+      revokePreviewUrls(stampPreviewPages)
+    }
+  }, [stampPreviewPages])
+
   const assetStats = useMemo(() => ({
     total: data?.assets.length ?? 0,
     stamps: data?.assets.filter((asset) => asset.kind === "stamp").length ?? 0,
@@ -731,47 +737,53 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   async function compressPdfFile(file: File) {
-    const pdfjs = await loadPdfJs()
     const bytes = await readFileAsArrayBuffer(file)
-    const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
-    const outputPdf = await PDFDocument.create()
+    try {
+      const pdfjs = await loadPdfJs()
+      const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+      const outputPdf = await PDFDocument.create()
 
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber)
-      const viewport = page.getViewport({ scale: 1 })
-      const canvas = document.createElement("canvas")
-      const context = canvas.getContext("2d")
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber)
+        const viewport = page.getViewport({ scale: 1 })
+        const canvas = document.createElement("canvas")
+        const context = canvas.getContext("2d")
 
-      if (!context) {
-        throw new Error("تعذر تجهيز صفحات PDF للضغط")
+        if (!context) {
+          throw new Error("تعذر تجهيز صفحات PDF للضغط")
+        }
+
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        context.fillStyle = "#ffffff"
+        context.fillRect(0, 0, canvas.width, canvas.height)
+        await page.render({ canvasContext: context, viewport }).promise
+
+        const pageBlob = await canvasToJpegBlob(canvas, 0.68)
+        const pageBytes = await pageBlob.arrayBuffer()
+        const embeddedImage = await outputPdf.embedJpg(pageBytes)
+        const outputPage = outputPdf.addPage([embeddedImage.width, embeddedImage.height])
+        outputPage.drawImage(embeddedImage, {
+          x: 0,
+          y: 0,
+          width: embeddedImage.width,
+          height: embeddedImage.height,
+        })
       }
 
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      context.fillStyle = "#ffffff"
-      context.fillRect(0, 0, canvas.width, canvas.height)
-      await page.render({ canvasContext: context, viewport }).promise
+      if (outputPdf.getPageCount() === 0) {
+        throw new Error("تعذر ضغط ملف PDF")
+      }
 
-      const pageBlob = await canvasToJpegBlob(canvas, 0.68)
-
-      const pageBytes = await pageBlob.arrayBuffer()
-      const embeddedImage = await outputPdf.embedJpg(pageBytes)
-      const outputPage = outputPdf.addPage([embeddedImage.width, embeddedImage.height])
-      outputPage.drawImage(embeddedImage, {
-        x: 0,
-        y: 0,
-        width: embeddedImage.width,
-        height: embeddedImage.height,
-      })
+      const output = await outputPdf.save()
+      downloadBlob(new Blob([output], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
+      setMessage({ type: "success", text: "تم ضغط ملف PDF وتنزيله" })
+    } catch {
+      const originalPdf = await PDFDocument.load(bytes)
+      const fallbackOutput = await originalPdf.save({ useObjectStreams: true })
+      downloadBlob(new Blob([fallbackOutput], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
+      setMessage({ type: "success", text: "تم تجهيز ملف PDF وتنزيله" })
     }
-
-    if (outputPdf.getPageCount() === 0) {
-      throw new Error("تعذر ضغط ملف PDF")
-    }
-
-    const output = await outputPdf.save()
-    downloadBlob(new Blob([output], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
-    setMessage({ type: "success", text: "تم ضغط ملف PDF وتنزيله" })
   }
 
   async function handleCompressFile() {
@@ -990,9 +1002,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           canvas.width = viewport.width
           canvas.height = viewport.height
           await page.render({ canvasContext: context, viewport }).promise
-          nextPages.push({ pageNumber, dataUrl: canvas.toDataURL("image/png") })
+          const blob = await canvasToPngBlob(canvas)
+          nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
         }
 
+        revokePreviewUrls(stampPreviewPages)
         setStampPreviewPages(nextPages)
         if (nextPages.length === 0) {
           throw new Error("تعذر استخراج صفحات PDF للمعاينة")
@@ -1004,6 +1018,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       return
     }
 
+    revokePreviewUrls(stampPreviewPages)
     setStampPreviewPages([{ pageNumber: 1, dataUrl: await readFileAsDataUrl(file) }])
   }
 
@@ -1015,6 +1030,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     try {
       await prepareStampPreview(file)
     } catch (error) {
+      revokePreviewUrls(stampPreviewPages)
       setStampPreviewPages([])
       setMessage({ type: "error", text: error instanceof Error ? error.message : "تعذر تجهيز الملف للمعاينة" })
     }

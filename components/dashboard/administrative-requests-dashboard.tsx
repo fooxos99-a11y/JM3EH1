@@ -26,7 +26,7 @@ import { DatePickerField } from "@/components/ui/date-picker-field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -226,12 +226,28 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     )
   }
 
+  const pageTitleByTab: Record<string, string> = {
+    submit: "الطلبات الإدارية",
+    internal: "المعاملات الداخلية",
+    profile: "الملف الوظيفي",
+    employment: "السجل الوظيفي",
+    leave: "سجلات الإجازات",
+  }
+
+  const pageDescriptionByTab: Record<string, string> = {
+    submit: "تقديم الطلبات الإدارية ومتابعة حالتها واعتمادها من مدير النظام عند الحاجة.",
+    internal: "مساحة مستقلة للمعاملات الداخلية ضمن قسم الخدمات الإدارية.",
+    profile: "استعراض بيانات الحساب الوظيفية الأساسية من صفحة مستقلة.",
+    employment: "عرض سجل إنشاء الحساب ونوعه والجهة التي قامت بإنشائه.",
+    leave: "عرض أرصدة الإجازات والأذونات وأيام السماحية وإدارتها حسب الصلاحية.",
+  }
+
   return (
     <section className="space-y-6 text-right">
       <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <h1 className="text-2xl font-bold text-foreground">الطلبات الإدارية</h1>
+        <h1 className="text-2xl font-bold text-foreground">{pageTitleByTab[initialTab] ?? "الطلبات الإدارية"}</h1>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          تقديم الطلبات، متابعة السجلات، تسجيل الحضور والانصراف، واستعراض البيانات الوظيفية في مكان واحد مع صلاحيات خاصة لمدير النظام في الاعتماد وتحديد الأرصدة والموقع الجغرافي.
+          {pageDescriptionByTab[initialTab] ?? "تقديم الطلبات الإدارية ومتابعة حالتها من قسم مستقل داخل لوحة التحكم."}
         </p>
       </div>
 
@@ -251,19 +267,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
         </Alert>
       ) : null}
 
-      <Tabs defaultValue={initialTab} className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
-          <TabsTrigger value="submit" className="rounded-xl px-4 py-2">تقديم طلب</TabsTrigger>
-          <TabsTrigger value="attendance" className="rounded-xl px-4 py-2">الحضور والانصراف</TabsTrigger>
-          <TabsTrigger value="internal" className="rounded-xl px-4 py-2">المعاملات الداخلية</TabsTrigger>
-          <TabsTrigger value="profile" className="rounded-xl px-4 py-2">الملف الوظيفي</TabsTrigger>
-          <TabsTrigger value="employment" className="rounded-xl px-4 py-2">السجل الوظيفي</TabsTrigger>
-          <TabsTrigger value="leave" className="rounded-xl px-4 py-2">سجلات الإجازات</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="attendance">
-          <AttendancePanel data={data} onRefresh={loadData} />
-        </TabsContent>
+      <Tabs value={initialTab} className="gap-4">
 
         <TabsContent value="submit" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">

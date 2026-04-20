@@ -53,7 +53,23 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
   }
 
   if (section === "administrative_requests") {
-    return <AdministrativeRequestsDashboard />
+    return <AdministrativeRequestsDashboard initialTab="submit" />
+  }
+
+  if (section === "administrative_internal") {
+    return <AdministrativeRequestsDashboard initialTab="internal" />
+  }
+
+  if (section === "administrative_profile") {
+    return <AdministrativeRequestsDashboard initialTab="profile" />
+  }
+
+  if (section === "administrative_employment") {
+    return <AdministrativeRequestsDashboard initialTab="employment" />
+  }
+
+  if (section === "administrative_leave") {
+    return <AdministrativeRequestsDashboard initialTab="leave" />
   }
 
   if (section === "supporters") {

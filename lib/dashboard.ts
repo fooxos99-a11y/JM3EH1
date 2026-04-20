@@ -72,7 +72,31 @@ export const dashboardSections: DashboardGroup[] = [
       {
         slug: "administrative_requests",
         label: "الطلبات الإدارية",
-        description: "إدارة الطلبات الإدارية، السجلات الوظيفية، وأرصدة الإجازات والأذونات.",
+        description: "تقديم الطلبات الإدارية ومتابعة الطلبات المرسلة واعتمادها.",
+        permission: "administrative_requests",
+      },
+      {
+        slug: "administrative_internal",
+        label: "المعاملات الداخلية",
+        description: "الوصول المباشر إلى مساحة المعاملات الداخلية ضمن الخدمات الإدارية.",
+        permission: "administrative_requests",
+      },
+      {
+        slug: "administrative_profile",
+        label: "الملف الوظيفي",
+        description: "عرض البيانات الوظيفية الأساسية للحساب من قسم مستقل.",
+        permission: "administrative_requests",
+      },
+      {
+        slug: "administrative_employment",
+        label: "السجل الوظيفي",
+        description: "استعراض سجل إنشاء الحساب والجهة التي قامت بإعداده.",
+        permission: "administrative_requests",
+      },
+      {
+        slug: "administrative_leave",
+        label: "سجلات الإجازات",
+        description: "عرض أرصدة الإجازات والأذونات وأيام السماحية من صفحة مستقلة.",
         permission: "administrative_requests",
       },
       {

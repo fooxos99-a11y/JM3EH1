@@ -73,7 +73,8 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
   const [triggerPosition, setTriggerPosition] = useState<FloatingPosition | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const dragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number; moved: boolean } | null>(null)
+  const dragStateRef = useRef<{ pointerId: number; moved: boolean } | null>(null)
+  const suppressTriggerClickRef = useRef(false)
   const sidePositionClass = side === "left" ? "left-0" : "right-0"
   const sideBorderClass = side === "left" ? "border-r" : "border-l"
   const closedTransformClass = side === "left" ? "-translate-x-[calc(100%+1.5rem)]" : "translate-x-[calc(100%+1.5rem)]"
@@ -243,8 +244,6 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
 
     dragStateRef.current = {
       pointerId: event.pointerId,
-      offsetX: event.clientX - (triggerPosition?.x ?? 0),
-      offsetY: event.clientY - (triggerPosition?.y ?? 0),
       moved: false,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -256,8 +255,8 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
     }
 
     const nextPosition = clampFloatingPosition({
-      x: event.clientX - dragStateRef.current.offsetX,
-      y: event.clientY - dragStateRef.current.offsetY,
+      x: event.clientX - (FLOATING_TRIGGER_SIZE / 2),
+      y: event.clientY - (FLOATING_TRIGGER_SIZE / 2),
     })
 
     if (Math.abs(nextPosition.x - (triggerPosition?.x ?? 0)) > 2 || Math.abs(nextPosition.y - (triggerPosition?.y ?? 0)) > 2) {
@@ -272,6 +271,8 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
       return
     }
 
+    suppressTriggerClickRef.current = dragStateRef.current.moved
+
     if (triggerPosition) {
       persistFloatingPosition(triggerPosition)
     }
@@ -280,8 +281,8 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
   }
 
   function handleTriggerClick() {
-    if (dragStateRef.current?.moved) {
-      dragStateRef.current = null
+    if (suppressTriggerClickRef.current) {
+      suppressTriggerClickRef.current = false
       return
     }
 

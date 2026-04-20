@@ -86,7 +86,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 
                   setOpenGroups((current) => ({ ...current, [group.title]: !isOpen }))
                 }}
-                className="flex w-full flex-row-reverse items-center justify-between rounded-lg px-2 py-2 text-[13px] font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-[13px] font-bold text-foreground transition-[background-color,color,transform] duration-300 hover:bg-primary/5 hover:text-primary"
               >
                 <span>{group.title}</span>
                 <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-0" : "-rotate-90"}`} />
@@ -103,7 +103,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
                       <Link
                         key={item.slug}
                         href={href}
-                        className={`flex flex-row-reverse items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-300 ${
+                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-300 ${
                           isActive
                             ? "bg-primary text-white shadow-lg shadow-primary/20"
                             : "text-foreground hover:bg-primary/5 hover:text-primary"
@@ -152,13 +152,13 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
                 </Sheet>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-row-reverse">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
+                  <Bell className="h-5 w-5" />
+                </div>
                 <div className="text-right">
                   <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
                   <p className="text-sm font-bold text-foreground">{userName}</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
-                  <Bell className="h-5 w-5" />
                 </div>
               </div>
             </div>

@@ -400,51 +400,55 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
                   <X className="h-4 w-4" />
                 </button>
 
-                <div className="relative mx-auto flex w-full max-w-[820px] flex-col overflow-visible rounded-[1.9rem] border border-[#11b7b5]/18 bg-white">
-                  <div className="relative bg-[linear-gradient(180deg,#f8fdfd,#eefafa)] px-8 py-10 sm:px-12 sm:py-12">
-                    <div className="flex min-h-[420px] items-center justify-center rounded-[1.6rem] border border-dashed border-[#11b7b5]/28 bg-white p-4 sm:min-h-[560px] sm:p-6">
-                      {activeViewerEntry.imageUrl ? (
-                        <img src={activeViewerEntry.imageUrl} alt="Achievement" className="max-h-[380px] w-full object-contain sm:max-h-[500px]" />
-                      ) : (
-                        <div className="flex h-full min-h-[320px] w-full items-center justify-center text-center">
-                          <div>
-                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#ecfbfb]">
-                              <Sparkles className="h-12 w-12 text-[#11b7b5]" />
+                <div className="relative mx-auto w-full max-w-[760px]">
+                  <div className="flex flex-col overflow-hidden rounded-[1.9rem] border border-[#11b7b5]/18 bg-white">
+                    <div className="bg-[linear-gradient(180deg,#f8fdfd,#eefafa)] p-6 sm:p-8">
+                      <div className="aspect-square w-full rounded-[1.6rem] border border-dashed border-[#11b7b5]/28 bg-white p-4 sm:p-6">
+                        <div className="flex h-full w-full items-center justify-center">
+                          {activeViewerEntry.imageUrl ? (
+                            <img src={activeViewerEntry.imageUrl} alt="Achievement" className="max-h-full w-full object-contain" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-center">
+                              <div>
+                                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#ecfbfb]">
+                                  <Sparkles className="h-12 w-12 text-[#11b7b5]" />
+                                </div>
+                                <p className="mt-5 text-lg font-semibold text-slate-700">إنجاز بدون صورة</p>
+                              </div>
                             </div>
-                            <p className="mt-5 text-lg font-semibold text-slate-700">إنجاز بدون صورة</p>
-                          </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    <Button type="button" variant="ghost" size="icon" className="absolute -left-6 top-1/2 z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:-left-7" onClick={showNextViewerEntry} disabled={viewerIndex === viewerEntries.length - 1}>
-                      <ChevronLeft className="h-6 w-6" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" className="absolute -right-6 top-1/2 z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:-right-7" onClick={showPreviousViewerEntry} disabled={viewerIndex === 0}>
-                      <ChevronRight className="h-6 w-6" />
-                    </Button>
-                  </div>
-
-                  <div className="border-t border-[#11b7b5]/14 bg-white px-6 py-5 sm:px-7">
-                    <div className="text-right">
-                      <h2 className="text-xl font-semibold leading-tight text-slate-900 sm:text-2xl">الإنجاز</h2>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-slate-600 sm:text-base sm:leading-9">{activeViewerEntry.achievementText}</p>
-                    </div>
-
-                    {viewerEntries.length > 1 ? (
-                      <div className="mt-5 flex flex-wrap justify-start gap-2">
-                        {viewerEntries.map((entry, index) => (
-                          <button
-                            key={entry.id}
-                            type="button"
-                            onClick={() => setViewerIndex(index)}
-                            className={`h-2.5 rounded-full transition-all duration-300 ${index === viewerIndex ? "w-10 bg-[#11b7b5]" : "w-2.5 bg-[#11b7b5]/25 hover:bg-[#11b7b5]/55"}`}
-                            aria-label={`عرض الإنجاز ${index + 1}`}
-                          />
-                        ))}
                       </div>
-                    ) : null}
+                    </div>
+
+                    <div className="border-t border-[#11b7b5]/14 bg-white px-6 py-5 sm:px-7">
+                      <div className="text-right">
+                        <h2 className="text-xl font-semibold leading-tight text-slate-900 sm:text-2xl">الإنجاز</h2>
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-8 text-slate-600 sm:text-base sm:leading-9">{activeViewerEntry.achievementText}</p>
+                      </div>
+
+                      {viewerEntries.length > 1 ? (
+                        <div className="mt-5 flex flex-wrap justify-start gap-2">
+                          {viewerEntries.map((entry, index) => (
+                            <button
+                              key={entry.id}
+                              type="button"
+                              onClick={() => setViewerIndex(index)}
+                              className={`h-2.5 rounded-full transition-all duration-300 ${index === viewerIndex ? "w-10 bg-[#11b7b5]" : "w-2.5 bg-[#11b7b5]/25 hover:bg-[#11b7b5]/55"}`}
+                              aria-label={`عرض الإنجاز ${index + 1}`}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
+
+                  <Button type="button" variant="ghost" size="icon" className="absolute -left-14 top-[38%] z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:-left-16" onClick={showNextViewerEntry} disabled={viewerIndex === viewerEntries.length - 1}>
+                    <ChevronLeft className="h-6 w-6" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon" className="absolute -right-14 top-[38%] z-20 h-12 w-12 -translate-y-1/2 rounded-full border border-[#11b7b5]/20 bg-white text-[#0f7f86] hover:bg-[#ecfbfb] hover:text-[#0b6a72] disabled:opacity-30 sm:-right-16" onClick={showPreviousViewerEntry} disabled={viewerIndex === 0}>
+                    <ChevronRight className="h-6 w-6" />
+                  </Button>
                 </div>
               </div>
             ) : null}

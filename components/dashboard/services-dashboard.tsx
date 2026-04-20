@@ -21,6 +21,7 @@ type MessageState = { type: "success" | "error"; text: string } | null
 type PdfImagePage = {
   pageNumber: number
   dataUrl: string
+  blob?: Blob
 }
 
 type StampPosition = {
@@ -90,6 +91,36 @@ function readFileAsDataUrl(file: File) {
     reader.onerror = () => reject(reader.error)
     reader.readAsDataURL(file)
   })
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((nextBlob) => {
+      if (!nextBlob) {
+        reject(new Error("تعذر إنشاء صورة الصفحة"))
+        return
+      }
+
+      resolve(nextBlob)
+    }, "image/png")
+  })
+}
+
+function canvasToJpegBlob(canvas: HTMLCanvasElement, quality = 0.72) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((nextBlob) => {
+      if (!nextBlob) {
+        reject(new Error("تعذر إنشاء صورة الصفحة"))
+        return
+      }
+
+      resolve(nextBlob)
+    }, "image/jpeg", quality)
+  })
+}
+
+function isPdfFile(file: File | null | undefined) {
+  return Boolean(file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")))
 }
 
 function loadImage(url: string) {
@@ -214,6 +245,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const stampDragFrameRef = useRef<number | null>(null)
   const stampDragPendingRef = useRef<{ id: string; pageNumber: number; position: StampPosition } | null>(null)
 
+  function revokePreviewUrls(pages: PdfImagePage[]) {
+    for (const page of pages) {
+      if (page.dataUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(page.dataUrl)
+      }
+    }
+  }
+
   async function loadData() {
     setLoading(true)
     const response = await fetch("/api/admin/services", { cache: "no-store" })
@@ -238,8 +277,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       if (stampDragFrameRef.current !== null) {
         window.cancelAnimationFrame(stampDragFrameRef.current)
       }
+
+      revokePreviewUrls(pdfImagePages)
     }
-  }, [])
+  }, [pdfImagePages])
+
+  useEffect(() => {
+    return () => {
+      revokePreviewUrls(editPreviewPages)
+    }
+  }, [editPreviewPages])
 
   const assetStats = useMemo(() => ({
     total: data?.assets.length ?? 0,
@@ -328,7 +375,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   async function prepareWriterBackground(file: File) {
-    if (file.type === "application/pdf") {
+    if (isPdfFile(file)) {
       setIsPreparingWriterBackground(true)
       try {
         const pdfjs = await loadPdfJs()
@@ -633,20 +680,23 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         canvas.width = viewport.width
         canvas.height = viewport.height
         await page.render({ canvasContext: context, viewport }).promise
-        nextPages.push({ pageNumber, dataUrl: canvas.toDataURL("image/png") })
+        const blob = await canvasToPngBlob(canvas)
+        nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
       }
 
-      setPdfImagePages(nextPages)
-
-      for (const page of nextPages) {
-        const blob = await fetch(page.dataUrl).then((response) => response.blob())
-        downloadBlob(blob, `page-${page.pageNumber}.png`)
-      }
-
-      setMessage({ type: "success", text: `تم تنزيل ${nextPages.length} صورة من ملف PDF` })
+      revokePdfPreviewUrls(pdfImagePages)
+        setPdfImagePages(nextPages)
+      setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة إلى صور، ويمكنك تنزيل كل صفحة من المعاينة` })
     } finally {
       setIsConvertingPdfPages(false)
     }
+  }
+
+  function handlePdfToImagesFileChange(file: File | null) {
+    revokePreviewUrls(pdfImagePages)
+    setPdfToImagesFile(file)
+    setPdfImagePages([])
+    setMessage(null)
   }
 
   async function compressImageFile(file: File) {
@@ -688,7 +738,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber)
-      const viewport = page.getViewport({ scale: 1.35 })
+      const viewport = page.getViewport({ scale: 1 })
       const canvas = document.createElement("canvas")
       const context = canvas.getContext("2d")
 
@@ -698,18 +748,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
       canvas.width = viewport.width
       canvas.height = viewport.height
+      context.fillStyle = "#ffffff"
+      context.fillRect(0, 0, canvas.width, canvas.height)
       await page.render({ canvasContext: context, viewport }).promise
 
-      const pageBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((nextBlob) => {
-          if (!nextBlob) {
-            reject(new Error("تعذر ضغط صفحة PDF"))
-            return
-          }
-
-          resolve(nextBlob)
-        }, "image/jpeg", 0.8)
-      })
+      const pageBlob = await canvasToJpegBlob(canvas, 0.68)
 
       const pageBytes = await pageBlob.arrayBuffer()
       const embeddedImage = await outputPdf.embedJpg(pageBytes)
@@ -722,6 +765,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       })
     }
 
+    if (outputPdf.getPageCount() === 0) {
+      throw new Error("تعذر ضغط ملف PDF")
+    }
+
     const output = await outputPdf.save()
     downloadBlob(new Blob([output], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
     setMessage({ type: "success", text: "تم ضغط ملف PDF وتنزيله" })
@@ -732,7 +779,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("ارفع صورة أو ملف PDF أولًا")
     }
 
-    if (compressTargetFile.type === "application/pdf") {
+    if (isPdfFile(compressTargetFile)) {
       await compressPdfFile(compressTargetFile)
       return
     }
@@ -746,7 +793,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   async function prepareEditPreview(file: File) {
-    if (file.type === "application/pdf") {
+    if (isPdfFile(file)) {
       setIsPreparingEditPreview(true)
       try {
         const pdfjs = await loadPdfJs()
@@ -767,10 +814,15 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           canvas.width = viewport.width
           canvas.height = viewport.height
           await page.render({ canvasContext: context, viewport }).promise
-          nextPages.push({ pageNumber, dataUrl: canvas.toDataURL("image/png") })
+          const blob = await canvasToPngBlob(canvas)
+          nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
         }
 
+        revokePreviewUrls(editPreviewPages)
         setEditPreviewPages(nextPages)
+        if (nextPages.length === 0) {
+          throw new Error("تعذر استخراج صفحات PDF للمعاينة")
+        }
       } finally {
         setIsPreparingEditPreview(false)
       }
@@ -785,7 +837,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     setEditTargetFile(file)
     setEditTextLayers([])
     setActiveEditTextLayerId(null)
-    await prepareEditPreview(file)
+    setMessage(null)
+    try {
+      await prepareEditPreview(file)
+    } catch (error) {
+      revokePreviewUrls(editPreviewPages)
+      setEditPreviewPages([])
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "تعذر تجهيز الملف للمعاينة" })
+    }
   }
 
   function createEditTextLayer(pageNumber: number): EditableTextLayer {
@@ -848,7 +907,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("تعذر تجهيز الملف للتحرير")
     }
 
-    if (editTargetFile.type === "application/pdf") {
+    if (isPdfFile(editTargetFile)) {
       const outputPdf = await PDFDocument.create()
 
       for (const previewPage of editPreviewPages) {
@@ -910,7 +969,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   async function prepareStampPreview(file: File) {
-    if (file.type === "application/pdf") {
+    if (isPdfFile(file)) {
       setIsPreparingStampPreview(true)
       try {
         const pdfjs = await loadPdfJs()
@@ -935,6 +994,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         }
 
         setStampPreviewPages(nextPages)
+        if (nextPages.length === 0) {
+          throw new Error("تعذر استخراج صفحات PDF للمعاينة")
+        }
       } finally {
         setIsPreparingStampPreview(false)
       }
@@ -949,7 +1011,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     setStampTargetFile(file)
     setPlacedAssets([])
     setActivePlacedAssetId(null)
-    await prepareStampPreview(file)
+    setMessage(null)
+    try {
+      await prepareStampPreview(file)
+    } catch (error) {
+      setStampPreviewPages([])
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "تعذر تجهيز الملف للمعاينة" })
+    }
   }
 
   function updateStampPositionFromPointer(rect: DOMRect, clientX: number, clientY: number, offset: StampPosition = { xPercent: 0, yPercent: 0 }) {
@@ -983,7 +1051,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("أضف ختمًا أو توقيعًا واحدًا على الأقل")
     }
 
-    if (stampTargetFile.type === "application/pdf") {
+    if (isPdfFile(stampTargetFile)) {
       const bytes = await readFileAsArrayBuffer(stampTargetFile)
       const pdf = await PDFDocument.load(bytes)
       const pages = pdf.getPages()
@@ -1184,15 +1252,15 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                <Input type="file" accept="application/pdf" onChange={(event) => { setPdfToImagesFile(event.target.files?.[0] ?? null); setPdfImagePages([]) }} />
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تنزيل الصور</Button>
+                <Input type="file" accept="application/pdf" onChange={(event) => handlePdfToImagesFileChange(event.target.files?.[0] ?? null)} />
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تحويل الصور</Button>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pdfImagePages.map((page) => (
                   <div key={page.pageNumber} className="overflow-hidden rounded-[1.25rem] border border-border/60 bg-white">
                     <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-64 w-full object-contain bg-muted/10" />
                     <div className="flex items-center justify-between px-4 py-3">
-                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => fetch(page.dataUrl).then((response) => response.blob()).then((blob) => downloadBlob(blob, `page-${page.pageNumber}.png`))}><Download className="h-4 w-4" />تنزيل</Button>
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => page.blob ? downloadBlob(page.blob, `page-${page.pageNumber}.png`) : fetch(page.dataUrl).then((response) => response.blob()).then((blob) => downloadBlob(blob, `page-${page.pageNumber}.png`))}><Download className="h-4 w-4" />تنزيل</Button>
                       <Badge variant="secondary">الصفحة {page.pageNumber}</Badge>
                     </div>
                   </div>
@@ -1261,13 +1329,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             <button
                               key={layer.id}
                               type="button"
-                              className={`absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed px-3 py-2 text-right shadow-sm ${activeEditTextLayerId === layer.id ? "border-primary bg-white/95" : "border-slate-300/80 bg-white/85"}`}
+                              className={`absolute min-w-[40px] -translate-x-1/2 -translate-y-1/2 cursor-grab bg-transparent px-1 py-0 text-right shadow-none ${activeEditTextLayerId === layer.id ? "opacity-100" : "opacity-95"}`}
                               style={{
                                 left: `${layer.xPercent}%`,
                                 top: `${layer.yPercent}%`,
                                 color: layer.color,
                                 fontSize: `${layer.fontSize}px`,
                                 lineHeight: 1.35,
+                                textShadow: activeEditTextLayerId === layer.id ? "0 0 10px rgba(255,255,255,0.95)" : "0 0 8px rgba(255,255,255,0.85)",
                               }}
                               onPointerDown={(event) => {
                                 event.stopPropagation()
@@ -1280,11 +1349,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                 setDraggingEditTextLayerId(null)
                               }}
                             >
-                              {layer.text || "نص جديد"}
+                              <span className="whitespace-pre-wrap bg-transparent">{layer.text || "نص جديد"}</span>
                             </button>
                           ))}
                         </button>
-                        {editTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                        {isPdfFile(editTargetFile) ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                       </div>
                     ))}
                   </div>
@@ -1415,13 +1484,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               )
                             })}
                           </button>
-                          {stampTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                          {isPdfFile(stampTargetFile) ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                         </div>
                       ))}
                     </div>
                   ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع ملفًا ثم اضغط داخل المعاينة لتحديد مكان الختم.</div>}
                 </div>
-                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${stampTargetFile?.type === "application/pdf" ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${isPdfFile(stampTargetFile) ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
               </CardContent>
             </Card>
           </div>

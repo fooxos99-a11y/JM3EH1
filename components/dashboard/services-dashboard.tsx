@@ -684,8 +684,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         nextPages.push({ pageNumber, dataUrl: URL.createObjectURL(blob), blob })
       }
 
-      revokePdfPreviewUrls(pdfImagePages)
-        setPdfImagePages(nextPages)
+      revokePreviewUrls(pdfImagePages)
+      setPdfImagePages(nextPages)
       setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة إلى صور، ويمكنك تنزيل كل صفحة من المعاينة` })
     } finally {
       setIsConvertingPdfPages(false)

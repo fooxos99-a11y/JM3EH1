@@ -135,7 +135,11 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
 
         <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-[1280px]">
-            <div className="mb-6 flex flex-row-reverse items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+            <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
+                <Bell className="h-5 w-5" />
+              </div>
+
               <div className="flex items-center gap-3">
                 <Sheet>
                   <SheetTrigger asChild>
@@ -150,12 +154,6 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
                     <SidebarContent permissions={userPermissions} logoUrl={logoUrl} logoAlt={logoAlt} logoArabicName={logoArabicName} logoEnglishName={logoEnglishName} logoTextColor={logoTextColor} logoArabicFontWeight={logoArabicFontWeight} logoEnglishFontWeight={logoEnglishFontWeight} />
                   </SheetContent>
                 </Sheet>
-              </div>
-
-              <div className="flex items-center gap-3 flex-row-reverse">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/15 bg-white/80 text-foreground" aria-label="الإشعارات">
-                  <Bell className="h-5 w-5" />
-                </div>
                 <div className="text-right">
                   <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
                   <p className="text-sm font-bold text-foreground">{userName}</p>

@@ -232,6 +232,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     profile: "الملف الوظيفي",
     employment: "السجل الوظيفي",
     leave: "سجلات الإجازات",
+    reviews: "طلبات الموظفين",
   }
 
   const pageDescriptionByTab: Record<string, string> = {
@@ -240,6 +241,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     profile: "استعراض بيانات الحساب الوظيفية الأساسية من صفحة مستقلة.",
     employment: "عرض سجل إنشاء الحساب ونوعه والجهة التي قامت بإنشائه.",
     leave: "عرض أرصدة الإجازات والأذونات وأيام السماحية وإدارتها حسب الصلاحية.",
+    reviews: "اعتماد أو رفض الطلبات التي رفعها الموظفون من صفحة تقديم طلب.",
   }
 
   return (
@@ -456,6 +458,63 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
               </CardContent>
             </Card>
           ) : null}
+        </TabsContent>
+
+        <TabsContent value="reviews" className="space-y-4">
+          {!data.isManager ? (
+            <Alert variant="destructive" className="rounded-[1.5rem] border-red-200 bg-red-50/80 text-right">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>ليس لديك صلاحية</AlertTitle>
+              <AlertDescription>هذه الصفحة مخصصة لمدير النظام لاعتماد أو رفض طلبات الموظفين.</AlertDescription>
+            </Alert>
+          ) : (
+            <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+              <CardHeader>
+                <CardTitle>طلبات الموظفين</CardTitle>
+                <CardDescription>يمكنك اعتماد أو رفض الطلبات من هنا. عند اعتماد الإجازات والأذونات سيتم خصمها من الرصيد تلقائيًا.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">الموظف</TableHead>
+                      <TableHead className="text-right">النوع</TableHead>
+                      <TableHead className="text-right">العنوان</TableHead>
+                      <TableHead className="text-right">التفاصيل</TableHead>
+                      <TableHead className="text-right">الإجراء</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingReviewRequests.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد طلبات معلقة حاليًا.</TableCell>
+                      </TableRow>
+                    ) : (
+                      pendingReviewRequests.map((request) => (
+                        <TableRow key={request.id}>
+                          <TableCell className="text-right">{request.requesterName}</TableCell>
+                          <TableCell className="text-right">{getAdministrativeRequestTypeLabel(request.requestType)}</TableCell>
+                          <TableCell className="text-right">{request.subject}</TableCell>
+                          <TableCell className="max-w-[280px] whitespace-normal text-right text-sm text-muted-foreground">
+                            {request.details}
+                            {request.requestType === "leave" && request.startDate && request.endDate ? (
+                              <p className="mt-2 text-xs">من {formatDate(request.startDate)} إلى {formatDate(request.endDate)}</p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button type="button" size="sm" className="rounded-lg" disabled={isPending} onClick={() => handleRequestAction({ action: "review_request", requestId: request.id, decision: "approved" }, "تم اعتماد الطلب")}>اعتماد</Button>
+                              <Button type="button" size="sm" variant="outline" className="rounded-lg" disabled={isPending} onClick={() => handleRequestAction({ action: "review_request", requestId: request.id, decision: "rejected" }, "تم رفض الطلب")}>رفض</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="internal">

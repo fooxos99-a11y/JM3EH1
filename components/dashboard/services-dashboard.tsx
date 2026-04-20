@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import type { ServiceAsset, ServiceAssetKind, ServiceDocumentTemplate, ServicesDashboardData } from "@/lib/services"
 
@@ -80,7 +80,7 @@ function applyEditorCommand(command: string, value?: string) {
   document.execCommand(command, false, value)
 }
 
-export function ServicesDashboard() {
+export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?: string } = {}) {
   const [data, setData] = useState<ServicesDashboardData | null>(null)
   const [message, setMessage] = useState<MessageState>(null)
   const [loading, setLoading] = useState(true)
@@ -520,12 +520,28 @@ export function ServicesDashboard() {
     )
   }
 
+  const pageTitleByTab: Record<string, string> = {
+    image_to_pdf: "تحويل إلى PDF",
+    pdf_to_images: "تحويل إلى صورة",
+    pdf_editor: "التعديل",
+    stamps: "الختم والتواقيع",
+    writer: "الكتابة على الوورد",
+  }
+
+  const pageDescriptionByTab: Record<string, string> = {
+    image_to_pdf: "تحويل صورة واحدة أو عدة صور إلى ملف PDF جاهز للتنزيل.",
+    pdf_to_images: "استخراج صفحات PDF وتحويلها إلى صور منفصلة قابلة للتنزيل.",
+    pdf_editor: "إضافة نصوص وتعديلات مباشرة داخل ملفات PDF مع التحكم بالموقع والحجم واللون.",
+    stamps: "إدارة مكتبة الأختام والتواقيع وتطبيقها على الصور وملفات PDF.",
+    writer: "إنشاء قوالب كتابة محفوظة وتحريرها ثم تصديرها إلى Word.",
+  }
+
   return (
     <section className="space-y-6 text-right">
       <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <h1 className="text-2xl font-bold text-foreground">الخدمات</h1>
+        <h1 className="text-2xl font-bold text-foreground">{pageTitleByTab[initialTab] ?? "الخدمات"}</h1>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          مركز داخلي لتحويل الصور وملفات PDF، إضافة النصوص والأختام والتواقيع على الملفات، وإنشاء قوالب كتابة دائمة يمكن تعديلها وتصديرها عند الحاجة.
+          {pageDescriptionByTab[initialTab] ?? "أدوات داخلية للتعامل مع الملفات والقوالب داخل لوحة التحكم."}
         </p>
       </div>
 
@@ -543,14 +559,7 @@ export function ServicesDashboard() {
         <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">قوالب الكتابة</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.templates}</p></CardContent></Card>
       </div>
 
-      <Tabs defaultValue="image_to_pdf" className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
-          <TabsTrigger value="image_to_pdf" className="rounded-xl px-4 py-2">تحويل صورة إلى PDF</TabsTrigger>
-          <TabsTrigger value="pdf_to_images" className="rounded-xl px-4 py-2">تحويل PDF إلى صور</TabsTrigger>
-          <TabsTrigger value="pdf_editor" className="rounded-xl px-4 py-2">التعديل على PDF</TabsTrigger>
-          <TabsTrigger value="stamps" className="rounded-xl px-4 py-2">الختم والتواقيع</TabsTrigger>
-          <TabsTrigger value="writer" className="rounded-xl px-4 py-2">الكتابة على الوورد</TabsTrigger>
-        </TabsList>
+      <Tabs value={initialTab} className="gap-4">
 
         <TabsContent value="image_to_pdf" className="space-y-4">
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95">

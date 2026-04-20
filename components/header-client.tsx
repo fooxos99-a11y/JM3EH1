@@ -67,12 +67,12 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
           <Link href="/" className="group flex min-w-0 items-center gap-2 sm:gap-3">
             {logo.logo ? (
               <>
-                <div className="flex h-[56px] w-[56px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] sm:h-[62px] sm:w-[62px] lg:h-[70px] lg:w-[70px]">
-                  <img src={logo.logo} alt={logo.alt} className="h-[56px] w-[56px] object-contain sm:h-[62px] sm:w-[62px] lg:h-[70px] lg:w-[70px]" />
+                <div className="flex h-[50px] w-[50px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] sm:h-[56px] sm:w-[56px] lg:h-[62px] lg:w-[62px]">
+                  <img src={logo.logo} alt={logo.alt} className="h-[50px] w-[50px] object-contain sm:h-[56px] sm:w-[56px] lg:h-[62px] lg:w-[62px]" />
                 </div>
-                <div className={`flex min-h-[56px] min-w-0 flex-col justify-center text-right transition-colors duration-300 sm:min-h-[62px] lg:min-h-[70px] ${useSolidHeader ? "" : "text-white"}`}>
-                  <h1 className={`text-[0.95rem] leading-tight sm:text-[1.05rem] lg:text-[1.15rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
-                  <p className={`mt-1 text-[9px] tracking-[0.02em] sm:text-[0.7rem] lg:text-[0.82rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
+                <div className={`flex min-h-[50px] min-w-0 flex-col justify-center text-right transition-colors duration-300 sm:min-h-[56px] lg:min-h-[62px] ${useSolidHeader ? "" : "text-white"}`}>
+                  <h1 className={`text-[0.88rem] leading-tight sm:text-[0.98rem] lg:text-[1.08rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
+                  <p className={`mt-1 text-[8px] tracking-[0.02em] sm:text-[0.66rem] lg:text-[0.76rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
                 </div>
               </>
             ) : (
@@ -131,13 +131,13 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                               className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
-                              <span>{item.label}</span>
+                              <span className="flex-1 text-right">{item.label}</span>
                               <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                             </button>
                           ) : (
                             <Link
                               href={item.href}
-                              className="flex w-full items-center justify-end rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
+                              className="block w-full rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
                               <span>{item.label}</span>
@@ -145,12 +145,12 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           )}
 
                           {hasChildren && isExpanded ? (
-                            <div className="space-y-1 pr-3">
+                            <div className="space-y-1 pr-3 text-right">
                               {item.children?.map((child) => (
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  className="flex w-full items-center justify-end rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
+                                  className="block w-full rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
                                   onClick={() => setIsGovernanceOpen(false)}
                                 >
                                   <span>{child.label}</span>
@@ -209,7 +209,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </button>
 
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
-                <div className="mt-2 space-y-2 px-2 pb-2">
+                <div className="mt-2 space-y-2 px-2 pb-2 text-right">
                   {governanceNavigation.map((item) => (
                     <div key={item.href} className="rounded-[1.1rem] bg-slate-50/90 p-1.5">
                       {item.children?.length ? (
@@ -218,14 +218,14 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-right text-base font-semibold transition-all duration-300 sm:text-lg ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
-                          <span>{item.label}</span>
+                          <span className="flex-1 text-right">{item.label}</span>
                           <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${expandedGovernanceHref === item.href ? "rotate-180" : ""}`} />
                         </button>
                       ) : (
-                        <div className="flex justify-end">
+                        <div className="text-right">
                           <Link
                             href={item.href}
-                            className="inline-flex w-full items-center justify-end rounded-full bg-transparent px-4 py-3 text-right text-base font-semibold text-slate-800 transition-all duration-300 hover:bg-white/90 sm:text-lg"
+                            className="block w-full rounded-full bg-transparent px-4 py-3 text-right text-base font-semibold text-slate-800 transition-all duration-300 hover:bg-white/90 sm:text-lg"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -236,12 +236,12 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         </div>
                       )}
                       {item.children?.length && expandedGovernanceHref === item.href ? (
-                        <div className="mt-1 space-y-1 pr-3">
+                        <div className="mt-1 space-y-1 pr-3 text-right">
                           {item.children.map((child) => (
                             <Link
                               key={child.href}
                               href={child.href}
-                              className="flex w-full items-center justify-end rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
+                              className="block w-full rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
                               onClick={() => {
                                 setIsMenuOpen(false)
                                 setIsMobileGovernanceOpen(false)

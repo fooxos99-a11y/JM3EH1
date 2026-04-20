@@ -72,12 +72,36 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     return <AdministrativeRequestsDashboard initialTab="leave" />
   }
 
+  if (section === "staff_requests") {
+    return <AdministrativeRequestsDashboard initialTab="reviews" />
+  }
+
   if (section === "supporters") {
     return <SupportersDashboard />
   }
 
   if (section === "services") {
-    return <ServicesDashboard />
+    return <ServicesDashboard initialTab="image_to_pdf" />
+  }
+
+  if (section === "service_image_to_pdf") {
+    return <ServicesDashboard initialTab="image_to_pdf" />
+  }
+
+  if (section === "service_pdf_to_images") {
+    return <ServicesDashboard initialTab="pdf_to_images" />
+  }
+
+  if (section === "service_pdf_editor") {
+    return <ServicesDashboard initialTab="pdf_editor" />
+  }
+
+  if (section === "service_stamps") {
+    return <ServicesDashboard initialTab="stamps" />
+  }
+
+  if (section === "service_writer") {
+    return <ServicesDashboard initialTab="writer" />
   }
 
   if (section === "tasks") {

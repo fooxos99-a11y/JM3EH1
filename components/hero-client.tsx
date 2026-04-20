@@ -76,7 +76,7 @@ export function HeroClient({ content }: HeroClientProps) {
               <div className="mx-auto flex max-w-6xl items-center justify-center px-4">
                 <div className="mx-auto max-w-4xl">
                   <p className="mb-4 text-xs font-semibold tracking-[0.16em] text-white/84 sm:text-sm md:text-base">{slide.subtitle}</p>
-                  <h1 className="mb-6 text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl">{slide.title}</h1>
+                  <h1 className="mb-6 text-3xl font-bold leading-tight text-white sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl">{slide.title}</h1>
                   <p className="mx-auto mb-10 max-w-3xl text-sm leading-7 text-white/88 sm:text-base md:text-xl md:leading-9">{slide.description}</p>
                   <div className="flex flex-wrap justify-center gap-4">
                     <Button asChild size="lg" className="min-h-14 rounded-2xl bg-white px-8 text-lg font-bold text-primary shadow-xl shadow-black/10 transition-all duration-300 hover:scale-105 hover:bg-[#f4fffe] sm:px-10 sm:text-xl">

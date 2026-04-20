@@ -174,17 +174,13 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
 
   return (
     <div className="space-y-4 rounded-[1.5rem] border border-border/60 bg-white/80 p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex justify-end">
         <Button type="button" variant="outline" className="rounded-xl" asChild>
           <a href={openUrl} target="_blank" rel="noreferrer">
             <ExternalLink className="h-4 w-4" />
             فتح في Google Maps
           </a>
         </Button>
-        <div className="text-right">
-          <p className="font-semibold text-foreground">اختيار موقع العمل</p>
-          <p className="text-xs text-muted-foreground">انقر على الخريطة أو حرّك المؤشر لتحديد الموقع, او أدخل الرابط من قوقل ماب</p>
-        </div>
       </div>
 
       <div className="space-y-3">

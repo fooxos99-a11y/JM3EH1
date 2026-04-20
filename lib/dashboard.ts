@@ -64,14 +64,21 @@ export const dashboardSections: DashboardGroup[] = [
         description: "متابعة إنجازات الموظفين الأسبوعية حسب الموظف والأسبوع المحدد.",
         permission: "staff_achievements",
       },
+      {
+        slug: "staff_requests",
+        label: "طلبات الموظفين",
+        description: "مراجعة الطلبات المرفوعة من الموظفين مع اعتمادها أو رفضها.",
+        permission: "administrative_requests",
+        managerOnly: true,
+      },
     ],
   },
   {
-    title: "الخدمات",
+    title: "الطلبات الادارية",
     items: [
       {
         slug: "administrative_requests",
-        label: "الطلبات الإدارية",
+        label: "تقديم طلب",
         description: "تقديم الطلبات الإدارية ومتابعة الطلبات المرسلة واعتمادها.",
         permission: "administrative_requests",
       },
@@ -99,10 +106,39 @@ export const dashboardSections: DashboardGroup[] = [
         description: "عرض أرصدة الإجازات والأذونات وأيام السماحية من صفحة مستقلة.",
         permission: "administrative_requests",
       },
+    ],
+  },
+  {
+    title: "الخدمات",
+    items: [
       {
-        slug: "services",
-        label: "الخدمات",
-        description: "أدوات تحويل الملفات، تعديل PDF، الأختام والتواقيع، وقوالب الكتابة الجاهزة.",
+        slug: "service_image_to_pdf",
+        label: "تحويل إلى PDF",
+        description: "تحويل صورة واحدة أو عدة صور إلى ملف PDF جاهز للتنزيل.",
+        permission: "services",
+      },
+      {
+        slug: "service_pdf_to_images",
+        label: "تحويل إلى صورة",
+        description: "استخراج صفحات PDF كصور PNG مستقلة.",
+        permission: "services",
+      },
+      {
+        slug: "service_pdf_editor",
+        label: "التعديل",
+        description: "إضافة نص وتحرير مواضع داخل ملفات PDF.",
+        permission: "services",
+      },
+      {
+        slug: "service_stamps",
+        label: "الختم والتواقيع",
+        description: "إدارة الأختام والتواقيع وتطبيقها على الصور وملفات PDF.",
+        permission: "services",
+      },
+      {
+        slug: "service_writer",
+        label: "الكتابة على الوورد",
+        description: "إنشاء قوالب كتابة محفوظة وتصديرها بصيغة Word.",
         permission: "services",
       },
     ],

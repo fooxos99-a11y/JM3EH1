@@ -24,6 +24,84 @@ function buildGoogleMapsUrl(latitude: number, longitude: number) {
   return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
 }
 
+type GeoSample = {
+  latitude: number
+  longitude: number
+  accuracy: number
+}
+
+function getBestCurrentLocation() {
+  return new Promise<GeoSample>((resolve, reject) => {
+    if (!("geolocation" in navigator)) {
+      reject(new Error("المتصفح الحالي لا يدعم خدمات الموقع"))
+      return
+    }
+
+    let bestSample: GeoSample | null = null
+    let watchId: number | null = null
+    let settled = false
+
+    const finish = (sample?: GeoSample, error?: Error) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+      window.clearTimeout(timeoutId)
+
+      if (sample) {
+        resolve(sample)
+        return
+      }
+
+      reject(error ?? new Error("تعذر قراءة موقعك الحالي"))
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (bestSample) {
+        finish(bestSample)
+        return
+      }
+
+      finish(undefined, new Error("تعذر قراءة موقعك الحالي بدقة مناسبة"))
+    }, 12000)
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const sample = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        }
+
+        if (!bestSample || sample.accuracy < bestSample.accuracy) {
+          bestSample = sample
+        }
+
+        if (sample.accuracy <= 30) {
+          finish(sample)
+        }
+      },
+      () => {
+        if (bestSample) {
+          finish(bestSample)
+          return
+        }
+
+        finish(undefined, new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح وتشغيل دقة الموقع العالية."))
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    )
+  })
+}
+
 function parseCoordinatesFromGoogleMapsUrl(url: string) {
   const normalizedUrl = url.trim()
 
@@ -230,29 +308,28 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
   function handleUseCurrentLocation() {
     setFeedback(null)
 
-    if (!("geolocation" in navigator)) {
-      setFeedback({ type: "error", text: "المتصفح الحالي لا يدعم خدمات الموقع" })
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude
-        const longitude = position.coords.longitude
+    startTransition(async () => {
+      try {
+        const sample = await getBestCurrentLocation()
 
         setLocationForm((current) => ({
           ...current,
-          latitude,
-          longitude,
-          googleMapsUrl: buildGoogleMapsUrl(latitude, longitude),
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          googleMapsUrl: buildGoogleMapsUrl(sample.latitude, sample.longitude),
         }))
-        setFeedback({ type: "success", text: "تم التقاط موقعك الحالي. احفظ التغييرات لتحديث موقع التحضير." })
-      },
-      () => {
-        setFeedback({ type: "error", text: "تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح." })
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    )
+
+        setFeedback({
+          type: "success",
+          text: `تم التقاط أفضل موقع متاح بدقة تقريبية ${Math.round(sample.accuracy)} متر. احفظ التغييرات لتحديث موقع التحضير.`,
+        })
+      } catch (nextError) {
+        setFeedback({
+          type: "error",
+          text: nextError instanceof Error ? nextError.message : "تعذر قراءة موقعك الحالي",
+        })
+      }
+    })
   }
 
   return (

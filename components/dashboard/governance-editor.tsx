@@ -76,11 +76,11 @@ export function GovernanceEditor({ section, pageTitle, initialContent }: Governa
         {content.items.map((item, index) => (
           <div key={item.id} className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
             <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground">{`${config.itemLabel} ${index + 1}`}</h2>
               <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeItem(item.id)}>
                 <Trash2 className="h-4 w-4" />
                 {`حذف ${config.itemLabel}`}
               </Button>
-              <h2 className="text-lg font-bold text-foreground">{`${config.itemLabel} ${index + 1}`}</h2>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

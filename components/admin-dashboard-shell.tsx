@@ -57,11 +57,11 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
     <div className="flex h-full flex-col bg-white">
       <div className="border-b border-border/60 px-5 py-5 text-right">
         {logoUrl ? (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-between gap-4">
             <div className="shrink-0">
               <img src={logoUrl} alt={logoAlt} className="h-14 w-14 object-contain" />
             </div>
-            <div className="text-right">
+            <div className="flex-1 text-left">
               <p className={`text-sm leading-tight ${getWeightClass(logoArabicFontWeight)}`} style={{ color: logoTextColor }}>{logoArabicName}</p>
               <p className={`mt-1 text-[10px] tracking-[0.02em] ${getWeightClass(logoEnglishFontWeight)}`} style={{ color: logoTextColor }} dir="ltr">{logoEnglishName}</p>
             </div>

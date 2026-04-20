@@ -117,7 +117,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
               </button>
 
-              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
+              <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-[opacity,transform,visibility] duration-300 ease-out ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
                 <div className="space-y-1.5 rounded-[1.4rem] bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)]">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)
@@ -144,18 +144,22 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                             </Link>
                           )}
 
-                          {hasChildren && isExpanded ? (
-                            <div className="space-y-1 pr-3 text-right">
-                              {item.children?.map((child) => (
-                                <Link
-                                  key={child.href}
-                                  href={child.href}
-                                  className="block w-full rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
-                                  onClick={() => setIsGovernanceOpen(false)}
-                                >
-                                  <span>{child.label}</span>
-                                </Link>
-                              ))}
+                          {hasChildren ? (
+                            <div className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${isExpanded ? "mt-1 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"}`}>
+                              <div className="min-h-0 overflow-hidden">
+                                <div className="space-y-1 pr-3 text-right">
+                                  {item.children?.map((child) => (
+                                    <Link
+                                      key={child.href}
+                                      href={child.href}
+                                      className="block w-full rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
+                                      onClick={() => setIsGovernanceOpen(false)}
+                                    >
+                                      <span>{child.label}</span>
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           ) : null}
                         </div>
@@ -208,7 +212,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                 <ChevronDown className={`h-6 w-6 transition-transform duration-300 ${isMobileGovernanceOpen ? "rotate-180" : ""}`} />
               </button>
 
-              <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
+              <div className={`overflow-hidden transition-[max-height,opacity] duration-400 ease-out ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
                 <div className="mt-2 space-y-2 px-2 pb-2 text-right">
                   {governanceNavigation.map((item) => (
                     <div key={item.href} className="rounded-[1.1rem] bg-slate-50/90 p-1.5">
@@ -235,21 +239,25 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           </Link>
                         </div>
                       )}
-                      {item.children?.length && expandedGovernanceHref === item.href ? (
-                        <div className="mt-1 space-y-1 pr-3 text-right">
-                          {item.children.map((child) => (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              className="block w-full rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
-                              onClick={() => {
-                                setIsMenuOpen(false)
-                                setIsMobileGovernanceOpen(false)
-                              }}
-                            >
-                              {child.label}
-                            </Link>
-                          ))}
+                      {item.children?.length ? (
+                        <div className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${expandedGovernanceHref === item.href ? "mt-1 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"}`}>
+                          <div className="min-h-0 overflow-hidden">
+                            <div className="space-y-1 pr-3 text-right">
+                              {item.children.map((child) => (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  className="block w-full rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
+                                  onClick={() => {
+                                    setIsMenuOpen(false)
+                                    setIsMobileGovernanceOpen(false)
+                                  }}
+                                >
+                                  {child.label}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       ) : null}
                     </div>

@@ -42,26 +42,28 @@ export function GovernanceSectionPage({ definition, content }: { definition: Gov
               {content.items.map((item, index) => (
                 <Card
                   key={item.id}
-                  className={`animate-fade-in-up w-full rounded-[2rem] border-white/80 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_26px_60px_rgba(15,23,42,0.1)] ${isMembersPage ? "max-w-2xl text-center" : "text-center"}`}
+                  className={`animate-fade-in-up w-full rounded-[2rem] border-white/80 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.06)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_26px_60px_rgba(15,23,42,0.1)] ${isMembersPage ? "max-w-2xl text-center" : isDownloadPage ? "max-w-2xl" : "text-center"}`}
                   style={{ animationDelay: `${index * 0.08}s` }}
                 >
-                  <CardContent className={`px-8 py-10 ${isMembersPage ? "text-center" : "text-center"}`}>
+                  <CardContent className={`px-8 ${isDownloadPage ? "py-6" : "py-10"} ${isMembersPage ? "text-center" : isDownloadPage ? "text-right" : "text-center"}`}>
                     {isMembersPage ? (
                       <div className="space-y-3">
                         <h2 className="text-2xl font-bold text-foreground md:text-3xl">{item.title}</h2>
                         <p className="text-base font-medium text-primary md:text-lg">{item.description}</p>
                       </div>
                     ) : isDownloadPage ? (
-                      <div className="flex items-center justify-between gap-4">
+                      <div className="flex flex-row-reverse items-center justify-between gap-4">
                         {item.fileUrl ? (
-                          <Button asChild variant="outline" className="rounded-2xl px-5">
+                          <Button asChild size="icon" className="h-12 w-12 rounded-2xl bg-[#11b7b5] text-white shadow-[0_12px_24px_rgba(17,183,181,0.28)] hover:bg-[#0fa5a4] hover:text-white">
                             <Link href={item.fileUrl} target="_blank">
-                              <Download className="h-4 w-4" />
-                              تحميل
+                              <Download className="h-5 w-5" />
+                              <span className="sr-only">تحميل</span>
                             </Link>
                           </Button>
                         ) : <span />}
-                        <h2 className="text-xl font-bold text-foreground">{item.title}</h2>
+                        <div className="flex-1 text-right">
+                          <h2 className="text-2xl font-bold text-foreground">{item.title}</h2>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3 text-center">

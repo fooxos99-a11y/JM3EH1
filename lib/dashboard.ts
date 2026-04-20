@@ -130,6 +130,12 @@ export const dashboardSections: DashboardGroup[] = [
         permission: "services",
       },
       {
+        slug: "service_compress",
+        label: "ضغط الملف",
+        description: "ضغط الصور وملفات PDF بجودة عالية مع تقليل الحجم قدر الإمكان.",
+        permission: "services",
+      },
+      {
         slug: "service_stamps",
         label: "الختم والتواقيع",
         description: "إدارة الأختام والتواقيع وتطبيقها على الصور وملفات PDF.",

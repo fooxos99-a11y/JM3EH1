@@ -96,6 +96,10 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     return <ServicesDashboard initialTab="pdf_editor" />
   }
 
+  if (section === "service_compress") {
+    return <ServicesDashboard initialTab="compress" />
+  }
+
   if (section === "service_stamps") {
     return <ServicesDashboard initialTab="stamps" />
   }

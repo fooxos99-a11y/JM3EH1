@@ -1,13 +1,14 @@
 "use client"
 
-import { Download, FileImage, FilePenLine, FileText, LoaderCircle, PenSquare, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
+import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,7 +28,31 @@ type StampPosition = {
   yPercent: number
 }
 
-const defaultTemplateHtml = "<p style=\"font-size:16px;line-height:1.9;text-align:right;\">اكتب هنا محتوى القالب الجاهز، ويمكنك حفظه ثم العودة له وتعديل البيانات في أي وقت.</p>"
+type PlacedAsset = {
+  id: string
+  assetId: string
+  pageNumber: number
+  xPercent: number
+  yPercent: number
+  scalePercent: number
+}
+
+type EditableTextLayer = {
+  id: string
+  pageNumber: number
+  text: string
+  xPercent: number
+  yPercent: number
+  fontSize: number
+  color: string
+}
+
+type WriterTemplateConfig = {
+  version: 1
+  backgroundKind: "image" | "html"
+  backgroundValue: string
+  textLayers: EditableTextLayer[]
+}
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ar-SA", {
@@ -64,10 +89,38 @@ function readFileAsDataUrl(file: File) {
 
 function loadImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image()
-    image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error("تعذر تحميل الصورة"))
-    image.src = url
+    const loadFromSource = (source: string, revoke?: () => void) => {
+      const image = new Image()
+      image.crossOrigin = "anonymous"
+      image.onload = () => {
+        revoke?.()
+        resolve(image)
+      }
+      image.onerror = () => {
+        revoke?.()
+        reject(new Error("تعذر تحميل الصورة"))
+      }
+      image.src = source
+    }
+
+    if (url.startsWith("data:") || url.startsWith("blob:")) {
+      loadFromSource(url)
+      return
+    }
+
+    fetch(url, { mode: "cors" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("تعذر تحميل الصورة")
+        }
+
+        const blob = await response.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        loadFromSource(objectUrl, () => URL.revokeObjectURL(objectUrl))
+      })
+      .catch(() => {
+        loadFromSource(url)
+      })
   })
 }
 
@@ -76,8 +129,39 @@ async function loadPdfJs() {
   return pdfjs
 }
 
-function applyEditorCommand(command: string, value?: string) {
-  document.execCommand(command, false, value)
+function parseWriterTemplateConfig(value: string): WriterTemplateConfig {
+  try {
+    const parsed = JSON.parse(value) as Partial<WriterTemplateConfig>
+    if (parsed && parsed.version === 1 && (parsed.backgroundKind === "image" || parsed.backgroundKind === "html") && typeof parsed.backgroundValue === "string" && Array.isArray(parsed.textLayers)) {
+      return {
+        version: 1,
+        backgroundKind: parsed.backgroundKind,
+        backgroundValue: parsed.backgroundValue,
+        textLayers: parsed.textLayers.map((layer) => ({
+          id: String(layer.id ?? `layer-${Math.random().toString(36).slice(2, 8)}`),
+          pageNumber: Number(layer.pageNumber ?? 1) || 1,
+          text: String(layer.text ?? ""),
+          xPercent: Number(layer.xPercent ?? 50) || 50,
+          yPercent: Number(layer.yPercent ?? 20) || 20,
+          fontSize: Number(layer.fontSize ?? 28) || 28,
+          color: String(layer.color ?? "#111827"),
+        })),
+      }
+    }
+  } catch {
+    // Fall through to legacy template support.
+  }
+
+  return {
+    version: 1,
+    backgroundKind: "html",
+    backgroundValue: value || "<div></div>",
+    textLayers: [],
+  }
+}
+
+function serializeWriterTemplateConfig(config: WriterTemplateConfig) {
+  return JSON.stringify(config)
 }
 
 export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?: string } = {}) {
@@ -91,32 +175,35 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [assetImageUrl, setAssetImageUrl] = useState("")
   const [isUploadingAsset, setIsUploadingAsset] = useState(false)
 
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("new")
-  const [templateTitle, setTemplateTitle] = useState("")
-  const [templateDescription, setTemplateDescription] = useState("")
-  const [templateHtml, setTemplateHtml] = useState(defaultTemplateHtml)
-  const editorRef = useRef<HTMLDivElement>(null)
+  const [selectedWriterTemplateId, setSelectedWriterTemplateId] = useState<string>("new")
+  const [writerTemplateTitle, setWriterTemplateTitle] = useState("")
+  const [writerBackgroundKind, setWriterBackgroundKind] = useState<"image" | "html">("html")
+  const [writerBackgroundValue, setWriterBackgroundValue] = useState("")
+  const [writerTextLayers, setWriterTextLayers] = useState<EditableTextLayer[]>([])
+  const [activeWriterTextLayerId, setActiveWriterTextLayerId] = useState<string | null>(null)
+  const [draggingWriterTextLayerId, setDraggingWriterTextLayerId] = useState<string | null>(null)
+  const [isPreparingWriterBackground, setIsPreparingWriterBackground] = useState(false)
 
   const [imageToPdfFiles, setImageToPdfFiles] = useState<File[]>([])
   const [pdfToImagesFile, setPdfToImagesFile] = useState<File | null>(null)
   const [pdfImagePages, setPdfImagePages] = useState<PdfImagePage[]>([])
   const [isConvertingPdfPages, setIsConvertingPdfPages] = useState(false)
+  const [compressTargetFile, setCompressTargetFile] = useState<File | null>(null)
 
-  const [pdfEditFile, setPdfEditFile] = useState<File | null>(null)
-  const [pdfEditText, setPdfEditText] = useState("")
-  const [pdfEditPage, setPdfEditPage] = useState(1)
-  const [pdfEditX, setPdfEditX] = useState(60)
-  const [pdfEditY, setPdfEditY] = useState(120)
-  const [pdfEditSize, setPdfEditSize] = useState(16)
-  const [pdfEditColor, setPdfEditColor] = useState("#111827")
+  const [editTargetFile, setEditTargetFile] = useState<File | null>(null)
+  const [editPreviewPages, setEditPreviewPages] = useState<PdfImagePage[]>([])
+  const [isPreparingEditPreview, setIsPreparingEditPreview] = useState(false)
+  const [editTextLayers, setEditTextLayers] = useState<EditableTextLayer[]>([])
+  const [activeEditTextLayerId, setActiveEditTextLayerId] = useState<string | null>(null)
+  const [draggingEditTextLayerId, setDraggingEditTextLayerId] = useState<string | null>(null)
 
   const [stampTargetFile, setStampTargetFile] = useState<File | null>(null)
-  const [stampTargetPreview, setStampTargetPreview] = useState<string>("")
-  const [selectedAssetId, setSelectedAssetId] = useState<string>("")
-  const [stampWidth, setStampWidth] = useState(140)
-  const [stampPage, setStampPage] = useState(1)
-  const [stampPosition, setStampPosition] = useState<StampPosition>({ xPercent: 50, yPercent: 50 })
+  const [stampPreviewPages, setStampPreviewPages] = useState<PdfImagePage[]>([])
+  const [placedAssets, setPlacedAssets] = useState<PlacedAsset[]>([])
+  const [activePlacedAssetId, setActivePlacedAssetId] = useState<string | null>(null)
+  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
+  const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
 
   async function loadData() {
     setLoading(true)
@@ -137,16 +224,6 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     void loadData()
   }, [])
 
-  useEffect(() => {
-    if (!editorRef.current) {
-      return
-    }
-
-    if (editorRef.current.innerHTML !== templateHtml) {
-      editorRef.current.innerHTML = templateHtml
-    }
-  }, [templateHtml])
-
   const assetStats = useMemo(() => ({
     total: data?.assets.length ?? 0,
     stamps: data?.assets.filter((asset) => asset.kind === "stamp").length ?? 0,
@@ -154,14 +231,29 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     templates: data?.templates.length ?? 0,
   }), [data])
 
-  const selectedTemplate = useMemo(
-    () => data?.templates.find((template) => template.id === selectedTemplateId) ?? null,
-    [data, selectedTemplateId],
+  const selectedWriterTemplate = useMemo(
+    () => data?.templates.find((template) => template.id === selectedWriterTemplateId) ?? null,
+    [data, selectedWriterTemplateId],
   )
 
-  const selectedAsset = useMemo(
-    () => data?.assets.find((asset) => asset.id === selectedAssetId) ?? null,
-    [data, selectedAssetId],
+  const assetMap = useMemo(
+    () => new Map((data?.assets ?? []).map((asset) => [asset.id, asset])),
+    [data],
+  )
+
+  const activePlacedAsset = useMemo(
+    () => placedAssets.find((item) => item.id === activePlacedAssetId) ?? null,
+    [placedAssets, activePlacedAssetId],
+  )
+
+  const activeEditTextLayer = useMemo(
+    () => editTextLayers.find((item) => item.id === activeEditTextLayerId) ?? null,
+    [editTextLayers, activeEditTextLayerId],
+  )
+
+  const activeWriterTextLayer = useMemo(
+    () => writerTextLayers.find((item) => item.id === activeWriterTextLayerId) ?? null,
+    [writerTextLayers, activeWriterTextLayerId],
   )
 
   function runTask(task: () => Promise<void>) {
@@ -199,18 +291,113 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
   }
 
-  function resetTemplateEditor() {
-    setSelectedTemplateId("new")
-    setTemplateTitle("")
-    setTemplateDescription("")
-    setTemplateHtml(defaultTemplateHtml)
+  function resetWriterTemplateEditor() {
+    setSelectedWriterTemplateId("new")
+    setWriterTemplateTitle("")
+    setWriterBackgroundKind("html")
+    setWriterBackgroundValue("")
+    setWriterTextLayers([])
+    setActiveWriterTextLayerId(null)
   }
 
-  function loadTemplateIntoEditor(template: ServiceDocumentTemplate) {
-    setSelectedTemplateId(template.id)
-    setTemplateTitle(template.title)
-    setTemplateDescription(template.description)
-    setTemplateHtml(template.contentHtml || defaultTemplateHtml)
+  function loadWriterTemplate(template: ServiceDocumentTemplate) {
+    const config = parseWriterTemplateConfig(template.contentHtml)
+    setSelectedWriterTemplateId(template.id)
+    setWriterTemplateTitle(template.title)
+    setWriterBackgroundKind(config.backgroundKind)
+    setWriterBackgroundValue(config.backgroundValue)
+    setWriterTextLayers(config.textLayers)
+    setActiveWriterTextLayerId(config.textLayers[0]?.id ?? null)
+  }
+
+  async function prepareWriterBackground(file: File) {
+    if (file.type === "application/pdf") {
+      setIsPreparingWriterBackground(true)
+      try {
+        const pdfjs = await loadPdfJs()
+        const bytes = await readFileAsArrayBuffer(file)
+        const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+        const page = await pdf.getPage(1)
+        const viewport = page.getViewport({ scale: 1.5 })
+        const canvas = document.createElement("canvas")
+        const context = canvas.getContext("2d")
+
+        if (!context) {
+          throw new Error("تعذر تجهيز الصفحة كقالب")
+        }
+
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        await page.render({ canvasContext: context, viewport }).promise
+        setWriterBackgroundKind("image")
+        setWriterBackgroundValue(canvas.toDataURL("image/png"))
+      } finally {
+        setIsPreparingWriterBackground(false)
+      }
+
+      return
+    }
+
+    if (file.name.toLowerCase().endsWith(".docx")) {
+      setIsPreparingWriterBackground(true)
+      try {
+        const mammoth = await import("mammoth/mammoth.browser")
+        const bytes = await readFileAsArrayBuffer(file)
+        const result = await mammoth.convertToHtml({ arrayBuffer: bytes })
+        setWriterBackgroundKind("html")
+        setWriterBackgroundValue(result.value)
+      } finally {
+        setIsPreparingWriterBackground(false)
+      }
+
+      return
+    }
+
+    if (file.name.toLowerCase().endsWith(".doc")) {
+      throw new Error("صيغة DOC القديمة غير مدعومة حاليًا، استخدم DOCX أو PDF أو صورة")
+    }
+
+    setWriterBackgroundKind("image")
+    setWriterBackgroundValue(await readFileAsDataUrl(file))
+  }
+
+  async function handleWriterBackgroundChange(file: File) {
+    await prepareWriterBackground(file)
+    setWriterTextLayers([])
+    setActiveWriterTextLayerId(null)
+  }
+
+  function createWriterTextLayer(): EditableTextLayer {
+    return {
+      id: `writer-text-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      pageNumber: 1,
+      text: "نص جديد",
+      xPercent: 50,
+      yPercent: 18,
+      fontSize: 28,
+      color: "#111827",
+    }
+  }
+
+  function addWriterTextLayer() {
+    const nextLayer = createWriterTextLayer()
+    setWriterTextLayers((current) => [...current, nextLayer])
+    setActiveWriterTextLayerId(nextLayer.id)
+  }
+
+  function updateWriterTextLayer(id: string, updates: Partial<EditableTextLayer>) {
+    setWriterTextLayers((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item))
+  }
+
+  function removeWriterTextLayer(id: string) {
+    setWriterTextLayers((current) => current.filter((item) => item.id !== id))
+    setActiveWriterTextLayerId((current) => current === id ? null : current)
+  }
+
+  function getWriterLayerPosition(rect: DOMRect, clientX: number, clientY: number) {
+    const xPercent = ((clientX - rect.left) / rect.width) * 100
+    const yPercent = ((clientY - rect.top) / rect.height) * 100
+    return { xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) }
   }
 
   async function handleCreateAsset() {
@@ -247,28 +434,64 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     setData(payload)
-    if (selectedAssetId === id) {
-      setSelectedAssetId("")
-    }
+    setPlacedAssets((current) => current.filter((item) => item.assetId !== id))
+    setActivePlacedAssetId((current) => {
+      if (!current) {
+        return null
+      }
+
+      const activeItem = placedAssets.find((item) => item.id === current)
+      return activeItem?.assetId === id ? null : current
+    })
     setMessage({ type: "success", text: "تم حذف الأصل من المكتبة" })
   }
 
+  function createPlacedAsset(assetId: string, pageNumber: number): PlacedAsset {
+    return {
+      id: `${assetId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      assetId,
+      pageNumber,
+      xPercent: 50,
+      yPercent: 50,
+      scalePercent: 22,
+    }
+  }
+
+  function updatePlacedAsset(id: string, updates: Partial<PlacedAsset>) {
+    setPlacedAssets((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item))
+  }
+
+  function removePlacedAsset(id: string) {
+    setPlacedAssets((current) => current.filter((item) => item.id !== id))
+    setActivePlacedAssetId((current) => current === id ? null : current)
+  }
+
   async function handleSaveTemplate() {
-    const currentHtml = editorRef.current?.innerHTML?.trim() || templateHtml
-    if (!templateTitle.trim()) {
+    if (!writerTemplateTitle.trim()) {
       throw new Error("أدخل عنوانًا للقالب أولًا")
     }
 
-    const isNew = selectedTemplateId === "new"
+    if (!writerBackgroundValue.trim()) {
+      throw new Error("ارفع ملف القالب أولًا")
+    }
+
+    const contentHtml = serializeWriterTemplateConfig({
+      version: 1,
+      backgroundKind: writerBackgroundKind,
+      backgroundValue: writerBackgroundValue,
+      textLayers: writerTextLayers,
+    })
+
+    const isNew = selectedWriterTemplateId === "new"
     const response = await fetch("/api/admin/services", {
       method: isNew ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "template",
-        ...(isNew ? null : { id: selectedTemplateId }),
-        title: templateTitle,
-        description: templateDescription,
-        contentHtml: currentHtml,
+        ...(isNew ? null : { id: selectedWriterTemplateId }),
+        title: writerTemplateTitle,
+        description: "",
+        contentHtml,
       }),
     })
 
@@ -278,9 +501,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     setData(payload)
-    const latestTemplate = payload.templates.find((template) => template.title === templateTitle) ?? payload.templates[0]
+    const latestTemplate = payload.templates.find((template) => template.title === writerTemplateTitle) ?? payload.templates[0]
     if (latestTemplate) {
-      loadTemplateIntoEditor(latestTemplate)
+      loadWriterTemplate(latestTemplate)
     }
     setMessage({ type: "success", text: isNew ? "تم إنشاء القالب" : "تم تحديث القالب" })
   }
@@ -297,8 +520,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     setData(payload)
-    if (selectedTemplateId === id) {
-      resetTemplateEditor()
+    if (selectedWriterTemplateId === id) {
+      resetWriterTemplateEditor()
     }
     setMessage({ type: "success", text: "تم حذف القالب" })
   }
@@ -331,7 +554,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     try {
       const pdfjs = await loadPdfJs()
       const bytes = await readFileAsArrayBuffer(pdfToImagesFile)
-      const pdf = await pdfjs.getDocument({ data: bytes }).promise
+      const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
       const nextPages: PdfImagePage[] = []
 
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -351,118 +574,253 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       }
 
       setPdfImagePages(nextPages)
-      setMessage({ type: "success", text: `تم استخراج ${nextPages.length} صورة من ملف PDF` })
+
+      for (const page of nextPages) {
+        const blob = await fetch(page.dataUrl).then((response) => response.blob())
+        downloadBlob(blob, `page-${page.pageNumber}.png`)
+      }
+
+      setMessage({ type: "success", text: `تم تنزيل ${nextPages.length} صورة من ملف PDF` })
     } finally {
       setIsConvertingPdfPages(false)
     }
   }
 
-  async function handlePdfTextEdit() {
-    if (!pdfEditFile) {
-      throw new Error("ارفع ملف PDF أولًا")
+  async function compressImageFile(file: File) {
+    const image = await loadImage(await readFileAsDataUrl(file))
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+
+    if (!context) {
+      throw new Error("تعذر تجهيز الصورة للضغط")
     }
 
-    if (!pdfEditText.trim()) {
-      throw new Error("أدخل النص المراد إضافته")
-    }
+    const maxDimension = 2200
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height))
+    canvas.width = Math.max(1, Math.round(image.width * scale))
+    canvas.height = Math.max(1, Math.round(image.height * scale))
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
 
-    const bytes = await readFileAsArrayBuffer(pdfEditFile)
-    const pdf = await PDFDocument.load(bytes)
-    const pages = pdf.getPages()
-    const pageIndex = clamp(pdfEditPage, 1, pages.length) - 1
-    const page = pages[pageIndex]
-    const font = await pdf.embedFont(StandardFonts.Helvetica)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (!nextBlob) {
+          reject(new Error("تعذر ضغط الصورة"))
+          return
+        }
 
-    const red = Number.parseInt(pdfEditColor.slice(1, 3), 16) / 255
-    const green = Number.parseInt(pdfEditColor.slice(3, 5), 16) / 255
-    const blue = Number.parseInt(pdfEditColor.slice(5, 7), 16) / 255
-
-    page.drawText(pdfEditText, {
-      x: pdfEditX,
-      y: page.getHeight() - pdfEditY,
-      size: pdfEditSize,
-      font,
-      color: rgb(red, green, blue),
+        resolve(nextBlob)
+      }, file.type === "image/png" ? "image/webp" : "image/jpeg", 0.82)
     })
 
-    const output = await pdf.save()
-    downloadBlob(new Blob([output], { type: "application/pdf" }), `edited-${pdfEditFile.name.replace(/\.pdf$/i, "")}.pdf`)
-    setMessage({ type: "success", text: "تم تعديل ملف PDF وتنزيل النسخة الجديدة" })
+    const extension = file.type === "image/png" ? "webp" : "jpg"
+    downloadBlob(blob, `${file.name.replace(/\.[^.]+$/, "")}-compressed.${extension}`)
+    setMessage({ type: "success", text: "تم ضغط الصورة وتنزيلها" })
   }
 
-  async function prepareStampPreview(file: File) {
+  async function compressPdfFile(file: File) {
+    const pdfjs = await loadPdfJs()
+    const bytes = await readFileAsArrayBuffer(file)
+    const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+    const outputPdf = await PDFDocument.create()
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 1.35 })
+      const canvas = document.createElement("canvas")
+      const context = canvas.getContext("2d")
+
+      if (!context) {
+        throw new Error("تعذر تجهيز صفحات PDF للضغط")
+      }
+
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      await page.render({ canvasContext: context, viewport }).promise
+
+      const pageBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((nextBlob) => {
+          if (!nextBlob) {
+            reject(new Error("تعذر ضغط صفحة PDF"))
+            return
+          }
+
+          resolve(nextBlob)
+        }, "image/jpeg", 0.8)
+      })
+
+      const pageBytes = await pageBlob.arrayBuffer()
+      const embeddedImage = await outputPdf.embedJpg(pageBytes)
+      const outputPage = outputPdf.addPage([embeddedImage.width, embeddedImage.height])
+      outputPage.drawImage(embeddedImage, {
+        x: 0,
+        y: 0,
+        width: embeddedImage.width,
+        height: embeddedImage.height,
+      })
+    }
+
+    const output = await outputPdf.save()
+    downloadBlob(new Blob([output], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
+    setMessage({ type: "success", text: "تم ضغط ملف PDF وتنزيله" })
+  }
+
+  async function handleCompressFile() {
+    if (!compressTargetFile) {
+      throw new Error("ارفع صورة أو ملف PDF أولًا")
+    }
+
+    if (compressTargetFile.type === "application/pdf") {
+      await compressPdfFile(compressTargetFile)
+      return
+    }
+
+    if (compressTargetFile.type.startsWith("image/")) {
+      await compressImageFile(compressTargetFile)
+      return
+    }
+
+    throw new Error("الملف المدعوم يجب أن يكون صورة أو PDF")
+  }
+
+  async function prepareEditPreview(file: File) {
     if (file.type === "application/pdf") {
-      setIsPreparingStampPreview(true)
+      setIsPreparingEditPreview(true)
       try {
         const pdfjs = await loadPdfJs()
         const bytes = await readFileAsArrayBuffer(file)
-        const pdf = await pdfjs.getDocument({ data: bytes }).promise
-        const page = await pdf.getPage(1)
-        const viewport = page.getViewport({ scale: 1.5 })
-        const canvas = document.createElement("canvas")
-        const context = canvas.getContext("2d")
+        const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+        const nextPages: PdfImagePage[] = []
 
-        if (!context) {
-          throw new Error("تعذر تجهيز معاينة PDF")
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber)
+          const viewport = page.getViewport({ scale: 1.3 })
+          const canvas = document.createElement("canvas")
+          const context = canvas.getContext("2d")
+
+          if (!context) {
+            throw new Error("تعذر تجهيز معاينة الملف")
+          }
+
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          await page.render({ canvasContext: context, viewport }).promise
+          nextPages.push({ pageNumber, dataUrl: canvas.toDataURL("image/png") })
         }
 
-        canvas.width = viewport.width
-        canvas.height = viewport.height
-        await page.render({ canvasContext: context, viewport }).promise
-        setStampTargetPreview(canvas.toDataURL("image/png"))
+        setEditPreviewPages(nextPages)
       } finally {
-        setIsPreparingStampPreview(false)
+        setIsPreparingEditPreview(false)
       }
 
       return
     }
 
-    setStampTargetPreview(await readFileAsDataUrl(file))
+    setEditPreviewPages([{ pageNumber: 1, dataUrl: await readFileAsDataUrl(file) }])
   }
 
-  async function handleStampTargetChange(file: File) {
-    setStampTargetFile(file)
-    setStampPage(1)
-    await prepareStampPreview(file)
+  async function handleEditTargetChange(file: File) {
+    setEditTargetFile(file)
+    setEditTextLayers([])
+    setActiveEditTextLayerId(null)
+    await prepareEditPreview(file)
   }
 
-  async function handleApplyStamp() {
-    if (!stampTargetFile) {
-      throw new Error("ارفع الملف المستهدف أولًا")
+  function createEditTextLayer(pageNumber: number): EditableTextLayer {
+    return {
+      id: `text-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      pageNumber,
+      text: "نص جديد",
+      xPercent: 50,
+      yPercent: 20,
+      fontSize: 28,
+      color: "#111827",
     }
+  }
 
-    if (!selectedAsset) {
-      throw new Error("اختر ختمًا أو توقيعًا من المكتبة")
-    }
+  function addEditTextLayer(pageNumber = 1) {
+    const newLayer = createEditTextLayer(pageNumber)
+    setEditTextLayers((current) => [...current, newLayer])
+    setActiveEditTextLayerId(newLayer.id)
+  }
 
-    const assetImage = await loadImage(selectedAsset.imageUrl)
+  function updateEditTextLayer(id: string, updates: Partial<EditableTextLayer>) {
+    setEditTextLayers((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item))
+  }
 
-    if (stampTargetFile.type === "application/pdf") {
-      const bytes = await readFileAsArrayBuffer(stampTargetFile)
-      const pdf = await PDFDocument.load(bytes)
-      const pages = pdf.getPages()
-      const pageIndex = clamp(stampPage, 1, pages.length) - 1
-      const page = pages[pageIndex]
-      const assetBytes = await fetch(selectedAsset.imageUrl).then((response) => response.arrayBuffer())
-      const embeddedAsset = selectedAsset.imageUrl.includes(".png") ? await pdf.embedPng(assetBytes) : await pdf.embedJpg(assetBytes)
-      const scaledHeight = (stampWidth / assetImage.width) * assetImage.height
-      const x = (stampPosition.xPercent / 100) * page.getWidth() - (stampWidth / 2)
-      const y = page.getHeight() - ((stampPosition.yPercent / 100) * page.getHeight()) - (scaledHeight / 2)
+  function removeEditTextLayer(id: string) {
+    setEditTextLayers((current) => current.filter((item) => item.id !== id))
+    setActiveEditTextLayerId((current) => current === id ? null : current)
+  }
 
-      page.drawImage(embeddedAsset, {
-        x: clamp(x, 0, Math.max(0, page.getWidth() - stampWidth)),
-        y: clamp(y, 0, Math.max(0, page.getHeight() - scaledHeight)),
-        width: stampWidth,
-        height: scaledHeight,
+  function getEditPositionFromPointer(rect: DOMRect, clientX: number, clientY: number) {
+    const xPercent = ((clientX - rect.left) / rect.width) * 100
+    const yPercent = ((clientY - rect.top) / rect.height) * 100
+    return { xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) }
+  }
+
+  function drawTextLayersOnCanvas(context: CanvasRenderingContext2D, width: number, height: number, pageNumber: number) {
+    context.textAlign = "right"
+    context.textBaseline = "top"
+    context.direction = "rtl"
+
+    for (const layer of editTextLayers.filter((item) => item.pageNumber === pageNumber && item.text.trim())) {
+      context.fillStyle = layer.color
+      context.font = `${layer.fontSize}px Arial`
+      const x = (layer.xPercent / 100) * width
+      const y = (layer.yPercent / 100) * height
+      const lines = layer.text.split("\n")
+
+      lines.forEach((line, index) => {
+        context.fillText(line, x, y + (index * layer.fontSize * 1.35))
       })
+    }
+  }
 
-      const output = await pdf.save()
-      downloadBlob(new Blob([output], { type: "application/pdf" }), `stamped-${stampTargetFile.name.replace(/\.pdf$/i, "")}.pdf`)
-      setMessage({ type: "success", text: "تم تطبيق الختم أو التوقيع على ملف PDF" })
+  async function handleApplyDocumentEdits() {
+    if (!editTargetFile) {
+      throw new Error("ارفع صورة أو ملف PDF أولًا")
+    }
+
+    if (editPreviewPages.length === 0) {
+      throw new Error("تعذر تجهيز الملف للتحرير")
+    }
+
+    if (editTargetFile.type === "application/pdf") {
+      const outputPdf = await PDFDocument.create()
+
+      for (const previewPage of editPreviewPages) {
+        const baseImage = await loadImage(previewPage.dataUrl)
+        const canvas = document.createElement("canvas")
+        const context = canvas.getContext("2d")
+
+        if (!context) {
+          throw new Error("تعذر تجهيز صفحة PDF النهائية")
+        }
+
+        canvas.width = baseImage.width
+        canvas.height = baseImage.height
+        context.drawImage(baseImage, 0, 0)
+        drawTextLayersOnCanvas(context, canvas.width, canvas.height, previewPage.pageNumber)
+
+        const pngDataUrl = canvas.toDataURL("image/png")
+        const pngBytes = await fetch(pngDataUrl).then((response) => response.arrayBuffer())
+        const embeddedPage = await outputPdf.embedPng(pngBytes)
+        const page = outputPdf.addPage([embeddedPage.width, embeddedPage.height])
+        page.drawImage(embeddedPage, { x: 0, y: 0, width: embeddedPage.width, height: embeddedPage.height })
+      }
+
+      const output = await outputPdf.save()
+      downloadBlob(new Blob([output], { type: "application/pdf" }), `edited-${editTargetFile.name.replace(/\.pdf$/i, "")}.pdf`)
+      setMessage({ type: "success", text: "تم تعديل الملف وتنزيله" })
       return
     }
 
-    const targetImage = await loadImage(stampTargetPreview)
+    const imagePreview = editPreviewPages[0]?.dataUrl
+    if (!imagePreview) {
+      throw new Error("تعذر تجهيز الصورة للتحرير")
+    }
+
+    const targetImage = await loadImage(imagePreview)
     const canvas = document.createElement("canvas")
     const context = canvas.getContext("2d")
     if (!context) {
@@ -472,10 +830,152 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     canvas.width = targetImage.width
     canvas.height = targetImage.height
     context.drawImage(targetImage, 0, 0)
-    const stampHeight = (stampWidth / assetImage.width) * assetImage.height
-    const x = ((stampPosition.xPercent / 100) * targetImage.width) - (stampWidth / 2)
-    const y = ((stampPosition.yPercent / 100) * targetImage.height) - (stampHeight / 2)
-    context.drawImage(assetImage, clamp(x, 0, Math.max(0, targetImage.width - stampWidth)), clamp(y, 0, Math.max(0, targetImage.height - stampHeight)), stampWidth, stampHeight)
+    drawTextLayersOnCanvas(context, canvas.width, canvas.height, 1)
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (!nextBlob) {
+          reject(new Error("تعذر إنشاء الصورة النهائية"))
+          return
+        }
+        resolve(nextBlob)
+      }, "image/png")
+    })
+
+    downloadBlob(blob, `edited-${editTargetFile.name.replace(/\.[^.]+$/, "")}.png`)
+    setMessage({ type: "success", text: "تم تعديل الملف وتنزيله" })
+  }
+
+  async function prepareStampPreview(file: File) {
+    if (file.type === "application/pdf") {
+      setIsPreparingStampPreview(true)
+      try {
+        const pdfjs = await loadPdfJs()
+        const bytes = await readFileAsArrayBuffer(file)
+        const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+        const nextPages: PdfImagePage[] = []
+
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber)
+          const viewport = page.getViewport({ scale: 1.25 })
+          const canvas = document.createElement("canvas")
+          const context = canvas.getContext("2d")
+
+          if (!context) {
+            throw new Error("تعذر تجهيز معاينة PDF")
+          }
+
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          await page.render({ canvasContext: context, viewport }).promise
+          nextPages.push({ pageNumber, dataUrl: canvas.toDataURL("image/png") })
+        }
+
+        setStampPreviewPages(nextPages)
+      } finally {
+        setIsPreparingStampPreview(false)
+      }
+
+      return
+    }
+
+    setStampPreviewPages([{ pageNumber: 1, dataUrl: await readFileAsDataUrl(file) }])
+  }
+
+  async function handleStampTargetChange(file: File) {
+    setStampTargetFile(file)
+    setPlacedAssets([])
+    setActivePlacedAssetId(null)
+    await prepareStampPreview(file)
+  }
+
+  function updateStampPositionFromPointer(rect: DOMRect, clientX: number, clientY: number) {
+    const xPercent = ((clientX - rect.left) / rect.width) * 100
+    const yPercent = ((clientY - rect.top) / rect.height) * 100
+    return { xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) }
+  }
+
+  function resizeStamp(step: number) {
+    if (!activePlacedAssetId) {
+      return
+    }
+
+    setPlacedAssets((current) => current.map((item) => item.id === activePlacedAssetId ? { ...item, scalePercent: clamp(item.scalePercent + step, 8, 60) } : item))
+  }
+
+  async function handleApplyStamp() {
+    if (!stampTargetFile) {
+      throw new Error("ارفع الملف المستهدف أولًا")
+    }
+
+    if (placedAssets.length === 0) {
+      throw new Error("أضف ختمًا أو توقيعًا واحدًا على الأقل")
+    }
+
+    if (stampTargetFile.type === "application/pdf") {
+      const bytes = await readFileAsArrayBuffer(stampTargetFile)
+      const pdf = await PDFDocument.load(bytes)
+      const pages = pdf.getPages()
+
+      for (const placedAsset of placedAssets) {
+        const asset = assetMap.get(placedAsset.assetId)
+        if (!asset) {
+          continue
+        }
+
+        const pageIndex = clamp(placedAsset.pageNumber, 1, pages.length) - 1
+        const page = pages[pageIndex]
+        const assetImage = await loadImage(asset.imageUrl)
+        const assetBytes = await fetch(asset.imageUrl).then((response) => response.arrayBuffer())
+        const embeddedAsset = asset.imageUrl.includes(".png") ? await pdf.embedPng(assetBytes) : await pdf.embedJpg(assetBytes)
+        const stampWidth = page.getWidth() * (placedAsset.scalePercent / 100)
+        const scaledHeight = (stampWidth / assetImage.width) * assetImage.height
+        const x = (placedAsset.xPercent / 100) * page.getWidth() - (stampWidth / 2)
+        const y = page.getHeight() - ((placedAsset.yPercent / 100) * page.getHeight()) - (scaledHeight / 2)
+
+        page.drawImage(embeddedAsset, {
+          x: clamp(x, 0, Math.max(0, page.getWidth() - stampWidth)),
+          y: clamp(y, 0, Math.max(0, page.getHeight() - scaledHeight)),
+          width: stampWidth,
+          height: scaledHeight,
+        })
+      }
+
+      const output = await pdf.save()
+      downloadBlob(new Blob([output], { type: "application/pdf" }), `stamped-${stampTargetFile.name.replace(/\.pdf$/i, "")}.pdf`)
+      setMessage({ type: "success", text: "تم تطبيق الختم أو التوقيع على ملف PDF" })
+      return
+    }
+
+    const imagePreview = stampPreviewPages[0]?.dataUrl
+    if (!imagePreview) {
+      throw new Error("تعذر تجهيز معاينة الملف")
+    }
+
+    const targetImage = await loadImage(imagePreview)
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+    if (!context) {
+      throw new Error("تعذر تجهيز الصورة النهائية")
+    }
+
+    canvas.width = targetImage.width
+    canvas.height = targetImage.height
+    context.drawImage(targetImage, 0, 0)
+
+    for (const placedAsset of placedAssets) {
+      const asset = assetMap.get(placedAsset.assetId)
+      if (!asset) {
+        continue
+      }
+
+      const assetImage = await loadImage(asset.imageUrl)
+      const stampWidth = targetImage.width * (placedAsset.scalePercent / 100)
+      const stampHeight = (stampWidth / assetImage.width) * assetImage.height
+      const x = ((placedAsset.xPercent / 100) * targetImage.width) - (stampWidth / 2)
+      const y = ((placedAsset.yPercent / 100) * targetImage.height) - (stampHeight / 2)
+      context.drawImage(assetImage, clamp(x, 0, Math.max(0, targetImage.width - stampWidth)), clamp(y, 0, Math.max(0, targetImage.height - stampHeight)), stampWidth, stampHeight)
+    }
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((nextBlob) => {
@@ -492,14 +992,28 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   function exportTemplateAsWord() {
-    const currentHtml = editorRef.current?.innerHTML?.trim() || templateHtml
-    if (!templateTitle.trim()) {
+    if (!writerTemplateTitle.trim()) {
       setMessage({ type: "error", text: "أدخل عنوان القالب قبل التصدير" })
       return
     }
 
-    const documentHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>${templateTitle}</title></head><body>${currentHtml}</body></html>`
-    downloadBlob(new Blob([documentHtml], { type: "application/msword;charset=utf-8" }), `${templateTitle}.doc`)
+    if (!writerBackgroundValue.trim()) {
+      setMessage({ type: "error", text: "ارفع ملف القالب أولًا" })
+      return
+    }
+
+    const textLayersHtml = writerTextLayers.map((layer) => `
+      <div style="position:absolute; right:${100 - layer.xPercent}%; top:${layer.yPercent}%; transform:translate(50%, -50%); color:${layer.color}; font-size:${layer.fontSize}px; line-height:1.35; white-space:pre-wrap; text-align:right;">
+        ${layer.text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />")}
+      </div>
+    `).join("")
+
+    const backgroundHtml = writerBackgroundKind === "image"
+      ? `<div style="position:relative; min-height:1100px; background:url('${writerBackgroundValue}') center/contain no-repeat;">${textLayersHtml}</div>`
+      : `<div style="position:relative; min-height:1100px;"><div>${writerBackgroundValue}</div>${textLayersHtml}</div>`
+
+    const documentHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>${writerTemplateTitle}</title></head><body>${backgroundHtml}</body></html>`
+    downloadBlob(new Blob([documentHtml], { type: "application/msword;charset=utf-8" }), `${writerTemplateTitle}.doc`)
     setMessage({ type: "success", text: "تم تصدير القالب كملف Word قابل للفتح والتعديل" })
   }
 
@@ -523,7 +1037,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const pageTitleByTab: Record<string, string> = {
     image_to_pdf: "تحويل إلى PDF",
     pdf_to_images: "تحويل إلى صورة",
-    pdf_editor: "التعديل",
+    pdf_editor: "التعديل على PDF أو صورة",
+    compress: "ضغط الملف",
     stamps: "الختم والتواقيع",
     writer: "الكتابة على الوورد",
   }
@@ -531,33 +1046,40 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const pageDescriptionByTab: Record<string, string> = {
     image_to_pdf: "تحويل صورة واحدة أو عدة صور إلى ملف PDF جاهز للتنزيل.",
     pdf_to_images: "استخراج صفحات PDF وتحويلها إلى صور منفصلة قابلة للتنزيل.",
-    pdf_editor: "إضافة نصوص وتعديلات مباشرة داخل ملفات PDF مع التحكم بالموقع والحجم واللون.",
+    pdf_editor: "رفع صورة أو PDF ثم إضافة النصوص وتحريكها وتعديل حجمها ولونها قبل تنزيل الملف النهائي.",
+    compress: "رفع صورة أو PDF ثم ضغطه بأعلى قدر ممكن مع الحفاظ على جودة جيدة قبل التنزيل.",
     stamps: "إدارة مكتبة الأختام والتواقيع وتطبيقها على الصور وملفات PDF.",
     writer: "إنشاء قوالب كتابة محفوظة وتحريرها ثم تصديرها إلى Word.",
   }
 
+  const isCompactServiceView = initialTab === "stamps" || initialTab === "image_to_pdf" || initialTab === "pdf_to_images" || initialTab === "pdf_editor" || initialTab === "writer" || initialTab === "compress"
+
   return (
     <section className="space-y-6 text-right">
-      <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <h1 className="text-2xl font-bold text-foreground">{pageTitleByTab[initialTab] ?? "الخدمات"}</h1>
-        <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          {pageDescriptionByTab[initialTab] ?? "أدوات داخلية للتعامل مع الملفات والقوالب داخل لوحة التحكم."}
-        </p>
-      </div>
+      {isCompactServiceView ? null : (
+        <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+          <h1 className="text-2xl font-bold text-foreground">{pageTitleByTab[initialTab] ?? "الخدمات"}</h1>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            {pageDescriptionByTab[initialTab] ?? "أدوات داخلية للتعامل مع الملفات والقوالب داخل لوحة التحكم."}
+          </p>
+        </div>
+      )}
 
-      {message ? (
+      {message && !isCompactServiceView ? (
         <Alert className={message.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}>
           <AlertTitle>{message.type === "success" ? "تم تنفيذ العملية" : "يوجد تنبيه"}</AlertTitle>
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">إجمالي الأصول المحفوظة</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.total}</p></CardContent></Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">الأختام</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.stamps}</p></CardContent></Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">التواقيع</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.signatures}</p></CardContent></Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">قوالب الكتابة</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.templates}</p></CardContent></Card>
-      </div>
+      {isCompactServiceView ? null : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">إجمالي الأصول المحفوظة</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.total}</p></CardContent></Card>
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">الأختام</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.stamps}</p></CardContent></Card>
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">التواقيع</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.signatures}</p></CardContent></Card>
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95"><CardContent className="p-5 text-right"><p className="text-xs text-muted-foreground">قوالب الكتابة</p><p className="mt-2 text-3xl font-bold text-foreground">{assetStats.templates}</p></CardContent></Card>
+        </div>
+      )}
 
       <Tabs value={initialTab} className="gap-4">
 
@@ -592,7 +1114,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                 <Input type="file" accept="application/pdf" onChange={(event) => { setPdfToImagesFile(event.target.files?.[0] ?? null); setPdfImagePages([]) }} />
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}استخراج الصور</Button>
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تنزيل الصور</Button>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pdfImagePages.map((page) => (
@@ -609,23 +1131,95 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           </Card>
         </TabsContent>
 
+        <TabsContent value="compress" className="space-y-4">
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+            <CardHeader>
+              <CardTitle>ضغط الملف</CardTitle>
+              <CardDescription>ارفع صورة أو PDF، ثم اضغط الملف مع الحفاظ على جودة عالية قدر الإمكان قبل التنزيل.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                <Input type="file" accept="image/*,application/pdf" onChange={(event) => setCompressTargetFile(event.target.files?.[0] ?? null)} />
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handleCompressFile)} disabled={isPending}><Download className="h-4 w-4" />تنزيل الملف</Button>
+              </div>
+              {compressTargetFile ? <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3 text-sm text-foreground">{compressTargetFile.name}</div> : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="pdf_editor" className="space-y-4">
           <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
             <CardHeader>
-              <CardTitle>التعديل على PDF</CardTitle>
-              <CardDescription>تحرير سريع بإضافة نص مباشر إلى صفحة محددة داخل الملف مع التحكم بالمكان والحجم واللون.</CardDescription>
+              <CardTitle>التعديل على PDF أو صورة</CardTitle>
+              <CardDescription>ارفع صورة أو PDF، ثم أضف النصوص وحرّكها داخل المعاينة مع التحكم بالحجم واللون قبل التنزيل.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Input type="file" accept="application/pdf" onChange={(event) => setPdfEditFile(event.target.files?.[0] ?? null)} />
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="space-y-2"><Label>رقم الصفحة</Label><Input type="number" min={1} value={pdfEditPage} onChange={(event) => setPdfEditPage(Number(event.target.value) || 1)} /></div>
-                <div className="space-y-2"><Label>X</Label><Input type="number" min={0} value={pdfEditX} onChange={(event) => setPdfEditX(Number(event.target.value) || 0)} /></div>
-                <div className="space-y-2"><Label>Y</Label><Input type="number" min={0} value={pdfEditY} onChange={(event) => setPdfEditY(Number(event.target.value) || 0)} /></div>
-                <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={pdfEditSize} onChange={(event) => setPdfEditSize(Number(event.target.value) || 16)} /></div>
-                <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={pdfEditColor} onChange={(event) => setPdfEditColor(event.target.value)} /></div>
+              <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleEditTargetChange(file) } }} />
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => addEditTextLayer(activeEditTextLayer?.pageNumber ?? 1)} disabled={editPreviewPages.length === 0}><Plus className="h-4 w-4" />إضافة نص</Button>
               </div>
-              <div className="space-y-2"><Label>النص</Label><Textarea rows={4} value={pdfEditText} onChange={(event) => setPdfEditText(event.target.value)} /></div>
-              <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfTextEdit)} disabled={isPending}><FilePenLine className="h-4 w-4" />تعديل الملف وتنزيله</Button></div>
+              {activeEditTextLayer ? (
+                <div className="grid gap-4 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2 xl:grid-cols-[1.4fr,0.7fr,0.7fr,auto]">
+                  <div className="space-y-2 md:col-span-2 xl:col-span-1"><Label>النص</Label><Textarea rows={3} value={activeEditTextLayer.text} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { text: event.target.value })} /></div>
+                  <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={activeEditTextLayer.fontSize} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { fontSize: Number(event.target.value) || 16 })} /></div>
+                  <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={activeEditTextLayer.color} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { color: event.target.value })} /></div>
+                  <div className="flex items-end"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeEditTextLayer(activeEditTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button></div>
+                </div>
+              ) : null}
+              <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
+                {isPreparingEditPreview ? <div className="flex h-[420px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : editPreviewPages.length > 0 ? (
+                  <div className="space-y-5">
+                    {editPreviewPages.map((page) => (
+                      <div key={page.pageNumber} className="relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border border-white bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                        <button
+                          type="button"
+                          className="relative block w-full touch-none"
+                          onPointerMove={(event) => {
+                            if (!draggingEditTextLayerId) {
+                              return
+                            }
+
+                            const nextPosition = getEditPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                            updateEditTextLayer(draggingEditTextLayerId, { ...nextPosition, pageNumber: page.pageNumber })
+                          }}
+                          onPointerUp={() => setDraggingEditTextLayerId(null)}
+                          onPointerCancel={() => setDraggingEditTextLayerId(null)}
+                        >
+                          <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
+                          {editTextLayers.filter((item) => item.pageNumber === page.pageNumber).map((layer) => (
+                            <button
+                              key={layer.id}
+                              type="button"
+                              className={`absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed px-3 py-2 text-right shadow-sm ${activeEditTextLayerId === layer.id ? "border-primary bg-white/95" : "border-slate-300/80 bg-white/85"}`}
+                              style={{
+                                left: `${layer.xPercent}%`,
+                                top: `${layer.yPercent}%`,
+                                color: layer.color,
+                                fontSize: `${layer.fontSize}px`,
+                                lineHeight: 1.35,
+                              }}
+                              onPointerDown={(event) => {
+                                event.stopPropagation()
+                                setActiveEditTextLayerId(layer.id)
+                                setDraggingEditTextLayerId(layer.id)
+                                event.currentTarget.setPointerCapture(event.pointerId)
+                              }}
+                              onPointerUp={(event) => {
+                                event.stopPropagation()
+                                setDraggingEditTextLayerId(null)
+                              }}
+                            >
+                              {layer.text || "نص جديد"}
+                            </button>
+                          ))}
+                        </button>
+                        {editTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو PDF لبدء التعديل.</div>}
+              </div>
+              <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activeEditTextLayer ? `النص المحدد على الصفحة ${activeEditTextLayer.pageNumber}` : `عدد النصوص المضافة: ${editTextLayers.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyDocumentEdits)} disabled={isPending}><FilePenLine className="h-4 w-4" />تنزيل الملف</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -639,24 +1233,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2"><Label>اسم الأصل</Label><Input value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
-                  <div className="space-y-2"><Label>النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2 md:order-1"><Label>النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2 md:order-2"><Label>اسم الأصل</Label><Input value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
                 </div>
                 <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
                   <Input type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
                   {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}حفظ في المكتبة</Button>
-                </div>
-                <div className="space-y-3">
-                  {data.assets.length === 0 ? <p className="text-sm text-muted-foreground">لا توجد أصول محفوظة بعد.</p> : data.assets.map((asset) => (
-                    <div key={asset.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
-                      <div className="flex items-center gap-3">
-                        <img src={asset.imageUrl} alt={asset.name} className="h-16 w-16 rounded-xl object-contain bg-white" />
-                        <div className="text-right"><p className="font-semibold text-foreground">{asset.name}</p><p className="text-xs text-muted-foreground">{asset.kind === "stamp" ? "ختم" : "توقيع"} • {formatDateTime(asset.updatedAt)}</p></div>
-                      </div>
-                      <div className="flex gap-2"><Button type="button" variant={selectedAssetId === asset.id ? "default" : "outline"} className="rounded-xl" onClick={() => setSelectedAssetId(asset.id)}>اختيار</Button><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" /></Button></div>
-                    </div>
-                  ))}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}حفظ في المكتبة</Button>
+                    <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={data.assets.length === 0}>عرض المحفوظات</Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -667,97 +1253,258 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 <CardDescription>ارفع صورة أو ملف PDF، ثم اختر الأصل المحفوظ واضغط على مكان المعاينة لتحديد موضعه قبل التنزيل.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleStampTargetChange(file) } }} />
-                  <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><Label>عرض الختم</Label><Input type="number" min={40} value={stampWidth} onChange={(event) => setStampWidth(Number(event.target.value) || 140)} /></div><div className="space-y-2"><Label>رقم الصفحة في PDF</Label><Input type="number" min={1} value={stampPage} onChange={(event) => setStampPage(Number(event.target.value) || 1)} /></div></div>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={data.assets.length === 0}><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
+                {placedAssets.length > 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {placedAssets.map((placedAsset) => {
+                        const asset = assetMap.get(placedAsset.assetId)
+                        if (!asset) {
+                          return null
+                        }
+
+                        return (
+                          <button
+                            key={placedAsset.id}
+                            type="button"
+                            className={`flex items-center gap-2 rounded-full border px-3 py-2 text-right transition-colors ${activePlacedAssetId === placedAsset.id ? "border-primary bg-primary/5" : "border-border/60 bg-white hover:bg-muted/20"}`}
+                            onClick={() => setActivePlacedAssetId(placedAsset.id)}
+                          >
+                            <img src={asset.imageUrl} alt={asset.name} className="h-8 w-8 rounded-full bg-white object-contain" />
+                            <span className="text-sm font-medium text-foreground">{asset.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => activePlacedAssetId ? removePlacedAsset(activePlacedAssetId) : null} disabled={!activePlacedAssetId}><Trash2 className="h-4 w-4" />حذف المحدد</Button>
+                      <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => resizeStamp(-2)} aria-label="تصغير الأصل">-</Button>
+                      <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => resizeStamp(2)} aria-label="تكبير الأصل">+</Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
-                  {isPreparingStampPreview ? <div className="flex h-[420px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : stampTargetPreview ? (
-                    <div className="relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border border-white bg-white">
-                      <button
-                        type="button"
-                        className="relative block w-full"
-                        onClick={(event) => {
-                          const rect = event.currentTarget.getBoundingClientRect()
-                          const xPercent = ((event.clientX - rect.left) / rect.width) * 100
-                          const yPercent = ((event.clientY - rect.top) / rect.height) * 100
-                          setStampPosition({ xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) })
-                        }}
-                      >
-                        <img src={stampTargetPreview} alt="Preview" className="w-full object-contain" />
-                        {selectedAsset ? (
-                          <img
-                            src={selectedAsset.imageUrl}
-                            alt={selectedAsset.name}
-                            className="pointer-events-none absolute opacity-80"
-                            style={{
-                              width: `${stampWidth}px`,
-                              left: `calc(${stampPosition.xPercent}% - ${stampWidth / 2}px)`,
-                              top: `calc(${stampPosition.yPercent}% - ${(stampWidth * 0.35)}px)`,
+                  {isPreparingStampPreview ? <div className="flex h-[420px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : stampPreviewPages.length > 0 ? (
+                    <div className="space-y-5">
+                      {stampPreviewPages.map((page) => (
+                        <div
+                          key={page.pageNumber}
+                          className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${stampSelectedPage === page.pageNumber ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
+                        >
+                          <button
+                            type="button"
+                            className="relative block w-full touch-none"
+                            onPointerDown={(event) => {
+                              if (!draggingPlacedAssetId) {
+                                return
+                              }
+
+                              const nextPosition = updateStampPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                              updatePlacedAsset(draggingPlacedAssetId, { ...nextPosition, pageNumber: page.pageNumber })
+                              event.currentTarget.setPointerCapture(event.pointerId)
                             }}
-                          />
-                        ) : null}
-                      </button>
+                            onPointerMove={(event) => {
+                              if (!draggingPlacedAssetId) {
+                                return
+                              }
+
+                              const nextPosition = updateStampPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                              updatePlacedAsset(draggingPlacedAssetId, { ...nextPosition, pageNumber: page.pageNumber })
+                            }}
+                            onPointerUp={() => setDraggingPlacedAssetId(null)}
+                            onPointerCancel={() => setDraggingPlacedAssetId(null)}
+                          >
+                            <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
+                            {placedAssets.filter((placedAsset) => placedAsset.pageNumber === page.pageNumber).map((placedAsset) => {
+                              const asset = assetMap.get(placedAsset.assetId)
+                              if (!asset) {
+                                return null
+                              }
+
+                              return (
+                                <button
+                                  key={placedAsset.id}
+                                  type="button"
+                                  className={`absolute opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
+                                  style={{
+                                    width: `${placedAsset.scalePercent}%`,
+                                    left: `${placedAsset.xPercent}%`,
+                                    top: `${placedAsset.yPercent}%`,
+                                    transform: "translate(-50%, -50%)",
+                                  }}
+                                  onPointerDown={(event) => {
+                                    event.stopPropagation()
+                                    setActivePlacedAssetId(placedAsset.id)
+                                    setDraggingPlacedAssetId(placedAsset.id)
+                                    event.currentTarget.setPointerCapture(event.pointerId)
+                                  }}
+                                  onPointerUp={(event) => {
+                                    event.stopPropagation()
+                                    setDraggingPlacedAssetId(null)
+                                  }}
+                                  onPointerCancel={(event) => {
+                                    event.stopPropagation()
+                                    setDraggingPlacedAssetId(null)
+                                  }}
+                                >
+                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
+                                </button>
+                              )
+                            })}
+                          </button>
+                          {stampTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                        </div>
+                      ))}
                     </div>
                   ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع ملفًا ثم اضغط داخل المعاينة لتحديد مكان الختم.</div>}
                 </div>
-                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">الموضع الحالي: X {stampPosition.xPercent.toFixed(1)}% • Y {stampPosition.yPercent.toFixed(1)}%</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تطبيق الختم وتنزيل الملف</Button></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${stampTargetFile?.type === "application/pdf" ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
               </CardContent>
             </Card>
           </div>
+
+          <Dialog open={isAssetPickerOpen} onOpenChange={setIsAssetPickerOpen}>
+            <DialogContent className="max-w-3xl rounded-[1.75rem] p-0 text-right">
+              <div className="p-6">
+                <DialogHeader className="text-right">
+                  <DialogTitle>اختر ختمًا أو توقيعًا</DialogTitle>
+                </DialogHeader>
+                {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.assets.map((asset) => (
+                    <div
+                      key={asset.id}
+                      className="rounded-[1.25rem] border border-border/60 p-4 text-right transition-colors hover:bg-muted/20"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <Badge variant="secondary">{asset.kind === "stamp" ? "ختم" : "توقيع"}</Badge>
+                        <img src={asset.imageUrl} alt={asset.name} className="h-14 w-14 rounded-xl bg-white object-contain" />
+                      </div>
+                      <p className="mt-3 font-semibold text-foreground">{asset.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(asset.updatedAt)}</p>
+                      <div className="mt-4 flex items-center justify-between gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => {
+                            const newPlacedAsset = createPlacedAsset(asset.id, stampTargetFile?.type === "application/pdf" ? 1 : 1)
+                            setPlacedAssets((current) => [...current, newPlacedAsset])
+                            setActivePlacedAssetId(newPlacedAsset.id)
+                            setIsAssetPickerOpen(false)
+                          }}
+                        >
+                          إضافة
+                        </Button>
+                        <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" />حذف</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>}
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="writer" className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[0.85fr,1.15fr]">
-            <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-              <CardHeader>
-                <CardTitle>قوالب الكتابة</CardTitle>
-                <CardDescription>أنشئ قالبًا واحدًا وارجع له لاحقًا للتعديل والكتابة والتصدير بدل البدء من الصفر كل مرة.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button type="button" variant="outline" className="w-full rounded-xl" onClick={resetTemplateEditor}><Plus className="h-4 w-4" />قالب جديد</Button>
-                <div className="space-y-3">
-                  {data.templates.length === 0 ? <p className="text-sm text-muted-foreground">لا توجد قوالب محفوظة بعد.</p> : data.templates.map((template) => (
-                    <button key={template.id} type="button" onClick={() => loadTemplateIntoEditor(template)} className={`block w-full rounded-[1.25rem] border px-4 py-4 text-right transition-colors ${selectedTemplateId === template.id ? "border-primary bg-primary/5" : "border-border/60 bg-muted/10 hover:bg-muted/20"}`}>
-                      <div className="flex items-center justify-between gap-3"><Badge variant="secondary">{formatDateTime(template.updatedAt)}</Badge><p className="font-semibold text-foreground">{template.title}</p></div>
-                      <p className="mt-2 text-sm text-muted-foreground">{template.description || "بدون وصف"}</p>
-                    </button>
-                  ))}
-                </div>
-                {selectedTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب الحالي</Button> : null}
-              </CardContent>
-            </Card>
+          <div className="flex items-center justify-start">
+            <Button type="button" className="rounded-xl" onClick={resetWriterTemplateEditor}><Plus className="h-4 w-4" />إضافة قالب</Button>
+          </div>
 
-            <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-              <CardHeader>
-                <CardTitle>الكتابة على الوورد</CardTitle>
-                <CardDescription>محرر نصي سريع بقوالب محفوظة، مع أدوات تنسيق أساسية وتصدير إلى ملف Word.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2"><Label>عنوان القالب</Label><Input value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} /></div>
-                  <div className="space-y-2"><Label>وصف مختصر</Label><Input value={templateDescription} onChange={(event) => setTemplateDescription(event.target.value)} /></div>
+          {data.templates.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {data.templates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => loadWriterTemplate(template)}
+                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${selectedWriterTemplateId === template.id ? "border-primary bg-primary/5 text-primary" : "border-border/60 bg-white hover:bg-muted/20"}`}
+                >
+                  {template.title}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="space-y-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+            <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto]">
+              <Input value={writerTemplateTitle} onChange={(event) => setWriterTemplateTitle(event.target.value)} placeholder="عنوان القالب" />
+              <Input type="file" accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleWriterBackgroundChange(file) } }} />
+              <Button type="button" variant="outline" className="rounded-xl" onClick={addWriterTextLayer} disabled={!writerBackgroundValue || isPreparingWriterBackground}><Plus className="h-4 w-4" />إضافة نص</Button>
+            </div>
+
+            {activeWriterTextLayer ? (
+              <div className="grid gap-4 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2 xl:grid-cols-[1.4fr,0.7fr,0.7fr,auto]">
+                <div className="space-y-2 md:col-span-2 xl:col-span-1"><Label>النص</Label><Textarea rows={3} value={activeWriterTextLayer.text} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { text: event.target.value })} /></div>
+                <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={activeWriterTextLayer.fontSize} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { fontSize: Number(event.target.value) || 16 })} /></div>
+                <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={activeWriterTextLayer.color} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { color: event.target.value })} /></div>
+                <div className="flex items-end"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeWriterTextLayer(activeWriterTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button></div>
+              </div>
+            ) : null}
+
+            <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
+              {isPreparingWriterBackground ? <div className="flex h-[520px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : writerBackgroundValue ? (
+                <div className="mx-auto max-w-4xl overflow-hidden rounded-[1.25rem] border border-white bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                  <div
+                    className="relative min-h-[720px] w-full overflow-hidden bg-white"
+                    onPointerMove={(event) => {
+                      if (!draggingWriterTextLayerId) {
+                        return
+                      }
+
+                      const nextPosition = getWriterLayerPosition(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                      updateWriterTextLayer(draggingWriterTextLayerId, nextPosition)
+                    }}
+                    onPointerUp={() => setDraggingWriterTextLayerId(null)}
+                    onPointerCancel={() => setDraggingWriterTextLayerId(null)}
+                  >
+                    {writerBackgroundKind === "image" ? (
+                      <img src={writerBackgroundValue} alt="Template background" className="w-full object-contain" />
+                    ) : (
+                      <div className="pointer-events-none min-h-[720px] p-10" dangerouslySetInnerHTML={{ __html: writerBackgroundValue }} />
+                    )}
+
+                    {writerTextLayers.map((layer) => (
+                      <button
+                        key={layer.id}
+                        type="button"
+                        className={`absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed px-3 py-2 text-right shadow-sm ${activeWriterTextLayerId === layer.id ? "border-primary bg-white/95" : "border-slate-300/80 bg-white/85"}`}
+                        style={{
+                          left: `${layer.xPercent}%`,
+                          top: `${layer.yPercent}%`,
+                          color: layer.color,
+                          fontSize: `${layer.fontSize}px`,
+                          lineHeight: 1.35,
+                        }}
+                        onPointerDown={(event) => {
+                          event.stopPropagation()
+                          setActiveWriterTextLayerId(layer.id)
+                          setDraggingWriterTextLayerId(layer.id)
+                          event.currentTarget.setPointerCapture(event.pointerId)
+                        }}
+                        onPointerUp={(event) => {
+                          event.stopPropagation()
+                          setDraggingWriterTextLayerId(null)
+                        }}
+                      >
+                        {layer.text || "نص جديد"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("bold")}><strong>B</strong></Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("italic")}><em>I</em></Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("underline")}><span className="underline">U</span></Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("justifyRight")}>يمين</Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("justifyCenter")}>وسط</Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("insertUnorderedList")}>تعداد</Button>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => applyEditorCommand("removeFormat")}>تنظيف</Button>
-                </div>
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  dir="rtl"
-                  className="min-h-[420px] rounded-[1.5rem] border border-border/60 bg-white p-6 text-right leading-8 outline-none"
-                  onInput={(event) => setTemplateHtml(event.currentTarget.innerHTML)}
-                />
-                <div className="flex flex-wrap justify-between gap-3"><div className="flex flex-wrap gap-2"><Button type="button" className="rounded-xl" onClick={() => runTask(handleSaveTemplate)} disabled={isPending}><Save className="h-4 w-4" />حفظ القالب</Button><Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}><FileText className="h-4 w-4" />تصدير Word</Button></div><div className="text-sm text-muted-foreground">يمكنك استخدام نفس القالب لاحقًا وتعديل النص مباشرة ثم إعادة التصدير.</div></div>
-              </CardContent>
-            </Card>
+              ) : <div className="flex h-[520px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو صفحة PDF أو ملف Word بصيغة DOCX ليكون خلفية للقالب.</div>}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">{activeWriterTextLayer ? `النص المحدد: ${activeWriterTextLayer.text || "نص جديد"}` : `عدد النصوص المضافة: ${writerTextLayers.length}`}</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedWriterTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedWriterTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب</Button> : null}
+                <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}><FileText className="h-4 w-4" />تنزيل Word</Button>
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handleSaveTemplate)} disabled={isPending}><Save className="h-4 w-4" />حفظ القالب</Button>
+              </div>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

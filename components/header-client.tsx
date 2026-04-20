@@ -61,20 +61,20 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
   return (
     <header
       className={`fixed left-0 right-0 top-0 z-50 transition-all duration-500 ${
-        useSolidHeader ? "border-b border-slate-200/80 bg-white/96 py-3 shadow-[0_14px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl" : "bg-transparent py-5"
+        useSolidHeader ? "bg-white/96 py-2.5 shadow-[0_14px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl" : "bg-transparent py-4"
       }`}
     >
       <div className="container mx-auto px-4">
-        <div className={`flex items-center justify-between rounded-[1.75rem] px-3 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "border border-white/15 bg-black/10 py-3 backdrop-blur-md"}`}>
-          <Link href="/" className="group flex items-center gap-4">
+        <div className={`flex items-center justify-between rounded-[1.75rem] px-2 transition-all duration-500 ${useSolidHeader ? "bg-transparent" : "bg-black/10 py-2.5 backdrop-blur-md"}`}>
+          <Link href="/" className="group flex items-center gap-3">
             {logo.logo ? (
               <>
-                <div className="flex h-[82px] w-[82px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02]">
-                  <img src={logo.logo} alt={logo.alt} className="h-[82px] w-[82px] object-contain" />
+                <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] md:h-[70px] md:w-[70px]">
+                  <img src={logo.logo} alt={logo.alt} className="h-[64px] w-[64px] object-contain md:h-[70px] md:w-[70px]" />
                 </div>
-                <div className={`flex min-h-[82px] flex-col justify-center text-right transition-colors duration-300 ${useSolidHeader ? "" : "text-white"}`}>
-                  <h1 className={`text-lg leading-tight md:text-[1.55rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
-                  <p className={`mt-1.5 text-[11px] tracking-[0.02em] md:text-[0.95rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
+                <div className={`flex min-h-[64px] flex-col justify-center text-right transition-colors duration-300 md:min-h-[70px] ${useSolidHeader ? "" : "text-white"}`}>
+                  <h1 className={`text-base leading-tight md:text-[1.3rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>
+                  <p className={`mt-1 text-[10px] tracking-[0.02em] md:text-[0.82rem] ${useSolidHeader ? getWeightClass(logo.englishFontWeight) : `${getWeightClass(logo.englishFontWeight)} text-white/70`}`} style={useSolidHeader ? solidTextStyle : undefined} dir="ltr">{englishName}</p>
                 </div>
               </>
             ) : (
@@ -120,7 +120,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </button>
 
               <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
-                <div className="space-y-1.5 rounded-[1.4rem] border border-slate-200/90 bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                <div className="space-y-1.5 rounded-[1.4rem] bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)] backdrop-blur-xl">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)
                       const isExpanded = expandedGovernanceHref === item.href
@@ -188,7 +188,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
         </div>
 
         <div className={`overflow-hidden transition-all duration-500 lg:hidden ${isMenuOpen ? "mt-4 max-h-[400px] opacity-100" : "max-h-0 opacity-0"}`}>
-          <nav className="rounded-[1.75rem] border border-border/50 bg-card/95 p-4 shadow-xl backdrop-blur-lg">
+          <nav className="rounded-[1.75rem] bg-card/95 p-4 shadow-xl backdrop-blur-lg">
             {navLinks.map((link, index) => (
               <Link
                 key={link.href + index}
@@ -200,7 +200,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </Link>
             ))}
 
-            <div className="mt-2 rounded-[1.35rem] border border-slate-200/90 bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+            <div className="mt-2 rounded-[1.35rem] bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
               <button
                 type="button"
                 className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-right font-medium text-slate-900 transition-all duration-300 hover:bg-slate-100/90"
@@ -213,7 +213,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               <div className={`overflow-hidden transition-all duration-300 ${isMobileGovernanceOpen ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0"}`}>
                 <div className="mt-2 space-y-2 px-2 pb-2">
                   {governanceNavigation.map((item) => (
-                    <div key={item.href} className="rounded-[1.1rem] border border-slate-200/80 bg-slate-50/90 p-1.5">
+                    <div key={item.href} className="rounded-[1.1rem] bg-slate-50/90 p-1.5">
                       {item.children?.length ? (
                         <button
                           type="button"

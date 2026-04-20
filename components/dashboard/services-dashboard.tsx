@@ -80,6 +80,16 @@ function downloadBlob(blob: Blob, fileName: string) {
   }, 1000)
 }
 
+function downloadPdfImagePages(pages: PdfImagePage[], baseFileName: string) {
+  pages.forEach((page, index) => {
+    window.setTimeout(() => {
+      if (page.blob) {
+        downloadBlob(page.blob, `${baseFileName}-page-${page.pageNumber}.png`)
+      }
+    }, index * 180)
+  })
+}
+
 function readFileAsArrayBuffer(file: File) {
   return file.arrayBuffer()
 }
@@ -239,11 +249,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [placedAssets, setPlacedAssets] = useState<PlacedAsset[]>([])
   const [activePlacedAssetId, setActivePlacedAssetId] = useState<string | null>(null)
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
+  const [assetDialogMode, setAssetDialogMode] = useState<"picker" | "manager">("picker")
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
   const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
   const stampDragOffsetRef = useRef<StampPosition>({ xPercent: 0, yPercent: 0 })
   const stampDragFrameRef = useRef<number | null>(null)
   const stampDragPendingRef = useRef<{ id: string; pageNumber: number; position: StampPosition } | null>(null)
+  const placedAssetElementRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   function revokePreviewUrls(pages: PdfImagePage[]) {
     for (const page of pages) {
@@ -277,22 +289,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       if (stampDragFrameRef.current !== null) {
         window.cancelAnimationFrame(stampDragFrameRef.current)
       }
-
-      revokePreviewUrls(pdfImagePages)
     }
-  }, [pdfImagePages])
-
-  useEffect(() => {
-    return () => {
-      revokePreviewUrls(editPreviewPages)
-    }
-  }, [editPreviewPages])
-
-  useEffect(() => {
-    return () => {
-      revokePreviewUrls(stampPreviewPages)
-    }
-  }, [stampPreviewPages])
+  }, [])
 
   const assetStats = useMemo(() => ({
     total: data?.assets.length ?? 0,
@@ -311,6 +309,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     [data],
   )
 
+  const signatureAssets = useMemo(
+    () => (data?.assets ?? []).filter((asset) => asset.kind === "signature"),
+    [data],
+  )
+
   const activePlacedAsset = useMemo(
     () => placedAssets.find((item) => item.id === activePlacedAssetId) ?? null,
     [placedAssets, activePlacedAssetId],
@@ -325,6 +328,21 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     () => writerTextLayers.find((item) => item.id === activeWriterTextLayerId) ?? null,
     [writerTextLayers, activeWriterTextLayerId],
   )
+
+  const imageToPdfPreviews = useMemo(
+    () => imageToPdfFiles.map((file, index) => ({
+      key: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+      file,
+      url: URL.createObjectURL(file),
+    })),
+    [imageToPdfFiles],
+  )
+
+  useEffect(() => {
+    return () => {
+      imageToPdfPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+    }
+  }, [imageToPdfPreviews])
 
   function runTask(task: () => Promise<void>) {
     setMessage(null)
@@ -380,7 +398,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     setActiveWriterTextLayerId(config.textLayers[0]?.id ?? null)
   }
 
-  async function prepareWriterBackground(file: File) {
+  async function prepareWriterBackground(file: File): Promise<WriterTemplateConfig> {
     if (isPdfFile(file)) {
       setIsPreparingWriterBackground(true)
       try {
@@ -399,13 +417,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         canvas.width = viewport.width
         canvas.height = viewport.height
         await page.render({ canvasContext: context, viewport }).promise
+        const backgroundValue = canvas.toDataURL("image/png")
         setWriterBackgroundKind("image")
-        setWriterBackgroundValue(canvas.toDataURL("image/png"))
+        setWriterBackgroundValue(backgroundValue)
+        return {
+          version: 1,
+          backgroundKind: "image",
+          backgroundValue,
+          textLayers: [],
+        }
       } finally {
         setIsPreparingWriterBackground(false)
       }
-
-      return
     }
 
     if (file.name.toLowerCase().endsWith(".docx")) {
@@ -416,19 +439,30 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         const result = await mammoth.convertToHtml({ arrayBuffer: bytes })
         setWriterBackgroundKind("html")
         setWriterBackgroundValue(result.value)
+        return {
+          version: 1,
+          backgroundKind: "html",
+          backgroundValue: result.value,
+          textLayers: [],
+        }
       } finally {
         setIsPreparingWriterBackground(false)
       }
-
-      return
     }
 
     if (file.name.toLowerCase().endsWith(".doc")) {
       throw new Error("صيغة DOC القديمة غير مدعومة حاليًا، استخدم DOCX أو PDF أو صورة")
     }
 
+    const backgroundValue = await readFileAsDataUrl(file)
     setWriterBackgroundKind("image")
-    setWriterBackgroundValue(await readFileAsDataUrl(file))
+    setWriterBackgroundValue(backgroundValue)
+    return {
+      version: 1,
+      backgroundKind: "image",
+      backgroundValue,
+      textLayers: [],
+    }
   }
 
   async function handleWriterBackgroundChange(file: File) {
@@ -438,11 +472,59 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     setWriterTemplateTitle((current) => current.trim() ? current : file.name.replace(/\.[^.]+$/, ""))
   }
 
-  function openWriterTemplatePicker(resetEditor: boolean) {
-    if (resetEditor) {
-      resetWriterTemplateEditor()
+  async function saveWriterTemplate(config: WriterTemplateConfig, options?: { templateId?: string; title?: string; description?: string }) {
+    const templateTitle = options?.title?.trim() || writerTemplateTitle.trim()
+    if (!templateTitle) {
+      throw new Error("أدخل عنوانًا للقالب أولًا")
     }
 
+    if (!config.backgroundValue.trim()) {
+      throw new Error("ارفع ملف القالب أولًا")
+    }
+
+    const templateId = options?.templateId ?? (selectedWriterTemplateId === "new" ? undefined : selectedWriterTemplateId)
+    const isNew = !templateId
+    const response = await fetch("/api/admin/services", {
+      method: isNew ? "POST" : "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "template",
+        ...(templateId ? { id: templateId } : null),
+        title: templateTitle,
+        description: options?.description ?? "",
+        contentHtml: serializeWriterTemplateConfig(config),
+      }),
+    })
+
+    const payload = await response.json() as ServicesDashboardData & { error?: string }
+    if (!response.ok) {
+      throw new Error(payload.error ?? "تعذر حفظ القالب")
+    }
+
+    setData(payload)
+    const latestTemplate = templateId
+      ? payload.templates.find((template) => template.id === templateId)
+      : payload.templates.find((template) => template.title === templateTitle) ?? payload.templates[0]
+
+    if (latestTemplate) {
+      loadWriterTemplate(latestTemplate)
+    }
+
+    return { isNew, latestTemplate }
+  }
+
+  async function handleCreateWriterTemplate(file: File) {
+    resetWriterTemplateEditor()
+    const nextTitle = file.name.replace(/\.[^.]+$/, "")
+    const config = await prepareWriterBackground(file)
+    setWriterTemplateTitle(nextTitle)
+    setWriterTextLayers([])
+    setActiveWriterTextLayerId(null)
+    await saveWriterTemplate(config, { title: nextTitle, description: file.name })
+    setMessage({ type: "success", text: "تم رفع القالب وحفظه في الموقع" })
+  }
+
+  function openWriterTemplateCreator() {
     writerTemplateFileInputRef.current?.click()
   }
 
@@ -560,12 +642,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         return
       }
 
-      stampDragPendingRef.current = null
-      updatePlacedAsset(nextUpdate.id, { ...nextUpdate.position, pageNumber: nextUpdate.pageNumber })
+      const assetElement = placedAssetElementRefs.current[nextUpdate.id]
+      if (assetElement) {
+        assetElement.style.left = `${nextUpdate.position.xPercent}%`
+        assetElement.style.top = `${nextUpdate.position.yPercent}%`
+      }
     })
   }
 
   function stopPlacedAssetDragging() {
+    const draggingId = draggingPlacedAssetId
     setDraggingPlacedAssetId(null)
     stampDragOffsetRef.current = { xPercent: 0, yPercent: 0 }
 
@@ -580,47 +666,24 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     if (nextUpdate) {
       updatePlacedAsset(nextUpdate.id, { ...nextUpdate.position, pageNumber: nextUpdate.pageNumber })
     }
+
+    if (draggingId) {
+      const assetElement = placedAssetElementRefs.current[draggingId]
+      if (assetElement) {
+        assetElement.style.willChange = "auto"
+      }
+    }
   }
 
   async function handleSaveTemplate() {
-    if (!writerTemplateTitle.trim()) {
-      throw new Error("أدخل عنوانًا للقالب أولًا")
-    }
-
-    if (!writerBackgroundValue.trim()) {
-      throw new Error("ارفع ملف القالب أولًا")
-    }
-
-    const contentHtml = serializeWriterTemplateConfig({
+    const config: WriterTemplateConfig = {
       version: 1,
       backgroundKind: writerBackgroundKind,
       backgroundValue: writerBackgroundValue,
       textLayers: writerTextLayers,
-    })
-
-    const isNew = selectedWriterTemplateId === "new"
-    const response = await fetch("/api/admin/services", {
-      method: isNew ? "POST" : "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "template",
-        ...(isNew ? null : { id: selectedWriterTemplateId }),
-        title: writerTemplateTitle,
-        description: "",
-        contentHtml,
-      }),
-    })
-
-    const payload = await response.json() as ServicesDashboardData & { error?: string }
-    if (!response.ok) {
-      throw new Error(payload.error ?? "تعذر حفظ القالب")
     }
 
-    setData(payload)
-    const latestTemplate = payload.templates.find((template) => template.title === writerTemplateTitle) ?? payload.templates[0]
-    if (latestTemplate) {
-      loadWriterTemplate(latestTemplate)
-    }
+    const { isNew } = await saveWriterTemplate(config)
     setMessage({ type: "success", text: isNew ? "تم إنشاء القالب" : "تم تحديث القالب" })
   }
 
@@ -661,6 +724,24 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     setMessage({ type: "success", text: "تم تحويل الصور إلى PDF وتنزيل الملف" })
   }
 
+  function moveImageToPdfFile(index: number, direction: "forward" | "backward") {
+    setImageToPdfFiles((current) => {
+      const targetIndex = direction === "forward" ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current
+      }
+
+      const nextFiles = [...current]
+      const [movedFile] = nextFiles.splice(index, 1)
+      nextFiles.splice(targetIndex, 0, movedFile)
+      return nextFiles
+    })
+  }
+
+  function removeImageToPdfFile(index: number) {
+    setImageToPdfFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
   async function handlePdfToImages() {
     if (!pdfToImagesFile) {
       throw new Error("ارفع ملف PDF أولًا")
@@ -692,7 +773,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
       revokePreviewUrls(pdfImagePages)
       setPdfImagePages(nextPages)
-      setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة إلى صور، ويمكنك تنزيل كل صفحة من المعاينة` })
+      downloadPdfImagePages(nextPages, pdfToImagesFile.name.replace(/\.pdf$/i, ""))
+      setMessage({ type: "success", text: `تم تحويل ${nextPages.length} صفحة وتنزيلها` })
     } finally {
       setIsConvertingPdfPages(false)
     }
@@ -738,14 +820,23 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
   async function compressPdfFile(file: File) {
     const bytes = await readFileAsArrayBuffer(file)
-    try {
-      const pdfjs = await loadPdfJs()
-      const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+    const pdfjs = await loadPdfJs()
+    const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
+    const compressionPresets = [
+      { scale: 1, quality: 0.68 },
+      { scale: 0.85, quality: 0.55 },
+      { scale: 0.7, quality: 0.42 },
+    ]
+
+    let bestOutput: Uint8Array | null = null
+    let bestSize = Number.POSITIVE_INFINITY
+
+    for (const preset of compressionPresets) {
       const outputPdf = await PDFDocument.create()
 
       for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
         const page = await pdf.getPage(pageNumber)
-        const viewport = page.getViewport({ scale: 1 })
+        const viewport = page.getViewport({ scale: preset.scale })
         const canvas = document.createElement("canvas")
         const context = canvas.getContext("2d")
 
@@ -753,13 +844,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           throw new Error("تعذر تجهيز صفحات PDF للضغط")
         }
 
-        canvas.width = viewport.width
-        canvas.height = viewport.height
+        canvas.width = Math.max(1, Math.floor(viewport.width))
+        canvas.height = Math.max(1, Math.floor(viewport.height))
         context.fillStyle = "#ffffff"
         context.fillRect(0, 0, canvas.width, canvas.height)
         await page.render({ canvasContext: context, viewport }).promise
 
-        const pageBlob = await canvasToJpegBlob(canvas, 0.68)
+        const pageBlob = await canvasToJpegBlob(canvas, preset.quality)
         const pageBytes = await pageBlob.arrayBuffer()
         const embeddedImage = await outputPdf.embedJpg(pageBytes)
         const outputPage = outputPdf.addPage([embeddedImage.width, embeddedImage.height])
@@ -772,18 +863,31 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       }
 
       if (outputPdf.getPageCount() === 0) {
-        throw new Error("تعذر ضغط ملف PDF")
+        continue
       }
 
-      const output = await outputPdf.save()
-      downloadBlob(new Blob([output], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
-      setMessage({ type: "success", text: "تم ضغط ملف PDF وتنزيله" })
-    } catch {
-      const originalPdf = await PDFDocument.load(bytes)
-      const fallbackOutput = await originalPdf.save({ useObjectStreams: true })
-      downloadBlob(new Blob([fallbackOutput], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
-      setMessage({ type: "success", text: "تم تجهيز ملف PDF وتنزيله" })
+      const candidateOutput = await outputPdf.save({ useObjectStreams: true })
+      if (candidateOutput.byteLength < bestSize) {
+        bestOutput = candidateOutput
+        bestSize = candidateOutput.byteLength
+      }
+
+      if (candidateOutput.byteLength <= bytes.byteLength * 0.8) {
+        break
+      }
     }
+
+    if (!bestOutput) {
+      throw new Error("تعذر ضغط ملف PDF")
+    }
+
+    if (bestSize >= bytes.byteLength) {
+      throw new Error("تعذر تقليل حجم ملف PDF هذا")
+    }
+
+    downloadBlob(new Blob([bestOutput], { type: "application/pdf" }), `${file.name.replace(/\.pdf$/i, "")}-compressed.pdf`)
+    const reductionPercent = Math.max(1, Math.round((1 - (bestSize / bytes.byteLength)) * 100))
+    setMessage({ type: "success", text: `تم ضغط ملف PDF وتقليل حجمه بنسبة ${reductionPercent}%` })
   }
 
   async function handleCompressFile() {
@@ -1250,9 +1354,24 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 <Input id="image-to-pdf-upload" type="file" accept="image/*" multiple onChange={(event) => setImageToPdfFiles(Array.from(event.target.files ?? []))} />
                 <p className="mt-3 text-sm text-muted-foreground">عدد الملفات المحددة: {imageToPdfFiles.length}</p>
               </div>
-              {imageToPdfFiles.length > 0 ? (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {imageToPdfFiles.map((file) => <div key={`${file.name}-${file.size}`} className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3 text-sm text-foreground">{file.name}</div>)}
+              {imageToPdfPreviews.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {imageToPdfPreviews.map((preview, index) => (
+                    <div key={preview.key} className="overflow-hidden rounded-[1.25rem] border border-border/60 bg-white">
+                      <img src={preview.url} alt={preview.file.name} className="h-56 w-full object-contain bg-muted/10" />
+                      <div className="space-y-3 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">الصفحة {index + 1}</span>
+                          <span className="text-xs text-muted-foreground">{preview.file.name}</span>
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button type="button" variant="outline" className="rounded-xl" onClick={() => moveImageToPdfFile(index, "forward")} disabled={index === 0}>تقديم</Button>
+                          <Button type="button" variant="outline" className="rounded-xl" onClick={() => moveImageToPdfFile(index, "backward")} disabled={index === imageToPdfPreviews.length - 1}>تأخير</Button>
+                          <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeImageToPdfFile(index)}><Trash2 className="h-4 w-4" />حذف</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : null}
               <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handleImageToPdf)} disabled={isPending}><FileImage className="h-4 w-4" />تحويل وتنزيل PDF</Button></div>
@@ -1269,7 +1388,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                 <Input type="file" accept="application/pdf" onChange={(event) => handlePdfToImagesFileChange(event.target.files?.[0] ?? null)} />
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تحويل الصور</Button>
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تنزيل الصور</Button>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pdfImagePages.map((page) => (
@@ -1384,13 +1503,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           <div>
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>تطبيق الختم أو التوقيع</CardTitle>
-                <CardDescription>ارفع صورة أو ملف PDF، ثم اختر الأصل المحفوظ واضغط على مكان المعاينة لتحديد موضعه قبل التنزيل.</CardDescription>
+                <div className="flex items-center justify-between gap-3">
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setAssetDialogMode("manager"); setIsAssetPickerOpen(true) }}><Plus className="h-4 w-4" />إضافة ختم او توقيع</Button>
+                  <div className="text-right">
+                    <CardTitle>تطبيق الختم أو التوقيع</CardTitle>
+                    <CardDescription>ارفع صورة أو ملف PDF، ثم اختر الأصل المحفوظ واضغط على مكان المعاينة لتحديد موضعه قبل التنزيل.</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleStampTargetChange(file) } }} />
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}><Plus className="h-4 w-4" />إضافة</Button>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setAssetDialogMode("picker"); setIsAssetPickerOpen(true) }}><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
                 {placedAssets.length > 0 ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
@@ -1463,6 +1587,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                 <button
                                   key={placedAsset.id}
                                   type="button"
+                                  ref={(element) => {
+                                    placedAssetElementRefs.current[placedAsset.id] = element
+                                  }}
                                   className={`absolute select-none opacity-85 ${draggingPlacedAssetId === placedAsset.id ? "cursor-grabbing transition-none" : "cursor-grab transition-shadow"} ${activePlacedAssetId === placedAsset.id ? "drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
                                   style={{
                                     width: `${placedAsset.scalePercent}%`,
@@ -1476,6 +1603,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     event.stopPropagation()
                                     setActivePlacedAssetId(placedAsset.id)
                                     setDraggingPlacedAssetId(placedAsset.id)
+                                    event.currentTarget.style.willChange = "left, top"
                                     const rect = event.currentTarget.parentElement?.getBoundingClientRect()
                                     if (rect) {
                                       const pointerPosition = updateStampPositionFromPointer(rect, event.clientX, event.clientY)
@@ -1515,26 +1643,30 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <DialogContent className="max-w-3xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
-                  <DialogTitle>مكتبة الأختام والتواقيع</DialogTitle>
+                  <DialogTitle>{assetDialogMode === "manager" ? "مكتبة الأختام والتواقيع" : "اختر توقيعًا"}</DialogTitle>
                 </DialogHeader>
                 <div className="mt-5 space-y-5">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
-                    <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
-                  </div>
+                  {assetDialogMode === "manager" ? (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
+                        <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
+                      </div>
 
-                  <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
-                    <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
-                    {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
-                    <div className="flex justify-end">
-                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
-                    </div>
-                  </div>
+                      <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
+                        <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
+                        {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
+                        <div className="flex justify-end">
+                          <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
 
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">اضغط على العنصر لإضافته للمعاينة</p>
-                    {data.assets.length === 0 ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {data.assets.map((asset) => (
+                    {(assetDialogMode === "manager" ? data.assets.length === 0 : signatureAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {(assetDialogMode === "manager" ? data.assets : signatureAssets).map((asset) => (
                         <button
                           key={asset.id}
                           type="button"
@@ -1569,7 +1701,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (file) {
-                void handleWriterBackgroundChange(file)
+                runTask(() => handleCreateWriterTemplate(file))
               }
 
               event.currentTarget.value = ""
@@ -1577,28 +1709,36 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           />
 
           <div className="flex items-center justify-start">
-            <Button type="button" className="rounded-xl" onClick={() => openWriterTemplatePicker(true)}><Plus className="h-4 w-4" />إضافة قالب</Button>
+            <Button type="button" className="rounded-xl" onClick={openWriterTemplateCreator}><Plus className="h-4 w-4" />إضافة قالب</Button>
           </div>
-
-          {data.templates.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {data.templates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => loadWriterTemplate(template)}
-                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${selectedWriterTemplateId === template.id ? "border-primary bg-primary/5 text-primary" : "border-border/60 bg-white hover:bg-muted/20"}`}
-                >
-                  {template.title}
-                </button>
-              ))}
-            </div>
-          ) : null}
 
           <div className="space-y-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
             <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
               <Input value={writerTemplateTitle} onChange={(event) => setWriterTemplateTitle(event.target.value)} placeholder="عنوان القالب" />
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => openWriterTemplatePicker(false)}>{writerBackgroundValue ? "تغيير ملف القالب" : "اختيار ملف القالب"}</Button>
+              <Select
+                value={selectedWriterTemplateId}
+                onValueChange={(value) => {
+                  if (value === "new") {
+                    resetWriterTemplateEditor()
+                    return
+                  }
+
+                  const template = data.templates.find((item) => item.id === value)
+                  if (template) {
+                    loadWriterTemplate(template)
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full rounded-xl text-right [&>span]:text-right">
+                  <SelectValue placeholder="اختيار قالب" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">اختيار قالب</SelectItem>
+                  {data.templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>{template.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button type="button" variant="outline" className="rounded-xl" onClick={addWriterTextLayer} disabled={!writerBackgroundValue || isPreparingWriterBackground}><Plus className="h-4 w-4" />إضافة نص</Button>
             </div>
 

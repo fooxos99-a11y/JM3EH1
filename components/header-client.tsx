@@ -60,7 +60,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
 
   return (
     <header
-      className="fixed left-0 right-0 top-0 z-50 bg-transparent py-3 transition-all duration-500"
+      className={`fixed left-0 right-0 top-0 z-50 py-3 transition-all duration-500 ${useSolidHeader ? "bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]" : "bg-transparent"}`}
     >
       <div className="container mx-auto px-3 sm:px-4 lg:px-6">
         <div className="flex items-center justify-between gap-3 rounded-[1.75rem] px-1 py-1 transition-all duration-500 sm:gap-4">
@@ -77,7 +77,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </>
             ) : (
               <div className={`flex items-center gap-3 transition-colors duration-300 ${useSolidHeader ? "text-foreground" : "text-white"}`}>
-                <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${useSolidHeader ? "bg-primary" : "bg-white/10 backdrop-blur-sm"}`}>
+                <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${useSolidHeader ? "bg-primary" : "bg-white/10"}`}>
                   <span className={`text-xl font-bold ${useSolidHeader ? "text-primary-foreground" : "text-white"}`}>ع</span>
                 </div>
                 <div className="text-right">
@@ -118,7 +118,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </button>
 
               <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-all duration-200 ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
-                <div className="space-y-1.5 rounded-[1.4rem] bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                <div className="space-y-1.5 rounded-[1.4rem] bg-white/98 p-2.5 text-right shadow-[0_24px_70px_rgba(15,23,42,0.16)]">
                     {governanceNavigation.map((item) => {
                       const hasChildren = Boolean(item.children?.length)
                       const isExpanded = expandedGovernanceHref === item.href
@@ -186,7 +186,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
         </div>
 
         <div className={`overflow-hidden transition-all duration-500 xl:hidden ${isMenuOpen ? "mt-4 max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
-          <nav className="rounded-[1.75rem] bg-card/95 p-4 shadow-xl backdrop-blur-lg">
+          <nav className="rounded-[1.75rem] bg-card/95 p-4 shadow-xl">
             {navLinks.map((link, index) => (
               <Link
                 key={link.href + index}
@@ -198,7 +198,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </Link>
             ))}
 
-            <div className="mt-2 rounded-[1.35rem] bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+            <div className="mt-2 rounded-[1.35rem] bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
               <button
                 type="button"
                 className="flex w-full items-center justify-between rounded-2xl px-4 py-4 text-right text-lg font-semibold text-slate-900 transition-all duration-300 hover:bg-slate-100/90 sm:text-xl"

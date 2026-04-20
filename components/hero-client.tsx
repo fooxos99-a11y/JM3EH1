@@ -54,39 +54,35 @@ export function HeroClient({ content }: HeroClientProps) {
   }, [])
 
   return (
-    <section ref={containerRef} className="relative min-h-screen w-full overflow-hidden">
+    <section ref={containerRef} className="relative h-screen min-h-[100svh] w-full overflow-hidden">
       {slides.map((slide, index) => (
         <div key={slide.id} className={`absolute inset-0 transition-all duration-1000 ease-out ${index === currentSlide ? "opacity-100 scale-100" : "opacity-0 scale-105"}`}>
           <div
-            className="absolute inset-0 bg-cover bg-center transition-transform duration-100 blur-sm"
+            className="absolute inset-0 bg-cover bg-center transition-transform duration-100"
             style={{
               backgroundImage: `url(${slide.image})`,
-              backgroundPosition: "center 32%",
-              transform: `translateY(${scrollY * 0.72}px) scale(1.04)`,
+              backgroundPosition: "center center",
+              transform: `translateY(${scrollY * 0.36}px) scale(1.08)`,
             }}
           />
-          <div
-            className="absolute inset-0 bg-contain bg-center bg-no-repeat transition-transform duration-100"
-            style={{ backgroundImage: `url(${slide.image})`, transform: `translateY(${scrollY * 0.22}px) scale(0.98)` }}
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(7,24,22,0.36),rgba(18,88,78,0.14),rgba(7,24,22,0.4))]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,24,22,0.34),rgba(7,24,22,0.18),rgba(7,24,22,0.48))]" />
         </div>
       ))}
 
-      <div className="relative z-10 flex min-h-screen items-center justify-center py-28">
-        <div className="container mx-auto px-4 text-center">
+      <div className="relative z-10 flex min-h-[100svh] items-center justify-center px-4 pb-16 pt-28 sm:pt-32 lg:pt-36">
+        <div className="container mx-auto text-center">
           {slides.map((slide, index) => (
             <div key={slide.id} className={`absolute inset-0 flex items-center justify-center transition-all duration-700 ${index === currentSlide ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 translate-y-8"}`}>
-              <div className="mx-auto flex max-w-5xl items-center justify-center px-4">
+              <div className="mx-auto flex max-w-6xl items-center justify-center px-4">
                 <div className="mx-auto max-w-4xl">
-                  <p className="mb-4 text-sm font-semibold tracking-[0.18em] text-white/84 md:text-base">{slide.subtitle}</p>
-                  <h1 className="mb-6 text-4xl font-bold leading-tight text-white md:text-6xl lg:text-7xl">{slide.title}</h1>
-                  <p className="mx-auto mb-10 max-w-3xl text-base leading-8 text-white/88 md:text-xl">{slide.description}</p>
+                  <p className="mb-4 text-xs font-semibold tracking-[0.16em] text-white/84 sm:text-sm md:text-base">{slide.subtitle}</p>
+                  <h1 className="mb-6 text-4xl font-bold leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl">{slide.title}</h1>
+                  <p className="mx-auto mb-10 max-w-3xl text-sm leading-7 text-white/88 sm:text-base md:text-xl md:leading-9">{slide.description}</p>
                   <div className="flex flex-wrap justify-center gap-4">
-                    <Button asChild size="lg" className="rounded-2xl bg-white px-10 py-7 text-xl font-bold text-primary shadow-xl shadow-black/10 transition-all duration-300 hover:scale-105 hover:bg-[#f4fffe]">
+                    <Button asChild size="lg" className="min-h-14 rounded-2xl bg-white px-8 text-lg font-bold text-primary shadow-xl shadow-black/10 transition-all duration-300 hover:scale-105 hover:bg-[#f4fffe] sm:px-10 sm:text-xl">
                       <Link href="#donation">{content.donateLabel}</Link>
                     </Button>
-                    <Button asChild size="lg" variant="outline" className="rounded-2xl border-2 border-white/35 bg-transparent px-10 py-7 text-xl font-bold text-white transition-all duration-300 hover:scale-105 hover:bg-white/10 hover:text-white">
+                    <Button asChild size="lg" variant="outline" className="min-h-14 rounded-2xl border-2 border-white/35 bg-transparent px-8 text-lg font-bold text-white transition-all duration-300 hover:scale-105 hover:bg-white/10 hover:text-white sm:px-10 sm:text-xl">
                       <Link href="#about">{content.aboutLabel}</Link>
                     </Button>
                   </div>

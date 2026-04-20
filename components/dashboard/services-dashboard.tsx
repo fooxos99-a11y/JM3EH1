@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
+import { LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -1374,7 +1374,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   ))}
                 </div>
               ) : null}
-              <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handleImageToPdf)} disabled={isPending}><FileImage className="h-4 w-4" />تحويل وتنزيل PDF</Button></div>
+              <div className="flex justify-end"><Button type="button" className="rounded-xl" onClick={() => runTask(handleImageToPdf)} disabled={isPending}>تنزيل</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1388,14 +1388,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                 <Input type="file" accept="application/pdf" onChange={(event) => handlePdfToImagesFileChange(event.target.files?.[0] ?? null)} />
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تنزيل الصور</Button>
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handlePdfToImages)} disabled={isPending || isConvertingPdfPages}>{isConvertingPdfPages ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}تنزيل</Button>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {pdfImagePages.map((page) => (
                   <div key={page.pageNumber} className="overflow-hidden rounded-[1.25rem] border border-border/60 bg-white">
                     <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-64 w-full object-contain bg-muted/10" />
                     <div className="flex items-center justify-between px-4 py-3">
-                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => page.blob ? downloadBlob(page.blob, `page-${page.pageNumber}.png`) : fetch(page.dataUrl).then((response) => response.blob()).then((blob) => downloadBlob(blob, `page-${page.pageNumber}.png`))}><Download className="h-4 w-4" />تنزيل</Button>
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => page.blob ? downloadBlob(page.blob, `page-${page.pageNumber}.png`) : fetch(page.dataUrl).then((response) => response.blob()).then((blob) => downloadBlob(blob, `page-${page.pageNumber}.png`))}>تنزيل</Button>
                       <Badge variant="secondary">الصفحة {page.pageNumber}</Badge>
                     </div>
                   </div>
@@ -1414,7 +1414,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                 <Input type="file" accept="image/*,application/pdf" onChange={(event) => setCompressTargetFile(event.target.files?.[0] ?? null)} />
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handleCompressFile)} disabled={isPending}><Download className="h-4 w-4" />تنزيل الملف</Button>
+                <Button type="button" className="rounded-xl" onClick={() => runTask(handleCompressFile)} disabled={isPending}>تنزيل</Button>
               </div>
               {compressTargetFile ? <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3 text-sm text-foreground">{compressTargetFile.name}</div> : null}
             </CardContent>
@@ -1494,7 +1494,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   </div>
                 ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو PDF لبدء التعديل.</div>}
               </div>
-              <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activeEditTextLayer ? `النص المحدد على الصفحة ${activeEditTextLayer.pageNumber}` : `عدد النصوص المضافة: ${editTextLayers.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyDocumentEdits)} disabled={isPending}><FilePenLine className="h-4 w-4" />تنزيل الملف</Button></div>
+              <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activeEditTextLayer ? `النص المحدد على الصفحة ${activeEditTextLayer.pageNumber}` : `عدد النصوص المضافة: ${editTextLayers.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyDocumentEdits)} disabled={isPending}>تنزيل</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1808,7 +1808,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
               <p className="text-sm text-muted-foreground">{activeWriterTextLayer ? `النص المحدد: ${activeWriterTextLayer.text || "نص جديد"}` : `عدد النصوص المضافة: ${writerTextLayers.length}`}</p>
               <div className="flex flex-wrap gap-2">
                 {selectedWriterTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedWriterTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب</Button> : null}
-                <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}><FileText className="h-4 w-4" />تنزيل Word</Button>
+                <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}>تنزيل</Button>
                 <Button type="button" className="rounded-xl" onClick={() => runTask(handleSaveTemplate)} disabled={isPending}><Save className="h-4 w-4" />حفظ القالب</Button>
               </div>
             </div>

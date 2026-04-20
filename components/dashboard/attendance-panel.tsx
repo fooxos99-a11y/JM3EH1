@@ -176,7 +176,7 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
               <AlertTitle>لم يتم تفعيل موقع التحضير</AlertTitle>
               <AlertDescription>لن يتمكن الموظفون من تسجيل الحضور حتى يحدد المدير موقع العمل ونطاقه المسموح.</AlertDescription>
             </Alert>
-          )}
+          ) : null}
 
           <div className="flex flex-wrap justify-center gap-3">
             <Button

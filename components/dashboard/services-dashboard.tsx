@@ -1,6 +1,6 @@
 "use client"
 
-import { LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
+import { Bold, Italic, LoaderCircle, Plus, Save, Stamp, Trash2, Underline, Upload } from "lucide-react"
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
 import type { ServiceAsset, ServiceAssetKind, ServiceDocumentTemplate, ServicesDashboardData } from "@/lib/services"
 
 type MessageState = { type: "success" | "error"; text: string } | null
@@ -46,6 +45,9 @@ type EditableTextLayer = {
   yPercent: number
   fontSize: number
   color: string
+  isBold: boolean
+  isItalic: boolean
+  isUnderline: boolean
 }
 
 type WriterTemplateConfig = {
@@ -64,6 +66,16 @@ function formatDateTime(value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function getCanvasFontValue(layer: EditableTextLayer) {
+  const weight = layer.isBold ? "700" : "400"
+  const style = layer.isItalic ? "italic" : "normal"
+  return `${style} ${weight} ${layer.fontSize}px Arial`
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -331,6 +343,9 @@ function parseWriterTemplateConfig(value: string): WriterTemplateConfig {
           yPercent: Number(layer.yPercent ?? 20) || 20,
           fontSize: Number(layer.fontSize ?? 28) || 28,
           color: String(layer.color ?? "#111827"),
+          isBold: Boolean(layer.isBold),
+          isItalic: Boolean(layer.isItalic),
+          isUnderline: Boolean(layer.isUnderline),
         })),
       }
     }
@@ -372,6 +387,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [isWriterTemplateManagerOpen, setIsWriterTemplateManagerOpen] = useState(false)
   const [writerTemplateDraftTitle, setWriterTemplateDraftTitle] = useState("")
   const [writerTemplateDraftFile, setWriterTemplateDraftFile] = useState<File | null>(null)
+  const writerTextElementRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const pendingWriterFocusIdRef = useRef<string | null>(null)
 
   const [imageToPdfFiles, setImageToPdfFiles] = useState<File[]>([])
   const [pdfToImagesFile, setPdfToImagesFile] = useState<File | null>(null)
@@ -471,6 +488,33 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     () => writerTextLayers.find((item) => item.id === activeWriterTextLayerId) ?? null,
     [writerTextLayers, activeWriterTextLayerId],
   )
+
+  useEffect(() => {
+    const pendingId = pendingWriterFocusIdRef.current
+    if (!pendingId || pendingId !== activeWriterTextLayerId) {
+      return
+    }
+
+    const element = writerTextElementRefs.current[pendingId]
+    if (!element) {
+      return
+    }
+
+    pendingWriterFocusIdRef.current = null
+    window.requestAnimationFrame(() => {
+      element.focus()
+      const selection = window.getSelection()
+      if (!selection) {
+        return
+      }
+
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      range.collapse(false)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    })
+  }, [activeWriterTextLayerId, writerTextLayers])
 
   const imageToPdfPreviews = useMemo(
     () => imageToPdfFiles.map((file, index) => ({
@@ -730,6 +774,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       yPercent: 18,
       fontSize: 28,
       color: "#111827",
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
     }
   }
 
@@ -737,6 +784,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     const nextLayer = createWriterTextLayer()
     setWriterTextLayers((current) => [...current, nextLayer])
     setActiveWriterTextLayerId(nextLayer.id)
+    pendingWriterFocusIdRef.current = nextLayer.id
   }
 
   function updateWriterTextLayer(id: string, updates: Partial<EditableTextLayer>) {
@@ -1124,6 +1172,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       yPercent: 20,
       fontSize: 28,
       color: "#111827",
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
     }
   }
 
@@ -1155,13 +1206,25 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
     for (const layer of editTextLayers.filter((item) => item.pageNumber === pageNumber && item.text.trim())) {
       context.fillStyle = layer.color
-      context.font = `${layer.fontSize}px Arial`
+      context.font = getCanvasFontValue(layer)
       const x = (layer.xPercent / 100) * width
       const y = (layer.yPercent / 100) * height
       const lines = layer.text.split("\n")
+      const lineHeight = layer.fontSize * 1.35
 
       lines.forEach((line, index) => {
-        context.fillText(line, x, y + (index * layer.fontSize * 1.35))
+        const lineY = y + (index * lineHeight)
+        context.fillText(line, x, lineY)
+
+        if (layer.isUnderline) {
+          const lineWidth = context.measureText(line).width
+          context.beginPath()
+          context.strokeStyle = layer.color
+          context.lineWidth = Math.max(1, layer.fontSize / 14)
+          context.moveTo(x - lineWidth, lineY + layer.fontSize + 2)
+          context.lineTo(x, lineY + layer.fontSize + 2)
+          context.stroke()
+        }
       })
     }
   }
@@ -1391,8 +1454,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     const textLayersHtml = writerTextLayers.map((layer) => `
-      <div style="position:absolute; right:${100 - layer.xPercent}%; top:${layer.yPercent}%; transform:translate(50%, -50%); color:${layer.color}; font-size:${layer.fontSize}px; line-height:1.35; white-space:pre-wrap; text-align:right;">
-        ${layer.text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />")}
+      <div style="position:absolute; right:${100 - layer.xPercent}%; top:${layer.yPercent}%; transform:translate(50%, -50%); color:${layer.color}; font-size:${layer.fontSize}px; line-height:1.35; white-space:pre-wrap; text-align:right; font-weight:${layer.isBold ? 700 : 400}; font-style:${layer.isItalic ? "italic" : "normal"}; text-decoration:${layer.isUnderline ? "underline" : "none"};">
+        ${escapeHtml(layer.text).replace(/\n/g, "<br />")}
       </div>
     `).join("")
 
@@ -1402,7 +1465,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
     const documentHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>${writerTemplateTitle}</title></head><body>${backgroundHtml}</body></html>`
     downloadBlob(new Blob([documentHtml], { type: "application/msword;charset=utf-8" }), `${writerTemplateTitle}.doc`)
-    setMessage({ type: "success", text: "تم تصدير القالب كملف Word قابل للفتح والتعديل" })
+    setMessage({ type: "success", text: "تم تصدير القالب كملف قابل للفتح والتعديل" })
   }
 
   if (loading) {
@@ -1425,22 +1488,20 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const pageTitleByTab: Record<string, string> = {
     image_to_pdf: "تحويل إلى PDF",
     pdf_to_images: "تحويل إلى صورة",
-    pdf_editor: "التعديل على PDF أو صورة",
     compress: "ضغط الملف",
     stamps: "الختم والتواقيع",
-    writer: "الكتابة على الوورد",
+    writer: "الكتابة على ملف",
   }
 
   const pageDescriptionByTab: Record<string, string> = {
     image_to_pdf: "تحويل صورة واحدة أو عدة صور إلى ملف PDF جاهز للتنزيل.",
     pdf_to_images: "استخراج صفحات PDF وتحويلها إلى صور منفصلة قابلة للتنزيل.",
-    pdf_editor: "رفع صورة أو PDF ثم إضافة النصوص وتحريكها وتعديل حجمها ولونها قبل تنزيل الملف النهائي.",
     compress: "رفع صورة أو PDF ثم ضغطه بأعلى قدر ممكن مع الحفاظ على جودة جيدة قبل التنزيل.",
     stamps: "إدارة مكتبة الأختام والتواقيع وتطبيقها على الصور وملفات PDF.",
-    writer: "إنشاء قوالب كتابة محفوظة وتحريرها ثم تصديرها إلى Word.",
+    writer: "إنشاء قوالب كتابة محفوظة وتحريرها ثم تصديرها إلى ملف.",
   }
 
-  const isCompactServiceView = initialTab === "stamps" || initialTab === "image_to_pdf" || initialTab === "pdf_to_images" || initialTab === "pdf_editor" || initialTab === "writer" || initialTab === "compress"
+  const isCompactServiceView = initialTab === "stamps" || initialTab === "image_to_pdf" || initialTab === "pdf_to_images" || initialTab === "writer" || initialTab === "compress"
 
   return (
     <section className="space-y-6 text-right">
@@ -1546,84 +1607,6 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 <Button type="button" className="rounded-xl" onClick={() => runTask(handleCompressFile)} disabled={isPending}>تنزيل</Button>
               </div>
               {compressTargetFile ? <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3 text-sm text-foreground">{compressTargetFile.name}</div> : null}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="pdf_editor" className="space-y-4">
-          <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-            <CardHeader>
-              <CardTitle>التعديل على PDF أو صورة</CardTitle>
-              <CardDescription>ارفع صورة أو PDF، ثم أضف النصوص وحرّكها داخل المعاينة مع التحكم بالحجم واللون قبل التنزيل.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleEditTargetChange(file) } }} />
-                <Button type="button" variant="outline" className="rounded-xl" onClick={() => addEditTextLayer(activeEditTextLayer?.pageNumber ?? 1)} disabled={editPreviewPages.length === 0}><Plus className="h-4 w-4" />إضافة نص</Button>
-              </div>
-              {activeEditTextLayer ? (
-                <div className="grid gap-4 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2 xl:grid-cols-[1.4fr,0.7fr,0.7fr,auto]">
-                  <div className="space-y-2 md:col-span-2 xl:col-span-1"><Label>النص</Label><Textarea rows={3} value={activeEditTextLayer.text} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { text: event.target.value })} /></div>
-                  <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={activeEditTextLayer.fontSize} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { fontSize: Number(event.target.value) || 16 })} /></div>
-                  <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={activeEditTextLayer.color} onChange={(event) => updateEditTextLayer(activeEditTextLayer.id, { color: event.target.value })} /></div>
-                  <div className="flex items-end"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeEditTextLayer(activeEditTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button></div>
-                </div>
-              ) : null}
-              <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
-                {isPreparingEditPreview ? <div className="flex h-[420px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : editPreviewPages.length > 0 ? (
-                  <div className="space-y-5">
-                    {editPreviewPages.map((page) => (
-                      <div key={page.pageNumber} className="relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border border-white bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-                        <button
-                          type="button"
-                          className="relative block w-full touch-none"
-                          onPointerMove={(event) => {
-                            if (!draggingEditTextLayerId) {
-                              return
-                            }
-
-                            const nextPosition = getEditPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
-                            updateEditTextLayer(draggingEditTextLayerId, { ...nextPosition, pageNumber: page.pageNumber })
-                          }}
-                          onPointerUp={() => setDraggingEditTextLayerId(null)}
-                          onPointerCancel={() => setDraggingEditTextLayerId(null)}
-                        >
-                          <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
-                          {editTextLayers.filter((item) => item.pageNumber === page.pageNumber).map((layer) => (
-                            <button
-                              key={layer.id}
-                              type="button"
-                              className={`absolute min-w-[40px] -translate-x-1/2 -translate-y-1/2 cursor-grab bg-transparent px-1 py-0 text-right shadow-none ${activeEditTextLayerId === layer.id ? "opacity-100" : "opacity-95"}`}
-                              style={{
-                                left: `${layer.xPercent}%`,
-                                top: `${layer.yPercent}%`,
-                                color: layer.color,
-                                fontSize: `${layer.fontSize}px`,
-                                lineHeight: 1.35,
-                                textShadow: activeEditTextLayerId === layer.id ? "0 0 10px rgba(255,255,255,0.95)" : "0 0 8px rgba(255,255,255,0.85)",
-                              }}
-                              onPointerDown={(event) => {
-                                event.stopPropagation()
-                                setActiveEditTextLayerId(layer.id)
-                                setDraggingEditTextLayerId(layer.id)
-                                event.currentTarget.setPointerCapture(event.pointerId)
-                              }}
-                              onPointerUp={(event) => {
-                                event.stopPropagation()
-                                setDraggingEditTextLayerId(null)
-                              }}
-                            >
-                              <span className="whitespace-pre-wrap bg-transparent">{layer.text || "نص جديد"}</span>
-                            </button>
-                          ))}
-                        </button>
-                        {isPdfFile(editTargetFile) ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو PDF لبدء التعديل.</div>}
-              </div>
-              <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activeEditTextLayer ? `النص المحدد على الصفحة ${activeEditTextLayer.pageNumber}` : `عدد النصوص المضافة: ${editTextLayers.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyDocumentEdits)} disabled={isPending}>تنزيل</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1870,7 +1853,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <DialogContent className="max-w-3xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
-                  <DialogTitle>إدارة قوالب الوورد</DialogTitle>
+                  <DialogTitle>إدارة قوالب الملفات</DialogTitle>
                 </DialogHeader>
 
                 <div className="mt-5 space-y-5">
@@ -1950,11 +1933,22 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             </div>
 
             {activeWriterTextLayer ? (
-              <div className="grid gap-4 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2 xl:grid-cols-[1.4fr,0.7fr,0.7fr,auto]">
-                <div className="space-y-2 md:col-span-2 xl:col-span-1"><Label>النص</Label><Textarea rows={3} value={activeWriterTextLayer.text} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { text: event.target.value })} /></div>
-                <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={activeWriterTextLayer.fontSize} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { fontSize: Number(event.target.value) || 16 })} /></div>
-                <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={activeWriterTextLayer.color} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { color: event.target.value })} /></div>
-                <div className="flex items-end"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeWriterTextLayer(activeWriterTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button></div>
+              <div className="flex flex-wrap items-end justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
+                <p className="text-sm text-muted-foreground">اضغط على النص نفسه للكتابة، واسحب من المساحة الفارغة لنقله.</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">حجم الخط</Label>
+                    <Input type="number" min={8} className="h-9 w-24 text-center" value={activeWriterTextLayer.fontSize} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { fontSize: Number(event.target.value) || 16 })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">اللون</Label>
+                    <Input type="color" className="h-9 w-16 p-1" value={activeWriterTextLayer.color} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { color: event.target.value })} />
+                  </div>
+                  <Button type="button" variant={activeWriterTextLayer.isBold ? "default" : "outline"} size="icon" className="h-9 w-9 rounded-lg" onClick={() => updateWriterTextLayer(activeWriterTextLayer.id, { isBold: !activeWriterTextLayer.isBold })} aria-label="تعريض النص"><Bold className="h-4 w-4" /></Button>
+                  <Button type="button" variant={activeWriterTextLayer.isItalic ? "default" : "outline"} size="icon" className="h-9 w-9 rounded-lg" onClick={() => updateWriterTextLayer(activeWriterTextLayer.id, { isItalic: !activeWriterTextLayer.isItalic })} aria-label="إمالة النص"><Italic className="h-4 w-4" /></Button>
+                  <Button type="button" variant={activeWriterTextLayer.isUnderline ? "default" : "outline"} size="icon" className="h-9 w-9 rounded-lg" onClick={() => updateWriterTextLayer(activeWriterTextLayer.id, { isUnderline: !activeWriterTextLayer.isUnderline })} aria-label="وضع خط تحت النص"><Underline className="h-4 w-4" /></Button>
+                  <Button type="button" variant="ghost" className="h-9 rounded-lg px-3 text-red-600 hover:text-red-700" onClick={() => removeWriterTextLayer(activeWriterTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button>
+                </div>
               </div>
             ) : null}
 
@@ -1963,6 +1957,21 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 <div className="mx-auto max-w-4xl overflow-hidden rounded-[1.25rem] border border-white bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
                   <div
                     className="relative min-h-[720px] w-full overflow-hidden bg-white"
+                    onPointerDown={(event) => {
+                      if (!activeWriterTextLayerId) {
+                        return
+                      }
+
+                      const target = event.target
+                      if (target instanceof HTMLElement && target.closest("[data-writer-text='true']")) {
+                        return
+                      }
+
+                      const nextPosition = getWriterLayerPosition(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                      updateWriterTextLayer(activeWriterTextLayerId, nextPosition)
+                      setDraggingWriterTextLayerId(activeWriterTextLayerId)
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                    }}
                     onPointerMove={(event) => {
                       if (!draggingWriterTextLayerId) {
                         return
@@ -1981,42 +1990,58 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                     )}
 
                     {writerTextLayers.map((layer) => (
-                      <button
+                      <div
                         key={layer.id}
-                        type="button"
-                        className={`absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed px-3 py-2 text-right shadow-sm ${activeWriterTextLayerId === layer.id ? "border-primary bg-white/95" : "border-slate-300/80 bg-white/85"}`}
+                        data-writer-text="true"
+                        className="absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2"
                         style={{
                           left: `${layer.xPercent}%`,
                           top: `${layer.yPercent}%`,
-                          color: layer.color,
-                          fontSize: `${layer.fontSize}px`,
-                          lineHeight: 1.35,
                         }}
                         onPointerDown={(event) => {
                           event.stopPropagation()
                           setActiveWriterTextLayerId(layer.id)
-                          setDraggingWriterTextLayerId(layer.id)
-                          event.currentTarget.setPointerCapture(event.pointerId)
-                        }}
-                        onPointerUp={(event) => {
-                          event.stopPropagation()
-                          setDraggingWriterTextLayerId(null)
                         }}
                       >
-                        {layer.text || "نص جديد"}
-                      </button>
+                        <div
+                          ref={(element) => {
+                            writerTextElementRefs.current[layer.id] = element
+                          }}
+                          contentEditable={activeWriterTextLayerId === layer.id}
+                          suppressContentEditableWarning
+                          spellCheck={false}
+                          className={`min-w-[120px] whitespace-pre-wrap bg-transparent text-right outline-none ${activeWriterTextLayerId === layer.id ? "ring-2 ring-primary/40" : ""}`}
+                          style={{
+                            color: layer.color,
+                            fontSize: `${layer.fontSize}px`,
+                            lineHeight: 1.35,
+                            fontWeight: layer.isBold ? 700 : 400,
+                            fontStyle: layer.isItalic ? "italic" : "normal",
+                            textDecoration: layer.isUnderline ? "underline" : "none",
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setActiveWriterTextLayerId(layer.id)
+                          }}
+                          onBlur={(event) => {
+                            updateWriterTextLayer(layer.id, { text: event.currentTarget.textContent?.replace(/\u00A0/g, " ") ?? "" })
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation()
+                          }}
+                        >
+                          {layer.text || "نص جديد"}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
-              ) : <div className="flex h-[520px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو صفحة PDF أو ملف Word بصيغة DOCX ليكون خلفية للقالب.</div>}
+              ) : <div className="flex h-[520px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو صفحة PDF أو ملف DOCX ليكون خلفية للقالب.</div>}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">{activeWriterTextLayer ? `النص المحدد: ${activeWriterTextLayer.text || "نص جديد"}` : `عدد النصوص المضافة: ${writerTextLayers.length}`}</p>
               <div className="flex flex-wrap gap-2">
-                {selectedWriterTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedWriterTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب</Button> : null}
                 <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}>تنزيل</Button>
-                <Button type="button" className="rounded-xl" onClick={() => runTask(handleSaveTemplate)} disabled={isPending}><Save className="h-4 w-4" />حفظ القالب</Button>
               </div>
             </div>
           </div>

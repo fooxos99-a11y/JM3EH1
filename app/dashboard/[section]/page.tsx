@@ -92,10 +92,6 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     return <ServicesDashboard initialTab="pdf_to_images" />
   }
 
-  if (section === "service_pdf_editor") {
-    return <ServicesDashboard initialTab="pdf_editor" />
-  }
-
   if (section === "service_compress") {
     return <ServicesDashboard initialTab="compress" />
   }

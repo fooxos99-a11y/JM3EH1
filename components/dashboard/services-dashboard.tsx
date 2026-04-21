@@ -369,7 +369,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [activeWriterTextLayerId, setActiveWriterTextLayerId] = useState<string | null>(null)
   const [draggingWriterTextLayerId, setDraggingWriterTextLayerId] = useState<string | null>(null)
   const [isPreparingWriterBackground, setIsPreparingWriterBackground] = useState(false)
-  const writerTemplateFileInputRef = useRef<HTMLInputElement>(null)
+  const [isWriterTemplateManagerOpen, setIsWriterTemplateManagerOpen] = useState(false)
+  const [writerTemplateDraftTitle, setWriterTemplateDraftTitle] = useState("")
+  const [writerTemplateDraftFile, setWriterTemplateDraftFile] = useState<File | null>(null)
 
   const [imageToPdfFiles, setImageToPdfFiles] = useState<File[]>([])
   const [pdfToImagesFile, setPdfToImagesFile] = useState<File | null>(null)
@@ -396,6 +398,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const stampDragFrameRef = useRef<number | null>(null)
   const stampDragPendingRef = useRef<{ id: string; pageNumber: number; position: StampPosition } | null>(null)
   const placedAssetElementRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const stampDragMetaRef = useRef<{ pageNumber: number; surfaceElement: HTMLButtonElement | null } | null>(null)
 
   function revokePreviewUrls(pages: PdfImagePage[]) {
     for (const page of pages) {
@@ -483,6 +486,41 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       imageToPdfPreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
     }
   }, [imageToPdfPreviews])
+
+  useEffect(() => {
+    if (!draggingPlacedAssetId) {
+      return
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragMeta = stampDragMetaRef.current
+      if (!dragMeta?.surfaceElement) {
+        return
+      }
+
+      const nextPosition = updateStampPositionFromPointer(
+        dragMeta.surfaceElement.getBoundingClientRect(),
+        event.clientX,
+        event.clientY,
+        stampDragOffsetRef.current,
+      )
+      queuePlacedAssetUpdate(draggingPlacedAssetId, dragMeta.pageNumber, nextPosition)
+    }
+
+    const handlePointerEnd = () => {
+      stopPlacedAssetDragging()
+    }
+
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerEnd)
+    window.addEventListener("pointercancel", handlePointerEnd)
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerEnd)
+      window.removeEventListener("pointercancel", handlePointerEnd)
+    }
+  }, [draggingPlacedAssetId])
 
   function runTask(task: () => Promise<void>) {
     setMessage(null)
@@ -653,19 +691,34 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     return { isNew, latestTemplate }
   }
 
-  async function handleCreateWriterTemplate(file: File) {
+  function resetWriterTemplateDraft() {
+    setWriterTemplateDraftTitle("")
+    setWriterTemplateDraftFile(null)
+  }
+
+  async function handleCreateWriterTemplate(file: File, title?: string) {
     resetWriterTemplateEditor()
-    const nextTitle = file.name.replace(/\.[^.]+$/, "")
+    const nextTitle = title?.trim() || file.name.replace(/\.[^.]+$/, "")
     const config = await prepareWriterBackground(file)
     setWriterTemplateTitle(nextTitle)
     setWriterTextLayers([])
     setActiveWriterTextLayerId(null)
     await saveWriterTemplate(config, { title: nextTitle, description: file.name })
+    resetWriterTemplateDraft()
+    setIsWriterTemplateManagerOpen(false)
     setMessage({ type: "success", text: "تم رفع القالب وحفظه في الموقع" })
   }
 
-  function openWriterTemplateCreator() {
-    writerTemplateFileInputRef.current?.click()
+  async function handleCreateWriterTemplateFromDialog() {
+    if (!writerTemplateDraftFile) {
+      throw new Error("اختر ملف القالب أولًا")
+    }
+
+    if (!writerTemplateDraftTitle.trim()) {
+      throw new Error("أدخل اسم القالب أولًا")
+    }
+
+    await handleCreateWriterTemplate(writerTemplateDraftFile, writerTemplateDraftTitle)
   }
 
   function createWriterTextLayer(): EditableTextLayer {
@@ -794,6 +847,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     const draggingId = draggingPlacedAssetId
     setDraggingPlacedAssetId(null)
     stampDragOffsetRef.current = { xPercent: 0, yPercent: 0 }
+    stampDragMetaRef.current = null
 
     if (stampDragFrameRef.current !== null) {
       window.cancelAnimationFrame(stampDragFrameRef.current)
@@ -1679,7 +1733,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     setActivePlacedAssetId(placedAsset.id)
                                     setDraggingPlacedAssetId(placedAsset.id)
                                     event.currentTarget.style.willChange = "left, top"
-                                    const rect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                    const surfaceElement = event.currentTarget.parentElement instanceof HTMLButtonElement ? event.currentTarget.parentElement : null
+                                    const rect = surfaceElement?.getBoundingClientRect()
+                                    stampDragMetaRef.current = { pageNumber: page.pageNumber, surfaceElement }
                                     if (rect) {
                                       const pointerPosition = updateStampPositionFromPointer(rect, event.clientX, event.clientY)
                                       stampDragOffsetRef.current = {
@@ -1743,11 +1799,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                     {(assetDialogMode === "manager" ? data.assets.length === 0 : signatureAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : assetDialogMode === "manager" ? <div className="space-y-3">
                       {data.assets.map((asset) => (
                         <div key={asset.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-white px-4 py-3">
-                          <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" />حذف</Button>
                           <div className="text-right">
                             <p className="font-semibold text-foreground">{asset.name}</p>
                             <p className="text-sm text-muted-foreground">{asset.kind === "stamp" ? "ختم" : "توقيع"}</p>
                           </div>
+                          <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteAsset(asset.id))}><Trash2 className="h-4 w-4" />حذف</Button>
                         </div>
                       ))}
                     </div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1778,24 +1834,70 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </TabsContent>
 
         <TabsContent value="writer" className="space-y-4">
-          <input
-            ref={writerTemplateFileInputRef}
-            type="file"
-            accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) {
-                runTask(() => handleCreateWriterTemplate(file))
-              }
-
-              event.currentTarget.value = ""
-            }}
-          />
-
           <div className="flex items-center justify-start">
-            <Button type="button" className="rounded-xl" onClick={openWriterTemplateCreator}><Plus className="h-4 w-4" />إضافة قالب</Button>
+            <Button type="button" className="rounded-xl" onClick={() => setIsWriterTemplateManagerOpen(true)}><Plus className="h-4 w-4" />إضافة قالب</Button>
           </div>
+
+          <Dialog
+            open={isWriterTemplateManagerOpen}
+            onOpenChange={(open) => {
+              setIsWriterTemplateManagerOpen(open)
+              if (!open) {
+                resetWriterTemplateDraft()
+              }
+            }}
+          >
+            <DialogContent className="max-w-3xl rounded-[1.75rem] p-0 text-right">
+              <div className="p-6">
+                <DialogHeader className="text-right">
+                  <DialogTitle>إدارة قوالب الوورد</DialogTitle>
+                </DialogHeader>
+
+                <div className="mt-5 space-y-5">
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">القوالب الحالية</p>
+                    {data.templates.length === 0 ? <p className="text-sm text-muted-foreground">لا توجد قوالب محفوظة بعد.</p> : <div className="space-y-3">
+                      {data.templates.map((template) => (
+                        <div key={template.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-white px-4 py-3">
+                          <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(template.id))}><Trash2 className="h-4 w-4" />حذف</Button>
+                          <div className="text-right">
+                            <p className="font-semibold text-foreground">{template.title}</p>
+                            <p className="text-sm text-muted-foreground">قالب محفوظ</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>}
+                  </div>
+
+                  <div className="space-y-4 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
+                    <div className="space-y-2 text-right">
+                      <Label className="block text-right">اسم القالب</Label>
+                      <Input className="text-right" value={writerTemplateDraftTitle} onChange={(event) => setWriterTemplateDraftTitle(event.target.value)} placeholder="اسم القالب" />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label className="block text-right">ملف القالب</Label>
+                      <Input
+                        className="text-right file:text-right"
+                        type="file"
+                        accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null
+                          setWriterTemplateDraftFile(file)
+                          if (file && !writerTemplateDraftTitle.trim()) {
+                            setWriterTemplateDraftTitle(file.name.replace(/\.[^.]+$/, ""))
+                          }
+                        }}
+                      />
+                    </div>
+                    {writerTemplateDraftFile ? <p className="text-sm text-muted-foreground">الملف المحدد: {writerTemplateDraftFile.name}</p> : null}
+                    <div className="flex justify-end">
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateWriterTemplateFromDialog)} disabled={isPending || isPreparingWriterBackground}>{isPreparingWriterBackground ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ القالب</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="space-y-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
             <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">

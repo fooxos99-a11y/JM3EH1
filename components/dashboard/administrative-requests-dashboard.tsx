@@ -69,6 +69,16 @@ function BalanceMetric({ label, value, hint }: { label: string; value: number; h
   )
 }
 
+function RecordSummaryCard({ title, summary, hint }: { title: string; summary: string; hint: string }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-muted/10 p-4 text-right">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-2 text-sm font-medium leading-7 text-foreground">{summary}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
 export function AdministrativeRequestsDashboard({ initialTab = "submit", attendanceOnly = false }: { initialTab?: string; attendanceOnly?: boolean } = {}) {
   const [data, setData] = useState<AdministrativeDashboardData | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -556,12 +566,42 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
               <CardTitle>السجل الوظيفي</CardTitle>
               <CardDescription>يوضح سجل إنشاء الحساب ونوعه والجهة التي قامت بإنشائه.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <InfoField label="تاريخ الإنشاء" value={formatDate(data.employmentRecord.createdAt)} />
-              <InfoField label="نوع الحساب" value={data.employmentRecord.accountType} />
-              <InfoField label="من أنشأ الحساب" value={data.employmentRecord.createdByName ?? "النظام"} />
-              <InfoField label="المسمى الوظيفي" value={data.employmentRecord.jobTitle} />
-              <InfoField label="الرتبة الوظيفية" value={data.employmentRecord.jobRank} />
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <InfoField label="تاريخ الإنشاء" value={formatDate(data.employmentRecord.createdAt)} />
+                <InfoField label="نوع الحساب" value={data.employmentRecord.accountType} />
+                <InfoField label="من أنشأ الحساب" value={data.employmentRecord.createdByName ?? "النظام"} />
+                <InfoField label="المسمى الوظيفي" value={data.employmentRecord.jobTitle} />
+                <InfoField label="الرتبة الوظيفية" value={data.employmentRecord.jobRank} />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <RecordSummaryCard
+                  title="سجل الإجازات"
+                  summary={`المستخدم ${data.leaveBalance.leaveTakenDays} يوم، والمتبقي ${leaveRemaining} يوم`}
+                  hint="ملخص رصيد الإجازات المستخدم والمتبقي."
+                />
+                <RecordSummaryCard
+                  title="سجل الإذونات"
+                  summary={`المستخدم ${data.leaveBalance.permissionUsedCount} إذن، والمتبقي ${permissionRemaining} إذن`}
+                  hint="ملخص الأذونات المعتمدة والمتاحة."
+                />
+                <RecordSummaryCard
+                  title="سجل الإنذارات"
+                  summary="لا توجد إنذارات مسجلة حاليًا"
+                  hint="سيظهر هنا أي إنذار وظيفي عند ربطه بالنظام."
+                />
+                <RecordSummaryCard
+                  title="سجل الطلبات"
+                  summary={`إجمالي الطلبات المسجلة: ${data.myRequests.length}`}
+                  hint="يشمل الطلبات الإدارية المرفوعة من هذا الحساب."
+                />
+                <RecordSummaryCard
+                  title="سجل المسائلات"
+                  summary="لا توجد مسائلات مسجلة حاليًا"
+                  hint="سيظهر هنا سجل المسائلات عند تفعيل هذا الجزء."
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

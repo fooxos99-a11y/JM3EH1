@@ -1,12 +1,13 @@
 "use client"
 
-import { Check, ChevronDown, LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
+import { ChevronDown, LoaderCircle, Plus, Save, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState, useTransition } from "react"
 
 import { calculateAge, employeeGenderValues, maritalStatusValues } from "@/lib/administrative-services"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { DatePickerField } from "@/components/ui/date-picker-field"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -32,7 +33,6 @@ type PermissionBundle = {
   title: string
   items: Array<{ label: string; permission: DashboardPermissionKey }>
   permissions: DashboardPermissionKey[]
-  count: number
 }
 
 const permissionBundles: PermissionBundle[] = dashboardSections
@@ -55,7 +55,6 @@ const permissionBundles: PermissionBundle[] = dashboardSections
       title: group.title,
       items,
       permissions: items.map((item) => item.permission),
-      count: items.length,
     }
   })
   .filter((bundle) => bundle.permissions.length > 0)
@@ -135,13 +134,8 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
         onClick={toggleAllPermissions}
         className={`flex w-full items-center justify-between rounded-[1rem] border px-3.5 py-2.5 text-right transition-all duration-300 ${isAll ? "border-primary/30 bg-primary/10 shadow-[0_10px_22px_rgba(1,154,151,0.08)]" : "border-border/70 bg-white hover:border-primary/20 hover:bg-primary/[0.03]"}`}
       >
-        <div className="flex items-center gap-2">
-          <p className="text-base font-bold text-foreground">كل الصلاحيات</p>
-          <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{allSelectablePermissions.length}</span>
-        </div>
-        <span className={`flex h-5.5 w-5.5 items-center justify-center rounded-full border transition-colors ${isAll ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
-          <Check className="h-3.5 w-3.5" />
-        </span>
+        <p className="text-base font-bold text-foreground">كل الصلاحيات</p>
+        <span className={`h-5.5 w-5.5 rounded-full border transition-colors ${isAll ? "border-primary bg-primary" : "border-border bg-white"}`} />
       </button>
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -157,21 +151,16 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
             >
               <div className="flex items-center justify-between gap-2">
                 <button type="button" onClick={() => toggleBundleExpansion(bundle)} className="flex flex-1 items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{bundle.count}</span>
-                    <p className="text-[15px] font-bold text-foreground">{bundle.title}</p>
-                  </div>
+                  <p className="text-[15px] font-bold text-foreground">{bundle.title}</p>
                   <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`} />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => toggleBundle(bundle)}
-                  className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary text-white" : state === "partial" ? "border-primary bg-primary/15 text-primary" : "border-border bg-white text-transparent"}`}
+                  className={`h-5.5 w-5.5 shrink-0 rounded-full border transition-colors ${state === "all" ? "border-primary bg-primary" : state === "partial" ? "border-primary bg-primary/25" : "border-border bg-white"}`}
                   aria-label={`تحديد ${bundle.title}`}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </button>
+                />
               </div>
 
               {isExpanded ? (
@@ -187,9 +176,7 @@ function PermissionPicker({ value, onChange }: { value: Array<DashboardPermissio
                         className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-sm transition-colors hover:bg-white/60"
                       >
                         <span className="font-medium text-foreground">{item.label}</span>
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border transition-colors ${isChecked ? "border-primary bg-primary text-white" : "border-border bg-white text-transparent"}`}>
-                          <Check className="h-3 w-3" />
-                        </span>
+                        <span className={`h-5 w-5 rounded-full border transition-colors ${isChecked ? "border-primary bg-primary" : "border-border bg-white"}`} />
                       </button>
                     )
                   })}
@@ -220,6 +207,7 @@ const initialForm = {
 export function PermissionsEditor() {
   const [accounts, setAccounts] = useState<AdminAccount[]>([])
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [saveSuccessDialogOpen, setSaveSuccessDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [form, setForm] = useState(initialForm)
@@ -322,11 +310,12 @@ export function PermissionsEditor() {
         })
 
         const payload = (await response.json()) as { error?: string }
-        setMessage(
-          response.ok
-            ? { type: "success", text: "تم تحديث الحساب" }
-            : { type: "error", text: payload.error ?? "تعذر تحديث الحساب" },
-        )
+        if (response.ok) {
+          setMessage(null)
+          setSaveSuccessDialogOpen(true)
+        } else {
+          setMessage({ type: "error", text: payload.error ?? "تعذر تحديث الحساب" })
+        }
 
         if (response.ok) {
           await loadAccounts()
@@ -365,6 +354,20 @@ export function PermissionsEditor() {
 
   return (
     <section className="space-y-6">
+      <Dialog open={saveSuccessDialogOpen} onOpenChange={setSaveSuccessDialogOpen}>
+        <DialogContent className="sm:max-w-md rounded-[1.75rem] text-right" showCloseButton={false}>
+          <DialogHeader className="text-right">
+            <DialogTitle>تم الحفظ بنجاح</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">تم حفظ بيانات الموظف وتحديثها بنجاح.</p>
+          <div className="flex justify-end">
+            <Button type="button" className="rounded-xl" onClick={() => setSaveSuccessDialogOpen(false)}>
+              إغلاق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {message ? (
         <Alert className={message.type === "success" ? "rounded-[1.25rem] border-emerald-200 bg-emerald-50/85 text-emerald-900" : "rounded-[1.25rem] border-red-200 bg-red-50/85 text-red-900"}>
           <AlertTitle>{message.type === "success" ? "تمت العملية بنجاح" : "تعذر تنفيذ العملية"}</AlertTitle>
@@ -398,7 +401,7 @@ export function PermissionsEditor() {
         {isLoading ? <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 text-center shadow-[0_18px_45px_rgba(15,23,42,0.05)]"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : null}
         {accounts.map((account, index) => (
           <div key={account.id} className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-            <div className="mb-4 flex items-center justify-between"><div className="flex gap-2"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => deleteAccount(account.id)} disabled={isPending}><Trash2 className="h-4 w-4" />حذف</Button><Button type="button" variant="outline" className="rounded-xl" onClick={() => saveAccount(account)} disabled={isPending}><Save className="h-4 w-4" />حفظ</Button></div><h3 className="text-lg font-bold text-foreground">{account.name}</h3></div>
+            <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold text-foreground">{account.name}</h3><div className="flex gap-2"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => deleteAccount(account.id)} disabled={isPending}><Trash2 className="h-4 w-4" />حذف</Button><Button type="button" variant="outline" className="rounded-xl" onClick={() => saveAccount(account)} disabled={isPending}><Save className="h-4 w-4" />حفظ</Button></div></div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 text-right"><Label htmlFor={`account-name-${account.id}`}>الاسم</Label><Input id={`account-name-${account.id}`} value={account.name} onChange={(event) => updateAccount(index, "name", event.target.value)} /></div>
               <div className="space-y-2 text-right"><Label htmlFor={`account-title-${account.id}`}>المسمى الوظيفي</Label><Input id={`account-title-${account.id}`} value={account.title} onChange={(event) => updateAccount(index, "title", event.target.value)} /></div>

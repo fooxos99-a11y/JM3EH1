@@ -19,6 +19,7 @@ type WorkLocationMapPickerProps = {
 declare global {
   interface Window {
     L?: any
+    google?: any
   }
 }
 
@@ -29,10 +30,133 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
   const leafletMapRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
   const circleRef = useRef<any>(null)
+  const googleMapRef = useRef<any>(null)
+  const googleMarkerRef = useRef<any>(null)
+  const googleCircleRef = useRef<any>(null)
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading")
   const coordinates = value ?? RIYADH_COORDINATES
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   useEffect(() => {
+    if (!googleMapsApiKey || !mapRef.current) {
+      return
+    }
+
+    let cancelled = false
+    let mapElement: HTMLDivElement | null = mapRef.current
+
+    function renderGoogleMap() {
+      if (!window.google?.maps || !mapElement || cancelled) {
+        return
+      }
+
+      const center = { lat: coordinates.latitude, lng: coordinates.longitude }
+
+      if (!googleMapRef.current) {
+        googleMapRef.current = new window.google.maps.Map(mapElement, {
+          center,
+          zoom: 16,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+        })
+
+        googleMapRef.current.addListener("click", (event: any) => {
+          if (!event.latLng) {
+            return
+          }
+
+          onChange({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
+        })
+      }
+
+      if (!googleMarkerRef.current) {
+        googleMarkerRef.current = new window.google.maps.Marker({
+          map: googleMapRef.current,
+          position: center,
+          draggable: true,
+        })
+
+        googleMarkerRef.current.addListener("dragend", (event: any) => {
+          if (!event.latLng) {
+            return
+          }
+
+          onChange({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
+        })
+      }
+
+      if (!googleCircleRef.current) {
+        googleCircleRef.current = new window.google.maps.Circle({
+          map: googleMapRef.current,
+          center,
+          radius: radiusMeters,
+          fillColor: "#019A97",
+          fillOpacity: 0.18,
+          strokeColor: "#019A97",
+          strokeOpacity: 0.7,
+          strokeWeight: 1.5,
+        })
+      }
+
+      googleMapRef.current.setCenter(center)
+      googleMarkerRef.current.setPosition(center)
+      googleCircleRef.current.setCenter(center)
+      googleCircleRef.current.setRadius(radiusMeters)
+      setMapStatus("ready")
+    }
+
+    function handleLoadError() {
+      if (!cancelled) {
+        setMapStatus("error")
+      }
+    }
+
+    if (window.google?.maps) {
+      renderGoogleMap()
+      return () => {
+        cancelled = true
+        mapElement = null
+      }
+    }
+
+    const scriptId = "google-maps-script"
+    const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null
+
+    if (existingScript) {
+      existingScript.addEventListener("load", renderGoogleMap)
+      existingScript.addEventListener("error", handleLoadError)
+
+      return () => {
+        cancelled = true
+        mapElement = null
+        existingScript.removeEventListener("load", renderGoogleMap)
+        existingScript.removeEventListener("error", handleLoadError)
+      }
+    }
+
+    const script = document.createElement("script")
+    script.id = scriptId
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&language=ar&region=SA`
+    script.async = true
+    script.defer = true
+    script.addEventListener("load", renderGoogleMap)
+    script.addEventListener("error", handleLoadError)
+    document.head.appendChild(script)
+
+    return () => {
+      cancelled = true
+      mapElement = null
+      script.removeEventListener("load", renderGoogleMap)
+      script.removeEventListener("error", handleLoadError)
+    }
+  }, [coordinates.latitude, coordinates.longitude, googleMapsApiKey, onChange, radiusMeters])
+
+  useEffect(() => {
+    if (googleMapsApiKey) {
+      return
+    }
+
     if (!mapRef.current) {
       return
     }
@@ -155,7 +279,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
       script.removeEventListener("load", renderMap)
       script.removeEventListener("error", handleLoadError)
     }
-  }, [coordinates.latitude, coordinates.longitude, onChange, radiusMeters])
+  }, [coordinates.latitude, coordinates.longitude, googleMapsApiKey, onChange, radiusMeters])
 
   useEffect(() => {
     return () => {
@@ -166,6 +290,9 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
 
       markerRef.current = null
       circleRef.current = null
+      googleMapRef.current = null
+      googleMarkerRef.current = null
+      googleCircleRef.current = null
     }
   }, [])
 
@@ -186,9 +313,13 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
       <div className="space-y-3">
         <div ref={mapRef} className="h-72 w-full overflow-hidden rounded-[1.25rem] border border-border/60 bg-muted/20" />
 
+        <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3 text-right text-sm text-muted-foreground">
+          الإحداثيات الحالية: {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
+        </div>
+
         {mapStatus === "loading" ? (
           <div className="rounded-2xl border border-sky-200 bg-sky-50/90 p-4 text-right text-sm text-sky-900">
-            جارٍ تحميل الخريطة التفاعلية...
+            جارٍ تحميل الخريطة التفاعلية{googleMapsApiKey ? " من Google Maps" : ""}...
           </div>
         ) : null}
 

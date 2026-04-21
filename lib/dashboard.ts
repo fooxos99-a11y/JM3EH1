@@ -81,6 +81,7 @@ export const dashboardSections: DashboardGroup[] = [
         label: "تقديم طلب",
         description: "تقديم الطلبات الإدارية ومتابعة الطلبات المرسلة واعتمادها.",
         permission: "administrative_requests",
+        autoAccess: true,
       },
       {
         slug: "administrative_internal",
@@ -93,12 +94,14 @@ export const dashboardSections: DashboardGroup[] = [
         label: "الملف الوظيفي",
         description: "عرض البيانات الوظيفية الأساسية للحساب من قسم مستقل.",
         permission: "administrative_requests",
+        autoAccess: true,
       },
       {
         slug: "administrative_employment",
         label: "السجل الوظيفي",
         description: "استعراض سجل إنشاء الحساب والجهة التي قامت بإعداده.",
         permission: "administrative_requests",
+        autoAccess: true,
       },
       {
         slug: "administrative_leave",

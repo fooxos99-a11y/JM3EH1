@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { FundraisingPaymentDialog } from "@/components/fundraising-payment-dialog"
@@ -151,6 +151,15 @@ export function DonationCardsClient({
                           <div className="relative h-48 overflow-hidden">
                             <img src={donation.image} alt={donation.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#083433]/90 via-[#0d6d69]/35 to-transparent" />
+                            <div className="absolute left-4 top-4" onClick={(event) => event.stopPropagation()}>
+                              <FundraisingPaymentDialog
+                                item={donation}
+                                dialogDescription={dialogDescription}
+                                triggerClassName="h-12 w-12 rounded-full border border-white/80 bg-white/95 p-0 text-primary shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white"
+                                triggerContent={<ArrowLeft className="h-5 w-5" />}
+                                triggerAriaLabel={`فتح نافذة التبرع لـ ${donation.title}`}
+                              />
+                            </div>
                             <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                               <h3 className="text-xl font-bold leading-8 drop-shadow-sm">{donation.title}</h3>
                             </div>

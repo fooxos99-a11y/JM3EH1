@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,8 @@ type FundraisingPaymentDialogProps = {
   triggerLabel?: string
   triggerClassName?: string
   fullWidthTrigger?: boolean
+  triggerContent?: ReactNode
+  triggerAriaLabel?: string
 }
 
 export function FundraisingPaymentDialog({
@@ -46,6 +49,8 @@ export function FundraisingPaymentDialog({
   triggerLabel,
   triggerClassName = "",
   fullWidthTrigger = false,
+  triggerContent,
+  triggerAriaLabel,
 }: FundraisingPaymentDialogProps) {
   const [open, setOpen] = useState(false)
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(item.labels[0]?.id ?? null)
@@ -87,8 +92,12 @@ export function FundraisingPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <Button className={`${fullWidthTrigger ? "w-full" : ""} ${triggerClassName}`.trim()} onClick={() => setOpen(true)}>
-        {triggerLabel ?? item.buttonLabel}
+      <Button
+        className={`${fullWidthTrigger ? "w-full" : ""} ${triggerClassName}`.trim()}
+        onClick={() => setOpen(true)}
+        aria-label={triggerAriaLabel ?? triggerLabel ?? item.buttonLabel}
+      >
+        {triggerContent ?? triggerLabel ?? item.buttonLabel}
       </Button>
 
       <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-2xl" showCloseButton={false}>
@@ -135,7 +144,7 @@ export function FundraisingPaymentDialog({
           <div className="mx-auto max-w-xl rounded-[1.75rem] border border-primary/10 bg-[linear-gradient(180deg,#0f766e_0%,#0b4f4c_100%)] p-6 text-right shadow-sm">
             <p className="text-sm text-white/75">{item.title}</p>
             <p className="mt-4 text-4xl font-bold text-white">{numericAmount} ريال</p>
-            <Button className="mt-6 h-12 w-full rounded-2xl border-0 bg-white text-primary hover:bg-[#f4fffe]" onClick={() => setOpen(false)}>
+            <Button className="mt-6 h-11 w-full rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]" onClick={() => setOpen(false)}>
               ادفع الآن
             </Button>
           </div>

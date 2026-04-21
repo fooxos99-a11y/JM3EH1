@@ -301,6 +301,11 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
 
         {view === "manager" ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center justify-start gap-2 text-right">
+              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
+              <span className="text-base font-medium text-foreground">{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع مختار"}</span>
+              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))} disabled={!hasPreviousWeekEntries}><ChevronLeft className="h-4 w-4" /></Button>
+            </div>
             <div className="w-full md:w-[280px]">
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                 <SelectTrigger className="w-full rounded-xl flex-row-reverse text-right [&_svg]:shrink-0"><SelectValue placeholder="اختر الموظف" /></SelectTrigger>
@@ -309,14 +314,9 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-end gap-2 text-right">
-              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
-              <span className="text-base font-medium text-foreground">{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع مختار"}</span>
-              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))} disabled={!hasPreviousWeekEntries}><ChevronLeft className="h-4 w-4" /></Button>
-            </div>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-2 text-right">
+          <div className="flex items-center justify-start gap-2 text-right">
             <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, 1))} disabled={isCurrentWeek}><ChevronRight className="h-4 w-4" /></Button>
             <span className="text-base font-medium text-foreground">{isCurrentWeek ? "الأسبوع الحالي" : "أسبوع مختار"}</span>
             <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => void loadData(shiftWeek(selectedWeekStartDate, -1))} disabled={!hasPreviousWeekEntries}><ChevronLeft className="h-4 w-4" /></Button>

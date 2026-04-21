@@ -29,6 +29,78 @@ type Coordinates = {
   accuracy?: number
 }
 
+type GeolocationPermissionState = "granted" | "prompt" | "denied" | "unknown"
+
+type LocationIntegrityPayload = {
+  permissionState: GeolocationPermissionState
+  isSecureContext: boolean
+  isMocked: boolean
+  reasons: string[]
+  userAgent: string
+  sampledAt: string
+  sampleCount: number
+}
+
+type ClockLocationPayload = Coordinates & {
+  integrity: LocationIntegrityPayload
+}
+
+function readPossibleBoolean(source: unknown, key: string) {
+  if (!source || typeof source !== "object" || !(key in source)) {
+    return null
+  }
+
+  const value = (source as Record<string, unknown>)[key]
+  return typeof value === "boolean" ? value : null
+}
+
+function extractMockLocationSignals(position: GeolocationPosition) {
+  const signals = [
+    readPossibleBoolean(position, "mocked"),
+    readPossibleBoolean(position, "isMocked"),
+    readPossibleBoolean(position, "isFromMockProvider"),
+    readPossibleBoolean(position.coords, "mocked"),
+    readPossibleBoolean(position.coords, "isMocked"),
+    readPossibleBoolean(position.coords, "isFromMockProvider"),
+  ]
+
+  const serializedPosition = typeof (position as { toJSON?: () => unknown }).toJSON === "function"
+    ? (position as { toJSON: () => unknown }).toJSON()
+    : null
+
+  const serializedCoords = serializedPosition && typeof serializedPosition === "object" && "coords" in serializedPosition
+    ? (serializedPosition as { coords?: unknown }).coords
+    : null
+
+  signals.push(
+    readPossibleBoolean(serializedPosition, "mocked"),
+    readPossibleBoolean(serializedPosition, "isMocked"),
+    readPossibleBoolean(serializedPosition, "isFromMockProvider"),
+    readPossibleBoolean(serializedCoords, "mocked"),
+    readPossibleBoolean(serializedCoords, "isMocked"),
+    readPossibleBoolean(serializedCoords, "isFromMockProvider"),
+  )
+
+  return signals.some((value) => value === true)
+}
+
+async function getGeolocationPermissionState(): Promise<GeolocationPermissionState> {
+  if (!("permissions" in navigator) || typeof navigator.permissions.query !== "function") {
+    return "unknown"
+  }
+
+  try {
+    const result = await navigator.permissions.query({ name: "geolocation" })
+    if (result.state === "granted" || result.state === "prompt" || result.state === "denied") {
+      return result.state
+    }
+  } catch {
+    return "unknown"
+  }
+
+  return "unknown"
+}
+
 function getInitialPermissionForm() {
   const fromTime = toSaudiTimeInputValue(new Date())
   const toTime = toSaudiTimeInputValue(new Date(Date.now() + 60 * 60 * 1000))
@@ -64,23 +136,100 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
   }, [onRefresh])
 
   async function getCurrentCoordinates() {
-    return new Promise<Coordinates>((resolve, reject) => {
+    const permissionStatePromise = getGeolocationPermissionState()
+
+    return new Promise<ClockLocationPayload>((resolve, reject) => {
       if (!("geolocation" in navigator)) {
         reject(new Error("المتصفح الحالي لا يدعم خدمات الموقع"))
         return
       }
 
-      navigator.geolocation.getCurrentPosition(
+      let bestPosition: GeolocationPosition | null = null
+      let watchId: number | null = null
+      let settled = false
+      let sampleCount = 0
+      let explicitMockDetected = false
+
+      const finish = async (position?: GeolocationPosition, error?: Error) => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId)
+        }
+        window.clearTimeout(timeoutId)
+
+        if (!position) {
+          reject(error ?? new Error("تعذر قراءة موقعك الحالي"))
+          return
+        }
+
+        const permissionState = await permissionStatePromise
+        const rawAccuracy = position.coords.accuracy
+        const accuracy = Number.isFinite(rawAccuracy) && rawAccuracy >= 0 ? rawAccuracy : undefined
+        const reasons: string[] = []
+
+        if (explicitMockDetected) {
+          reasons.push("الجهاز أو المتصفح أبلغ عن استخدام موقع وهمي")
+        }
+
+        if (navigator.webdriver) {
+          reasons.push("بيئة المتصفح تعمل في وضع أتمتة")
+        }
+
+        if (accuracy !== undefined && accuracy > 1000) {
+          reasons.push("دقة الموقع ضعيفة جدًا")
+        }
+
+        const integrity = {
+          permissionState,
+          isSecureContext: window.isSecureContext,
+          isMocked: explicitMockDetected || navigator.webdriver,
+          reasons,
+          userAgent: navigator.userAgent.slice(0, 300),
+          sampledAt: new Date(position.timestamp).toISOString(),
+          sampleCount: Math.max(sampleCount, 1),
+        } satisfies LocationIntegrityPayload
+
+        if (integrity.isMocked) {
+          reject(new Error("تم رفض التحضير لأن الجهاز يشير إلى استخدام موقع وهمي أو بيئة غير موثوقة"))
+          return
+        }
+
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy,
+          integrity,
+        })
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        void finish(bestPosition ?? undefined, bestPosition ? undefined : new Error("تعذر قراءة موقعك الحالي بدقة مناسبة"))
+      }, 12000)
+
+      watchId = navigator.geolocation.watchPosition(
         (position) => {
-          const rawAccuracy = position.coords.accuracy
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: Number.isFinite(rawAccuracy) && rawAccuracy >= 0 ? rawAccuracy : undefined,
-          })
+          sampleCount += 1
+
+          if (extractMockLocationSignals(position)) {
+            explicitMockDetected = true
+            void finish(position)
+            return
+          }
+
+          if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+            bestPosition = position
+          }
+
+          if (position.coords.accuracy <= 25) {
+            void finish(position)
+          }
         },
-        () => reject(new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح")),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+        () => void finish(bestPosition ?? undefined, new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح وتشغيل دقة الموقع العالية.")),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       )
     })
   }
@@ -105,7 +254,12 @@ export function AttendancePanel({ data, onRefresh, compact = false }: Attendance
         body: JSON.stringify({
           action: "clock_attendance",
           eventType,
-          coordinates,
+          coordinates: {
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            accuracy: coordinates.accuracy,
+          },
+          integrity: coordinates.integrity,
         }),
       })
       const payload = (await response.json()) as { error?: string }

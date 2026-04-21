@@ -30,6 +30,16 @@ const coordinateSchema = z.object({
   accuracy: z.number().finite().nonnegative().optional(),
 })
 
+const locationIntegritySchema = z.object({
+  permissionState: z.enum(["granted", "prompt", "denied", "unknown"]).optional(),
+  isSecureContext: z.boolean().optional(),
+  isMocked: z.boolean().optional(),
+  reasons: z.array(z.string().trim().min(1)).max(8).optional(),
+  userAgent: z.string().trim().max(300).optional(),
+  sampledAt: z.string().datetime().optional(),
+  sampleCount: z.number().int().min(1).max(10).optional(),
+})
+
 function parseCoordinatesFromGoogleMapsUrl(url: string) {
   const normalizedUrl = url.trim()
 
@@ -129,6 +139,7 @@ const createAttendanceSchema = z.object({
   action: z.literal("clock_attendance"),
   eventType: z.enum(["clock_in", "clock_out"]),
   coordinates: coordinateSchema,
+  integrity: locationIntegritySchema.optional(),
 })
 
 const postSchema = z.union([createRequestSchema, createAttendanceSchema])
@@ -258,10 +269,8 @@ async function requireAdministrativeAccess(scope: "attendance" | "administrative
     return { user: null, response: NextResponse.json({ error: "غير مصرح" }, { status: 401 }) }
   }
 
-  const hasAttendanceAccess = hasPermission(user, "administrative_requests") || hasPermission(user, "preparation")
-
-  if (scope === "attendance" && !hasAttendanceAccess) {
-    return { user, response: NextResponse.json({ error: "ليس لديك صلاحية للوصول إلى قسم التحضير" }, { status: 403 }) }
+  if (scope === "attendance") {
+    return { user, response: null }
   }
 
   if (scope === "administrative" && !hasPermission(user, "administrative_requests")) {
@@ -607,12 +616,37 @@ async function insertAdministrativeRequest(userId: string, payload: z.infer<type
   return error
 }
 
-async function handleClockAttendance(userId: string, eventType: "clock_in" | "clock_out", coordinates: { latitude: number; longitude: number; accuracy?: number }) {
+async function handleClockAttendance(
+  userId: string,
+  eventType: "clock_in" | "clock_out",
+  payload: {
+    coordinates: { latitude: number; longitude: number; accuracy?: number }
+    integrity?: {
+      permissionState?: "granted" | "prompt" | "denied" | "unknown"
+      isSecureContext?: boolean
+      isMocked?: boolean
+      reasons?: string[]
+      userAgent?: string
+      sampledAt?: string
+      sampleCount?: number
+    }
+  },
+) {
   const supabase = createSupabaseAdminClient()
   const workLocation = await getLatestWorkLocation()
+  const { coordinates, integrity } = payload
 
   if (!workLocation) {
     return NextResponse.json({ error: "لم يتم تحديد موقع العمل بعد من قبل المدير" }, { status: 400 })
+  }
+
+  if (integrity?.isMocked) {
+    return NextResponse.json(
+      {
+        error: `تم رفض التحضير لأن الجهاز يشير إلى استخدام موقع وهمي.${integrity.reasons?.length ? ` ${integrity.reasons.join("، ")}.` : ""}`,
+      },
+      { status: 400 },
+    )
   }
 
   const distance = calculateDistanceMeters(
@@ -631,10 +665,17 @@ async function handleClockAttendance(userId: string, eventType: "clock_in" | "cl
       {
         error:
           gpsAccuracyBuffer > 0
-            ? `${isLikelyMisconfiguredLocation ? "يبدو أن موقع التحضير المحفوظ بعيد جدًا عن موقعك الحالي. راجع إعدادات موقع العمل أولًا. " : ""}لا يمكنك تسجيل الحضور خارج نطاق موقع العمل. المسافة الحالية تقريبًا ${Math.round(distance)} متر، ودقة موقع الجهاز ${Math.round(gpsAccuracyBuffer)} متر.`
+            ? `${isLikelyMisconfiguredLocation ? "يبدو أن موقع التحضير المحفوظ بعيد جدًا عن موقعك الحالي. راجع إعدادات موقع العمل أولًا. " : ""}لا يمكنك تسجيل الحضور خارج نطاق موقع العمل (${workLocation.name}). المسافة الحالية تقريبًا ${Math.round(distance)} متر، والنطاق المسموح ${Math.round(allowedDistance)} متر، ودقة موقع الجهاز ${Math.round(gpsAccuracyBuffer)} متر.`
             : isLikelyMisconfiguredLocation
               ? "يبدو أن موقع التحضير المحفوظ بعيد جدًا عن موقعك الحالي. راجع إعدادات موقع العمل أولًا."
               : "لا يمكنك تسجيل الحضور خارج نطاق موقع العمل",
+        geofence: {
+          workLocationName: workLocation.name,
+          distanceMeters: Math.round(distance),
+          allowedDistanceMeters: Math.round(allowedDistance),
+          accuracyMeters: Math.round(gpsAccuracyBuffer),
+          googleMapsUrl: workLocation.google_maps_url,
+        },
       },
       { status: 400 },
     )
@@ -730,7 +771,10 @@ export async function POST(request: Request) {
   }
 
   if (parsed.data.action === "clock_attendance") {
-    return handleClockAttendance(user.id, parsed.data.eventType, parsed.data.coordinates)
+    return handleClockAttendance(user.id, parsed.data.eventType, {
+      coordinates: parsed.data.coordinates,
+      integrity: parsed.data.integrity,
+    })
   }
 
   const error = await insertAdministrativeRequest(user.id, parsed.data)

@@ -30,6 +30,25 @@ type GeoSample = {
   accuracy: number
 }
 
+const maxAcceptedLocationAccuracy = 1000
+
+function formatReportedAccuracy(accuracy: number) {
+  return new Intl.NumberFormat("ar", {
+    minimumFractionDigits: accuracy < 10 ? 2 : 1,
+    maximumFractionDigits: accuracy < 10 ? 2 : 1,
+  }).format(accuracy)
+}
+
+function buildLocationCaptureMessage(accuracy: number) {
+  const formattedAccuracy = formatReportedAccuracy(accuracy)
+
+  if (accuracy <= 100) {
+    return `تم التقاط أفضل موقع متاح. الدقة المبلّغ عنها من الجهاز: ${formattedAccuracy} متر. احفظ التغييرات لتحديث موقع الحضور.`
+  }
+
+  return `تم التقاط أفضل موقع متاح، لكن دقة الموقع الحالية محدودة. الدقة المبلّغ عنها من الجهاز: ${formattedAccuracy} متر. يمكنك المحاولة مرة أخرى للحصول على دقة أفضل، أو حفظ التغييرات لتحديث موقع الحضور.`
+}
+
 function getBestCurrentLocation() {
   return new Promise<GeoSample>((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -61,7 +80,7 @@ function getBestCurrentLocation() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      if (bestSample) {
+      if (bestSample && bestSample.accuracy <= maxAcceptedLocationAccuracy) {
         finish(bestSample)
         return
       }
@@ -71,10 +90,16 @@ function getBestCurrentLocation() {
 
     watchId = navigator.geolocation.watchPosition(
       (position) => {
+        const rawAccuracy = position.coords.accuracy
+
+        if (!Number.isFinite(rawAccuracy) || rawAccuracy < 0) {
+          return
+        }
+
         const sample = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
+          accuracy: rawAccuracy,
         }
 
         if (!bestSample || sample.accuracy < bestSample.accuracy) {
@@ -257,7 +282,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
           throw new Error(result.error ?? "تعذر حفظ موقع العمل")
         }
 
-        setFeedback({ type: "success", text: "تم حفظ موقع التحضير بنجاح" })
+        setFeedback({ type: "success", text: "تم حفظ موقع الحضور بنجاح" })
         await reloadHistory()
       } catch (nextError) {
         setFeedback({ type: "error", text: nextError instanceof Error ? nextError.message : "تعذر حفظ موقع العمل" })
@@ -321,7 +346,7 @@ export function AttendanceHistoryDashboard({ canConfigureLocation }: { canConfig
 
         setFeedback({
           type: "success",
-          text: `تم التقاط أفضل موقع متاح بدقة تقريبية ${Math.round(sample.accuracy)} متر. احفظ التغييرات لتحديث موقع التحضير.`,
+          text: buildLocationCaptureMessage(sample.accuracy),
         })
       } catch (nextError) {
         setFeedback({

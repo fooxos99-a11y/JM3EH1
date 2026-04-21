@@ -398,7 +398,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const stampDragFrameRef = useRef<number | null>(null)
   const stampDragPendingRef = useRef<{ id: string; pageNumber: number; position: StampPosition } | null>(null)
   const placedAssetElementRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const stampDragMetaRef = useRef<{ pageNumber: number; surfaceElement: HTMLButtonElement | null } | null>(null)
+  const stampDragMetaRef = useRef<{ pageNumber: number; surfaceElement: HTMLDivElement | null } | null>(null)
 
   function revokePreviewUrls(pages: PdfImagePage[]) {
     for (const page of pages) {
@@ -1691,9 +1691,26 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                           key={page.pageNumber}
                           className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${(activePlacedAsset?.pageNumber === page.pageNumber) ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
                         >
-                          <button
-                            type="button"
+                          <div
                             className="relative block w-full touch-none"
+                            onPointerDown={(event) => {
+                              if (!activePlacedAssetId) {
+                                return
+                              }
+
+                              const target = event.target
+                              if (target instanceof HTMLElement && target.closest("[data-placed-asset='true']")) {
+                                return
+                              }
+
+                              event.preventDefault()
+                              setDraggingPlacedAssetId(activePlacedAssetId)
+                              stampDragOffsetRef.current = { xPercent: 0, yPercent: 0 }
+                              stampDragMetaRef.current = { pageNumber: page.pageNumber, surfaceElement: event.currentTarget }
+                              const nextPosition = updateStampPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
+                              queuePlacedAssetUpdate(activePlacedAssetId, page.pageNumber, nextPosition)
+                              event.currentTarget.setPointerCapture(event.pointerId)
+                            }}
                             onPointerMove={(event) => {
                               if (!draggingPlacedAssetId) {
                                 return
@@ -1705,7 +1722,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             onPointerUp={stopPlacedAssetDragging}
                             onPointerCancel={stopPlacedAssetDragging}
                           >
-                            <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
+                            <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" draggable={false} onDragStart={(event) => event.preventDefault()} />
                             {placedAssets.filter((placedAsset) => placedAsset.pageNumber === page.pageNumber).map((placedAsset) => {
                               const asset = assetMap.get(placedAsset.assetId)
                               if (!asset) {
@@ -1716,6 +1733,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                 <button
                                   key={placedAsset.id}
                                   type="button"
+                                  data-placed-asset="true"
                                   ref={(element) => {
                                     placedAssetElementRefs.current[placedAsset.id] = element
                                   }}
@@ -1729,11 +1747,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     willChange: draggingPlacedAssetId === placedAsset.id ? "left, top" : undefined,
                                   }}
                                   onPointerDown={(event) => {
+                                    event.preventDefault()
                                     event.stopPropagation()
                                     setActivePlacedAssetId(placedAsset.id)
                                     setDraggingPlacedAssetId(placedAsset.id)
                                     event.currentTarget.style.willChange = "left, top"
-                                    const surfaceElement = event.currentTarget.parentElement instanceof HTMLButtonElement ? event.currentTarget.parentElement : null
+                                    const surfaceElement = event.currentTarget.parentElement instanceof HTMLDivElement ? event.currentTarget.parentElement : null
                                     const rect = surfaceElement?.getBoundingClientRect()
                                     stampDragMetaRef.current = { pageNumber: page.pageNumber, surfaceElement }
                                     if (rect) {
@@ -1753,12 +1772,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     event.stopPropagation()
                                     stopPlacedAssetDragging()
                                   }}
+                                  onDragStart={(event) => event.preventDefault()}
                                 >
-                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
+                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} draggable={false} onDragStart={(event) => event.preventDefault()} />
                                 </button>
                               )
                             })}
-                          </button>
+                          </div>
                           {isPdfFile(stampTargetFile) ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                         </div>
                       ))}

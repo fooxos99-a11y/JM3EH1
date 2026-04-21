@@ -44,6 +44,7 @@ const initialRequestForm = {
 }
 
 const rtlInputClassName = "text-right [&::placeholder]:text-right"
+const rtlLabelClassName = "block text-right"
 const rtlSelectTriggerClassName = "w-full flex-row-reverse text-right [&>span]:text-right"
 const rtlDatePickerClassName = "flex-row-reverse text-right [&>span]:text-right"
 
@@ -294,7 +295,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 text-right md:col-span-2">
-                  <Label>نوع الطلب</Label>
+                  <Label className={rtlLabelClassName}>نوع الطلب</Label>
                   <Select value={requestForm.requestType} onValueChange={(value) => setRequestForm((current) => ({ ...current, requestType: value as typeof current.requestType }))}>
                     <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -307,19 +308,19 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                 </div>
 
                 <div className="space-y-2 text-right md:col-span-2">
-                  <Label htmlFor="request-subject">عنوان الطلب</Label>
+                  <Label htmlFor="request-subject" className={rtlLabelClassName}>عنوان الطلب</Label>
                   <Input id="request-subject" value={requestForm.subject} onChange={(event) => setRequestForm((current) => ({ ...current, subject: event.target.value }))} className={rtlInputClassName} />
                 </div>
 
                 <div className="space-y-2 text-right md:col-span-2">
-                  <Label htmlFor="request-details">تفاصيل الطلب</Label>
+                  <Label htmlFor="request-details" className={rtlLabelClassName}>تفاصيل الطلب</Label>
                   <Textarea id="request-details" value={requestForm.details} onChange={(event) => setRequestForm((current) => ({ ...current, details: event.target.value }))} className={`min-h-28 ${rtlInputClassName}`} />
                 </div>
 
                 {requestForm.requestType === "leave" ? (
                   <>
                     <div className="space-y-2 text-right">
-                      <Label>الخصم من</Label>
+                      <Label className={rtlLabelClassName}>الخصم من</Label>
                       <Select value={requestForm.leaveAllocationType} onValueChange={(value) => setRequestForm((current) => ({ ...current, leaveAllocationType: value as LeaveAllocationType }))}>
                         <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -329,11 +330,11 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                       </Select>
                     </div>
                     <div className="space-y-2 text-right">
-                      <Label htmlFor="request-start-date">من تاريخ</Label>
+                      <Label htmlFor="request-start-date" className={rtlLabelClassName}>من تاريخ</Label>
                       <DatePickerField id="request-start-date" value={requestForm.startDate} onChange={(value) => setRequestForm((current) => ({ ...current, startDate: value }))} placeholder="اختر تاريخ البداية" className={rtlDatePickerClassName} />
                     </div>
                     <div className="space-y-2 text-right">
-                      <Label htmlFor="request-end-date">إلى تاريخ</Label>
+                      <Label htmlFor="request-end-date" className={rtlLabelClassName}>إلى تاريخ</Label>
                       <DatePickerField id="request-end-date" value={requestForm.endDate} onChange={(value) => setRequestForm((current) => ({ ...current, endDate: value }))} placeholder="اختر تاريخ النهاية" className={rtlDatePickerClassName} />
                     </div>
                     <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-right">
@@ -346,15 +347,15 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                 {requestForm.requestType === "permission" ? (
                   <>
                     <div className="space-y-2 text-right">
-                      <Label htmlFor="request-date">تاريخ الإذن</Label>
+                      <Label htmlFor="request-date" className={rtlLabelClassName}>تاريخ الإذن</Label>
                       <DatePickerField id="request-date" value={requestForm.requestDate} onChange={(value) => setRequestForm((current) => ({ ...current, requestDate: value }))} placeholder="اختر تاريخ الإذن" className={rtlDatePickerClassName} />
                     </div>
                     <div className="space-y-2 text-right">
-                      <Label htmlFor="request-from-time">من الساعة</Label>
+                      <Label htmlFor="request-from-time" className={rtlLabelClassName}>من الساعة</Label>
                       <Input id="request-from-time" type="time" value={requestForm.fromTime} onChange={(event) => setRequestForm((current) => ({ ...current, fromTime: event.target.value }))} className={rtlInputClassName} />
                     </div>
                     <div className="space-y-2 text-right">
-                      <Label htmlFor="request-to-time">إلى الساعة</Label>
+                      <Label htmlFor="request-to-time" className={rtlLabelClassName}>إلى الساعة</Label>
                       <Input id="request-to-time" type="time" value={requestForm.toTime} onChange={(event) => setRequestForm((current) => ({ ...current, toTime: event.target.value }))} className={rtlInputClassName} />
                     </div>
                   </>
@@ -362,7 +363,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
 
                 {requestForm.requestType === "financial" ? (
                   <div className="space-y-2 text-right md:col-span-2">
-                    <Label htmlFor="request-amount">المبلغ المطلوب</Label>
+                    <Label htmlFor="request-amount" className={rtlLabelClassName}>المبلغ المطلوب</Label>
                     <Input id="request-amount" type="number" min="0" value={requestForm.amountRequested} onChange={(event) => setRequestForm((current) => ({ ...current, amountRequested: event.target.value }))} className={rtlInputClassName} />
                   </div>
                 ) : null}
@@ -637,7 +638,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div className="space-y-2 text-right xl:col-span-4">
-                  <Label>الحساب المستهدف</Label>
+                  <Label className={rtlLabelClassName}>الحساب المستهدف</Label>
                   <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
                     <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -649,15 +650,15 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                 </div>
 
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="leave-quota">رصيد الإجازات الأساسي</Label>
+                  <Label htmlFor="leave-quota" className={rtlLabelClassName}>رصيد الإجازات الأساسي</Label>
                   <Input id="leave-quota" type="number" min="0" value={balanceForm.leaveQuotaDays} onChange={(event) => setBalanceForm((current) => ({ ...current, leaveQuotaDays: event.target.value }))} className={rtlInputClassName} />
                 </div>
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="allowance-total">إجمالي أيام السماحية</Label>
+                  <Label htmlFor="allowance-total" className={rtlLabelClassName}>إجمالي أيام السماحية</Label>
                   <Input id="allowance-total" type="number" min="0" value={balanceForm.allowanceTotalDays} onChange={(event) => setBalanceForm((current) => ({ ...current, allowanceTotalDays: event.target.value }))} className={rtlInputClassName} />
                 </div>
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="permission-quota">رصيد الأذونات</Label>
+                  <Label htmlFor="permission-quota" className={rtlLabelClassName}>رصيد الأذونات</Label>
                   <Input id="permission-quota" type="number" min="0" value={balanceForm.permissionQuotaCount} onChange={(event) => setBalanceForm((current) => ({ ...current, permissionQuotaCount: event.target.value }))} className={rtlInputClassName} />
                 </div>
                 <div className="flex items-end justify-end">

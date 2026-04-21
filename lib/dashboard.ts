@@ -27,7 +27,7 @@ export const dashboardSections: DashboardGroup[] = [
           autoAccess: true,
       },
       {
-        slug: "tasks",
+        label: "الكتابة على ملف",
         label: "مهامي",
         description: "متابعة المهام الشخصية المسندة لك وتحديث حالتها وتنبيهاتها.",
         permission: "tasks",
@@ -124,12 +124,6 @@ export const dashboardSections: DashboardGroup[] = [
         slug: "service_pdf_to_images",
         label: "تحويل إلى صورة",
         description: "استخراج صفحات PDF كصور PNG مستقلة.",
-        permission: "services",
-      },
-      {
-        slug: "service_pdf_editor",
-        label: "التعديل",
-        description: "إضافة نص وتحرير مواضع داخل ملفات PDF.",
         permission: "services",
       },
       {

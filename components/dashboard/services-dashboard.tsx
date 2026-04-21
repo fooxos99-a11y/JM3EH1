@@ -1958,19 +1958,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   <div
                     className="relative min-h-[720px] w-full overflow-hidden bg-white"
                     onPointerDown={(event) => {
-                      if (!activeWriterTextLayerId) {
-                        return
-                      }
-
                       const target = event.target
                       if (target instanceof HTMLElement && target.closest("[data-writer-text='true']")) {
                         return
                       }
 
-                      const nextPosition = getWriterLayerPosition(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
-                      updateWriterTextLayer(activeWriterTextLayerId, nextPosition)
-                      setDraggingWriterTextLayerId(activeWriterTextLayerId)
-                      event.currentTarget.setPointerCapture(event.pointerId)
+                      setDraggingWriterTextLayerId(null)
+                      setActiveWriterTextLayerId(null)
+                      if (document.activeElement instanceof HTMLElement) {
+                        document.activeElement.blur()
+                      }
                     }}
                     onPointerMove={(event) => {
                       if (!draggingWriterTextLayerId) {

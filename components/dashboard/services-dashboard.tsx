@@ -1478,7 +1478,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                           className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${(activePlacedAsset?.pageNumber === page.pageNumber) ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
                         >
                           <div
-                            className="relative block w-full touch-none"
+                            className="relative block w-full touch-none select-none"
+                            style={{ userSelect: "none" }}
                             onPointerDown={(event) => {
                               if (!draggingPlacedAssetId) {
                                 return
@@ -1488,6 +1489,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               updatePlacedAsset(draggingPlacedAssetId, { ...nextPosition, pageNumber: page.pageNumber })
                               event.currentTarget.setPointerCapture(event.pointerId)
                             }}
+                            onDragStart={(event) => event.preventDefault()}
                             onPointerMove={(event) => {
                               if (rotatingPlacedAssetId || resizingPlacedAssetId) {
                                 return
@@ -1511,7 +1513,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               setRotatingPlacedAssetId(null)
                             }}
                           >
-                            <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
+                            <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="pointer-events-none select-none w-full object-contain" draggable={false} />
                             {placedAssets.filter((placedAsset) => placedAsset.pageNumber === page.pageNumber).map((placedAsset) => {
                               const asset = assetMap.get(placedAsset.assetId)
                               if (!asset) {
@@ -1521,15 +1523,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               return (
                                 <div
                                   key={placedAsset.id}
-                                  className={`absolute overflow-visible border border-dashed opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "border-primary/70 drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "border-transparent drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
+                                  className={`absolute overflow-visible border border-dashed select-none opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "border-primary/70 drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "border-transparent drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
                                   style={{
                                     width: `${placedAsset.scalePercent}%`,
                                     left: `${placedAsset.xPercent}%`,
                                     top: `${placedAsset.yPercent}%`,
                                     transform: `translate(-50%, -50%) rotate(${placedAsset.rotationDegrees}deg)`,
+                                    userSelect: "none",
                                   }}
                                   onPointerDown={(event) => {
                                     event.stopPropagation()
+                                    event.preventDefault()
                                     setActivePlacedAssetId(placedAsset.id)
 
                                     const assetRect = event.currentTarget.getBoundingClientRect()
@@ -1559,6 +1563,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
                                     event.currentTarget.setPointerCapture(event.pointerId)
                                   }}
+                                  onDragStart={(event) => event.preventDefault()}
                                   onPointerMove={(event) => {
                                     event.stopPropagation()
 
@@ -1594,7 +1599,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     setResizingPlacedAssetId(null)
                                   }}
                                 >
-                                  <img src={asset.imageUrl} alt={asset.name} className="block w-full object-contain" />
+                                  <img src={asset.imageUrl} alt={asset.name} className="pointer-events-none block select-none w-full object-contain" draggable={false} />
                                   <span
                                     className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[140%] items-center justify-center rounded-full border bg-white text-[10px] font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
                                     onPointerDown={(event) => {
@@ -1635,7 +1640,6 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   >
                                     ↻
                                   </span>
-                                  {activePlacedAssetId === placedAsset.id ? <span className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 rounded-full border border-primary bg-white shadow" /> : null}
                                 </div>
                               )
                             })}

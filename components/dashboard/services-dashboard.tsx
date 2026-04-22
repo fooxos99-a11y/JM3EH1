@@ -1376,19 +1376,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </TabsContent>
 
         <TabsContent value="stamps" className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
-            <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-              <CardContent className="flex min-h-[220px] items-center justify-center p-6">
-                <Button type="button" className="rounded-xl px-6" onClick={() => setIsAssetLibraryOpen(true)}>
-                  <Upload className="h-4 w-4" />مكتبة الختم والتواقيع
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+          <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>تطبيق الختم أو التوقيع</CardTitle>
-                <CardDescription>ارفع صورة أو ملف PDF، ثم اختر الأصل المحفوظ واضغط على مكان المعاينة لتحديد موضعه قبل التنزيل.</CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Button type="button" className="rounded-xl px-6" onClick={() => setIsAssetLibraryOpen(true)}>
+                    <Upload className="h-4 w-4" />مكتبة الختم والتواقيع
+                  </Button>
+                  <div className="text-right">
+                    <CardTitle>تطبيق الختم أو التوقيع</CardTitle>
+                    <CardDescription className="mt-2">ارفع صورة أو ملف PDF، ثم اختر الأصل المحفوظ واضغط على مكان المعاينة لتحديد موضعه قبل التنزيل.</CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
@@ -1501,11 +1499,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 </div>
                 <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${stampTargetIsPdf ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
               </CardContent>
-            </Card>
-          </div>
+          </Card>
 
           <Dialog open={isAssetPickerOpen} onOpenChange={setIsAssetPickerOpen}>
-            <DialogContent className="max-w-5xl rounded-[1.75rem] p-0 text-right">
+            <DialogContent className="max-w-6xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
                   <DialogTitle>اختر ختمًا أو توقيعًا</DialogTitle>
@@ -1513,17 +1510,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 space-y-5">
                   <div>
                     <p className="mb-3 text-sm font-medium text-foreground">1. اختر الختم أو التوقيع</p>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                       {data.assets.map((asset) => (
                         <button
                           key={asset.id}
                           type="button"
-                          className={`rounded-[1.25rem] border p-4 text-right transition-colors ${selectedPickerAssetId === asset.id ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/20"}`}
+                          className={`rounded-[1.1rem] border p-3 text-right transition-colors ${selectedPickerAssetId === asset.id ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/20"}`}
                           onClick={() => setSelectedPickerAssetId(asset.id)}
                         >
-                          <div className="flex flex-col items-center gap-3 text-center">
-                            <img src={asset.imageUrl} alt={asset.name} className="h-24 w-24 rounded-2xl bg-white object-contain" />
-                            <p className="font-semibold text-foreground">{asset.name}</p>
+                          <div className="flex flex-col items-center gap-2 text-center">
+                            <img src={asset.imageUrl} alt={asset.name} className="h-20 w-20 rounded-xl bg-white object-contain" />
+                            <p className="text-sm font-semibold leading-6 text-foreground">{asset.name}</p>
                           </div>
                         </button>
                       ))}
@@ -1533,16 +1530,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   <div>
                     <p className="mb-3 text-sm font-medium text-foreground">2. اختر الصفحة</p>
                     {stampPreviewPages.length > 0 ? (
-                      <div className="grid max-h-[360px] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid max-h-[360px] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-5">
                         {stampPreviewPages.map((page) => (
                           <button
                             key={page.pageNumber}
                             type="button"
-                            className={`overflow-hidden rounded-[1.25rem] border bg-white text-right transition-colors ${selectedPickerPageNumber === page.pageNumber ? "border-primary shadow-[0_16px_35px_rgba(15,23,42,0.12)]" : "border-border/60 hover:bg-muted/20"}`}
+                            className={`overflow-hidden rounded-[1rem] border bg-white text-right transition-colors ${selectedPickerPageNumber === page.pageNumber ? "border-primary shadow-[0_16px_35px_rgba(15,23,42,0.12)]" : "border-border/60 hover:bg-muted/20"}`}
                             onClick={() => setSelectedPickerPageNumber(page.pageNumber)}
                           >
-                            <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-48 w-full object-contain bg-muted/10" />
-                            <div className="px-4 py-3 text-sm font-medium text-foreground">الصفحة {page.pageNumber}</div>
+                            <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-32 w-full object-contain bg-muted/10" />
+                            <div className="px-3 py-2 text-sm font-medium text-foreground">الصفحة {page.pageNumber}</div>
                           </button>
                         ))}
                       </div>

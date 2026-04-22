@@ -289,6 +289,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [selectedPickerPageNumber, setSelectedPickerPageNumber] = useState<number>(1)
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
   const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
+  const [resizingPlacedAssetId, setResizingPlacedAssetId] = useState<string | null>(null)
   const [rotatingPlacedAssetId, setRotatingPlacedAssetId] = useState<string | null>(null)
 
   async function loadData() {
@@ -1062,14 +1063,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     return normalizeRotationDegrees(angle)
   }
 
-  function resizeStamp(step: number, assetId?: string) {
-    const targetAssetId = assetId ?? activePlacedAssetId
+  function isPointerNearAssetEdge(rect: DOMRect, clientX: number, clientY: number) {
+    const edgeThreshold = 14
+    const horizontalDistance = Math.min(Math.abs(clientX - rect.left), Math.abs(clientX - rect.right))
+    const verticalDistance = Math.min(Math.abs(clientY - rect.top), Math.abs(clientY - rect.bottom))
+    return Math.min(horizontalDistance, verticalDistance) <= edgeThreshold
+  }
 
-    if (!targetAssetId) {
-      return
-    }
-
-    setPlacedAssets((current) => current.map((item) => item.id === targetAssetId ? { ...item, scalePercent: clamp(item.scalePercent + step, 8, 60) } : item))
+  function getScalePercentFromPointer(previewRect: DOMRect, placedAsset: PlacedAsset, clientX: number) {
+    const centerX = previewRect.left + ((placedAsset.xPercent / 100) * previewRect.width)
+    const halfWidth = Math.max(Math.abs(clientX - centerX), 18)
+    return clamp(((halfWidth * 2) / previewRect.width) * 100, 8, 60)
   }
 
   async function handleApplyStamp() {
@@ -1473,8 +1477,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                           key={page.pageNumber}
                           className={`relative mx-auto max-w-3xl overflow-hidden rounded-[1.25rem] border bg-white ${(activePlacedAsset?.pageNumber === page.pageNumber) ? "border-primary/50 shadow-[0_20px_45px_rgba(15,23,42,0.12)]" : "border-white"}`}
                         >
-                          <button
-                            type="button"
+                          <div
                             className="relative block w-full touch-none"
                             onPointerDown={(event) => {
                               if (!draggingPlacedAssetId) {
@@ -1486,7 +1489,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               event.currentTarget.setPointerCapture(event.pointerId)
                             }}
                             onPointerMove={(event) => {
-                              if (rotatingPlacedAssetId) {
+                              if (rotatingPlacedAssetId || resizingPlacedAssetId) {
                                 return
                               }
 
@@ -1499,10 +1502,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             }}
                             onPointerUp={() => {
                               setDraggingPlacedAssetId(null)
+                              setResizingPlacedAssetId(null)
                               setRotatingPlacedAssetId(null)
                             }}
                             onPointerCancel={() => {
                               setDraggingPlacedAssetId(null)
+                              setResizingPlacedAssetId(null)
                               setRotatingPlacedAssetId(null)
                             }}
                           >
@@ -1514,10 +1519,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               }
 
                               return (
-                                <button
+                                <div
                                   key={placedAsset.id}
-                                  type="button"
-                                  className={`absolute overflow-visible opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
+                                  className={`absolute overflow-visible border border-dashed opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "border-primary/70 drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "border-transparent drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
                                   style={{
                                     width: `${placedAsset.scalePercent}%`,
                                     left: `${placedAsset.xPercent}%`,
@@ -1528,69 +1532,71 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     event.stopPropagation()
                                     setActivePlacedAssetId(placedAsset.id)
                                     setDraggingPlacedAssetId(placedAsset.id)
-                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                      const assetRect = event.currentTarget.getBoundingClientRect()
                                     if (previewRect) {
-                                      updatePlacedAsset(placedAsset.id, {
-                                        ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
-                                        pageNumber: page.pageNumber,
-                                      })
-                                    }
-                                    event.currentTarget.setPointerCapture(event.pointerId)
-                                  }}
+                                      const shouldResize = isPointerNearAssetEdge(assetRect, event.clientX, event.clientY)
+
+                                      if (shouldResize) {
+                                        setResizingPlacedAssetId(placedAsset.id)
+                                        setDraggingPlacedAssetId(null)
+
+                                        if (previewRect) {
+                                          updatePlacedAsset(placedAsset.id, {
+                                            scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
+                                          })
+                                        }
+                                      } else {
+                                        setDraggingPlacedAssetId(placedAsset.id)
+                                        setResizingPlacedAssetId(null)
+
+                                        if (previewRect) {
+                                          updatePlacedAsset(placedAsset.id, {
+                                            ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
+                                            pageNumber: page.pageNumber,
+                                          })
+                                        }
+                                      }
                                   onPointerMove={(event) => {
                                     event.stopPropagation()
                                     if (draggingPlacedAssetId !== placedAsset.id || rotatingPlacedAssetId) {
                                       return
-                                    }
-
-                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
-                                    if (!previewRect) {
                                       return
                                     }
 
                                     updatePlacedAsset(placedAsset.id, {
                                       ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
-                                      pageNumber: page.pageNumber,
-                                    })
-                                  }}
-                                  onPointerUp={(event) => {
+                                      if (rotatingPlacedAssetId === placedAsset.id) {
+                                        return
+                                      }
+
+                                      if (resizingPlacedAssetId === placedAsset.id) {
+                                        updatePlacedAsset(placedAsset.id, {
+                                          scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
+                                        })
+                                        return
+                                      }
+
+                                      if (draggingPlacedAssetId !== placedAsset.id) {
+                                        return
+                                      }
+
+                                      updatePlacedAsset(placedAsset.id, {
+                                        ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
+                                        pageNumber: page.pageNumber,
+                                      })
                                     event.stopPropagation()
                                     setDraggingPlacedAssetId(null)
                                   }}
                                   onPointerCancel={(event) => {
+                                      setResizingPlacedAssetId(null)
                                     event.stopPropagation()
                                     setDraggingPlacedAssetId(null)
                                   }}
                                 >
+                                      setResizingPlacedAssetId(null)
                                   <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
                                   <span className="absolute right-0 top-0 flex -translate-y-[120%] translate-x-[35%] items-center gap-1">
-                                    <span
-                                      className={`flex h-5 w-5 items-center justify-center rounded-full border bg-white text-xs font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
-                                      onPointerDown={(event) => {
-                                        event.stopPropagation()
-                                        setActivePlacedAssetId(placedAsset.id)
-                                        resizeStamp(-2, placedAsset.id)
-                                      }}
-                                      role="button"
-                                      aria-label={`تصغير ${asset.name}`}
-                                    >
-                                      -
-                                    </span>
-                                    <span
-                                      className={`flex h-5 w-5 items-center justify-center rounded-full border bg-white text-xs font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
-                                      onPointerDown={(event) => {
-                                        event.stopPropagation()
-                                        setActivePlacedAssetId(placedAsset.id)
-                                        resizeStamp(2, placedAsset.id)
-                                      }}
-                                      role="button"
-                                      aria-label={`تكبير ${asset.name}`}
-                                    >
-                                      +
-                                    </span>
-                                  </span>
-                                  <span
-                                    className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[140%] items-center justify-center rounded-full border bg-white text-[10px] font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
+                                    <img src={asset.imageUrl} alt={asset.name} className="block w-full object-contain" />
                                     onPointerDown={(event) => {
                                       event.stopPropagation()
                                       setActivePlacedAssetId(placedAsset.id)
@@ -1629,10 +1635,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   >
                                     ↻
                                   </span>
-                                </button>
+                                  {activePlacedAssetId === placedAsset.id ? <span className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 rounded-full border border-primary bg-white shadow" /> : null}
+                                </div>
                               )
                             })}
-                          </button>
+                          </div>
                           {stampTargetIsPdf ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                         </div>
                       ))}

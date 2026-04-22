@@ -1530,6 +1530,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     top: `${placedAsset.yPercent}%`,
                                     transform: `translate(-50%, -50%) rotate(${placedAsset.rotationDegrees}deg)`,
                                     userSelect: "none",
+                                    cursor: resizingPlacedAssetId === placedAsset.id ? "nwse-resize" : draggingPlacedAssetId === placedAsset.id ? "grabbing" : "move",
                                   }}
                                   onPointerDown={(event) => {
                                     event.stopPropagation()
@@ -1543,6 +1544,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     if (shouldResize) {
                                       setResizingPlacedAssetId(placedAsset.id)
                                       setDraggingPlacedAssetId(null)
+                                      event.currentTarget.style.cursor = "nwse-resize"
 
                                       if (previewRect) {
                                         updatePlacedAsset(placedAsset.id, {
@@ -1552,6 +1554,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     } else {
                                       setDraggingPlacedAssetId(placedAsset.id)
                                       setResizingPlacedAssetId(null)
+                                      event.currentTarget.style.cursor = "grabbing"
 
                                       if (previewRect) {
                                         updatePlacedAsset(placedAsset.id, {
@@ -1566,6 +1569,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   onDragStart={(event) => event.preventDefault()}
                                   onPointerMove={(event) => {
                                     event.stopPropagation()
+
+                                    const assetRect = event.currentTarget.getBoundingClientRect()
+                                    const isNearEdge = isPointerNearAssetEdge(assetRect, event.clientX, event.clientY)
+                                    event.currentTarget.style.cursor = isNearEdge || resizingPlacedAssetId === placedAsset.id ? "nwse-resize" : draggingPlacedAssetId === placedAsset.id ? "grabbing" : "move"
 
                                     const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
                                     if (!previewRect || rotatingPlacedAssetId === placedAsset.id) {
@@ -1590,13 +1597,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   }}
                                   onPointerUp={(event) => {
                                     event.stopPropagation()
+                                    event.currentTarget.style.cursor = "move"
                                     setDraggingPlacedAssetId(null)
                                     setResizingPlacedAssetId(null)
                                   }}
                                   onPointerCancel={(event) => {
                                     event.stopPropagation()
+                                    event.currentTarget.style.cursor = "move"
                                     setDraggingPlacedAssetId(null)
                                     setResizingPlacedAssetId(null)
+                                  }}
+                                  onPointerLeave={(event) => {
+                                    event.currentTarget.style.cursor = "move"
                                   }}
                                 >
                                   <img src={asset.imageUrl} alt={asset.name} className="pointer-events-none block select-none w-full object-contain" draggable={false} />

@@ -1531,72 +1531,72 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   onPointerDown={(event) => {
                                     event.stopPropagation()
                                     setActivePlacedAssetId(placedAsset.id)
-                                    setDraggingPlacedAssetId(placedAsset.id)
-                                      const assetRect = event.currentTarget.getBoundingClientRect()
-                                    if (previewRect) {
-                                      const shouldResize = isPointerNearAssetEdge(assetRect, event.clientX, event.clientY)
 
-                                      if (shouldResize) {
-                                        setResizingPlacedAssetId(placedAsset.id)
-                                        setDraggingPlacedAssetId(null)
+                                    const assetRect = event.currentTarget.getBoundingClientRect()
+                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                    const shouldResize = isPointerNearAssetEdge(assetRect, event.clientX, event.clientY)
 
-                                        if (previewRect) {
-                                          updatePlacedAsset(placedAsset.id, {
-                                            scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
-                                          })
-                                        }
-                                      } else {
-                                        setDraggingPlacedAssetId(placedAsset.id)
-                                        setResizingPlacedAssetId(null)
+                                    if (shouldResize) {
+                                      setResizingPlacedAssetId(placedAsset.id)
+                                      setDraggingPlacedAssetId(null)
 
-                                        if (previewRect) {
-                                          updatePlacedAsset(placedAsset.id, {
-                                            ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
-                                            pageNumber: page.pageNumber,
-                                          })
-                                        }
+                                      if (previewRect) {
+                                        updatePlacedAsset(placedAsset.id, {
+                                          scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
+                                        })
                                       }
+                                    } else {
+                                      setDraggingPlacedAssetId(placedAsset.id)
+                                      setResizingPlacedAssetId(null)
+
+                                      if (previewRect) {
+                                        updatePlacedAsset(placedAsset.id, {
+                                          ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
+                                          pageNumber: page.pageNumber,
+                                        })
+                                      }
+                                    }
+
+                                    event.currentTarget.setPointerCapture(event.pointerId)
+                                  }}
                                   onPointerMove={(event) => {
                                     event.stopPropagation()
-                                    if (draggingPlacedAssetId !== placedAsset.id || rotatingPlacedAssetId) {
+
+                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                    if (!previewRect || rotatingPlacedAssetId === placedAsset.id) {
                                       return
+                                    }
+
+                                    if (resizingPlacedAssetId === placedAsset.id) {
+                                      updatePlacedAsset(placedAsset.id, {
+                                        scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
+                                      })
+                                      return
+                                    }
+
+                                    if (draggingPlacedAssetId !== placedAsset.id) {
                                       return
                                     }
 
                                     updatePlacedAsset(placedAsset.id, {
                                       ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
-                                      if (rotatingPlacedAssetId === placedAsset.id) {
-                                        return
-                                      }
-
-                                      if (resizingPlacedAssetId === placedAsset.id) {
-                                        updatePlacedAsset(placedAsset.id, {
-                                          scalePercent: getScalePercentFromPointer(previewRect, placedAsset, event.clientX),
-                                        })
-                                        return
-                                      }
-
-                                      if (draggingPlacedAssetId !== placedAsset.id) {
-                                        return
-                                      }
-
-                                      updatePlacedAsset(placedAsset.id, {
-                                        ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
-                                        pageNumber: page.pageNumber,
-                                      })
+                                      pageNumber: page.pageNumber,
+                                    })
+                                  }}
+                                  onPointerUp={(event) => {
                                     event.stopPropagation()
                                     setDraggingPlacedAssetId(null)
+                                    setResizingPlacedAssetId(null)
                                   }}
                                   onPointerCancel={(event) => {
-                                      setResizingPlacedAssetId(null)
                                     event.stopPropagation()
                                     setDraggingPlacedAssetId(null)
+                                    setResizingPlacedAssetId(null)
                                   }}
                                 >
-                                      setResizingPlacedAssetId(null)
-                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
-                                  <span className="absolute right-0 top-0 flex -translate-y-[120%] translate-x-[35%] items-center gap-1">
-                                    <img src={asset.imageUrl} alt={asset.name} className="block w-full object-contain" />
+                                  <img src={asset.imageUrl} alt={asset.name} className="block w-full object-contain" />
+                                  <span
+                                    className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[140%] items-center justify-center rounded-full border bg-white text-[10px] font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
                                     onPointerDown={(event) => {
                                       event.stopPropagation()
                                       setActivePlacedAssetId(placedAsset.id)

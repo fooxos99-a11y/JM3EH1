@@ -1,7 +1,7 @@
 "use client"
 
-import { Bold, Italic, LoaderCircle, Plus, Save, Stamp, Trash2, Underline, Upload } from "lucide-react"
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
+import { Bold, Italic, LoaderCircle, Plus, RotateCw, Save, Stamp, Trash2, Underline, Upload } from "lucide-react"
+import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -35,6 +35,7 @@ type PlacedAsset = {
   xPercent: number
   yPercent: number
   scalePercent: number
+  rotationDegrees: number
 }
 
 type EditableTextLayer = {
@@ -66,6 +67,11 @@ function formatDateTime(value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function normalizeRotationDegrees(value: number) {
+  const normalized = ((value + 180) % 360 + 360) % 360 - 180
+  return normalized === -180 ? 180 : normalized
 }
 
 function getCanvasFontValue(layer: EditableTextLayer) {
@@ -412,11 +418,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [selectedStampInsertPage, setSelectedStampInsertPage] = useState(1)
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
   const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
+  const [rotatingPlacedAssetId, setRotatingPlacedAssetId] = useState<string | null>(null)
   const stampDragOffsetRef = useRef<StampPosition>({ xPercent: 0, yPercent: 0 })
   const stampDragFrameRef = useRef<number | null>(null)
   const stampDragPendingRef = useRef<{ id: string; pageNumber: number; position: StampPosition } | null>(null)
   const placedAssetElementRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const stampDragMetaRef = useRef<{ pageNumber: number; surfaceElement: HTMLDivElement | null } | null>(null)
+  const stampRotateMetaRef = useRef<{ centerX: number; centerY: number; startAngle: number; startRotation: number } | null>(null)
 
   function revokePreviewUrls(pages: PdfImagePage[]) {
     for (const page of pages) {
@@ -535,13 +543,30 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }, [imageToPdfPreviews])
 
   useEffect(() => {
-    if (!draggingPlacedAssetId) {
+    if (!draggingPlacedAssetId && !rotatingPlacedAssetId) {
       return
     }
 
     const handlePointerMove = (event: PointerEvent) => {
+      if (rotatingPlacedAssetId) {
+        const rotateMeta = stampRotateMetaRef.current
+        if (!rotateMeta) {
+          return
+        }
+
+        const nextAngle = Math.atan2(event.clientY - rotateMeta.centerY, event.clientX - rotateMeta.centerX)
+        const deltaDegrees = (nextAngle - rotateMeta.startAngle) * (180 / Math.PI)
+        updatePlacedAsset(rotatingPlacedAssetId, { rotationDegrees: normalizeRotationDegrees(rotateMeta.startRotation + deltaDegrees) })
+        return
+      }
+
       const dragMeta = stampDragMetaRef.current
       if (!dragMeta?.surfaceElement) {
+        return
+      }
+
+      const draggingAssetId = draggingPlacedAssetId
+      if (!draggingAssetId) {
         return
       }
 
@@ -551,10 +576,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         event.clientY,
         stampDragOffsetRef.current,
       )
-      queuePlacedAssetUpdate(draggingPlacedAssetId, dragMeta.pageNumber, nextPosition)
+      queuePlacedAssetUpdate(draggingAssetId, dragMeta.pageNumber, nextPosition)
     }
 
     const handlePointerEnd = () => {
+      stopPlacedAssetRotating()
       stopPlacedAssetDragging()
     }
 
@@ -567,7 +593,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       window.removeEventListener("pointerup", handlePointerEnd)
       window.removeEventListener("pointercancel", handlePointerEnd)
     }
-  }, [draggingPlacedAssetId])
+  }, [draggingPlacedAssetId, rotatingPlacedAssetId])
 
   function runTask(task: () => Promise<void>) {
     setMessage(null)
@@ -859,6 +885,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       xPercent: 50,
       yPercent: 50,
       scalePercent: 22,
+      rotationDegrees: 0,
     }
   }
 
@@ -873,6 +900,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
   function updatePlacedAsset(id: string, updates: Partial<PlacedAsset>) {
     setPlacedAssets((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item))
+  }
+
+  function setActivePlacedAssetRotation(rotationDegrees: number) {
+    if (!activePlacedAssetId) {
+      return
+    }
+
+    updatePlacedAsset(activePlacedAssetId, { rotationDegrees: normalizeRotationDegrees(rotationDegrees) })
   }
 
   function removePlacedAsset(id: string) {
@@ -927,6 +962,37 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         assetElement.style.willChange = "auto"
       }
     }
+  }
+
+  function startPlacedAssetRotating(event: React.PointerEvent<HTMLSpanElement>, placedAsset: PlacedAsset) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const surfaceElement = event.currentTarget.closest("[data-stamp-surface='true']")
+    if (!(surfaceElement instanceof HTMLDivElement)) {
+      return
+    }
+
+    const rect = surfaceElement.getBoundingClientRect()
+    const centerX = rect.left + ((placedAsset.xPercent / 100) * rect.width)
+    const centerY = rect.top + ((placedAsset.yPercent / 100) * rect.height)
+    const startAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX)
+
+    stampRotateMetaRef.current = {
+      centerX,
+      centerY,
+      startAngle,
+      startRotation: placedAsset.rotationDegrees,
+    }
+
+    setActivePlacedAssetId(placedAsset.id)
+    setRotatingPlacedAssetId(placedAsset.id)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function stopPlacedAssetRotating() {
+    setRotatingPlacedAssetId(null)
+    stampRotateMetaRef.current = null
   }
 
   async function handleSaveTemplate() {
@@ -1394,14 +1460,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         const embeddedAsset = asset.imageUrl.includes(".png") ? await pdf.embedPng(assetBytes) : await pdf.embedJpg(assetBytes)
         const stampWidth = page.getWidth() * (placedAsset.scalePercent / 100)
         const scaledHeight = (stampWidth / assetImage.width) * assetImage.height
-        const x = (placedAsset.xPercent / 100) * page.getWidth() - (stampWidth / 2)
-        const y = page.getHeight() - ((placedAsset.yPercent / 100) * page.getHeight()) - (scaledHeight / 2)
+        const centerX = (placedAsset.xPercent / 100) * page.getWidth()
+        const centerY = page.getHeight() - ((placedAsset.yPercent / 100) * page.getHeight())
+        const radians = (placedAsset.rotationDegrees * Math.PI) / 180
+        const rotatedX = centerX - (((stampWidth * Math.cos(radians)) - (scaledHeight * Math.sin(radians))) / 2)
+        const rotatedY = centerY - (((stampWidth * Math.sin(radians)) + (scaledHeight * Math.cos(radians))) / 2)
 
         page.drawImage(embeddedAsset, {
-          x: clamp(x, 0, Math.max(0, page.getWidth() - stampWidth)),
-          y: clamp(y, 0, Math.max(0, page.getHeight() - scaledHeight)),
+          x: rotatedX,
+          y: rotatedY,
           width: stampWidth,
           height: scaledHeight,
+          rotate: degrees(placedAsset.rotationDegrees),
         })
       }
 
@@ -1436,9 +1506,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       const assetImage = await loadImage(asset.imageUrl)
       const stampWidth = targetImage.width * (placedAsset.scalePercent / 100)
       const stampHeight = (stampWidth / assetImage.width) * assetImage.height
-      const x = ((placedAsset.xPercent / 100) * targetImage.width) - (stampWidth / 2)
-      const y = ((placedAsset.yPercent / 100) * targetImage.height) - (stampHeight / 2)
-      context.drawImage(assetImage, clamp(x, 0, Math.max(0, targetImage.width - stampWidth)), clamp(y, 0, Math.max(0, targetImage.height - stampHeight)), stampWidth, stampHeight)
+      const centerX = (placedAsset.xPercent / 100) * targetImage.width
+      const centerY = (placedAsset.yPercent / 100) * targetImage.height
+      context.save()
+      context.translate(centerX, centerY)
+      context.rotate((placedAsset.rotationDegrees * Math.PI) / 180)
+      context.drawImage(assetImage, -(stampWidth / 2), -(stampHeight / 2), stampWidth, stampHeight)
+      context.restore()
     }
 
     const blob = await new Promise<Blob>((resolve, reject) => {
@@ -1665,11 +1739,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       {activePlacedAsset ? (
-                        <div className="flex min-w-[220px] items-center gap-3 rounded-full border border-border/60 bg-white px-3 py-2">
-                          <span className="text-xs font-medium text-muted-foreground">الحجم</span>
-                          <Input type="range" min={8} max={60} step={1} value={activePlacedAsset.scalePercent} onChange={(event) => setActivePlacedAssetScale(Number(event.target.value) || activePlacedAsset.scalePercent)} className="h-2 border-0 bg-transparent p-0" />
-                          <span className="w-10 text-left text-xs font-semibold text-foreground">{activePlacedAsset.scalePercent}%</span>
-                        </div>
+                        <>
+                          <div className="flex min-w-[220px] items-center gap-3 rounded-full border border-border/60 bg-white px-3 py-2">
+                            <span className="text-xs font-medium text-muted-foreground">الحجم</span>
+                            <Input type="range" min={8} max={60} step={1} value={activePlacedAsset.scalePercent} onChange={(event) => setActivePlacedAssetScale(Number(event.target.value) || activePlacedAsset.scalePercent)} className="h-2 border-0 bg-transparent p-0" />
+                            <span className="w-10 text-left text-xs font-semibold text-foreground">{activePlacedAsset.scalePercent}%</span>
+                          </div>
+                          <div className="flex min-w-[220px] items-center gap-3 rounded-full border border-border/60 bg-white px-3 py-2">
+                            <span className="text-xs font-medium text-muted-foreground">الدوران</span>
+                            <Input type="range" min={-180} max={180} step={1} value={activePlacedAsset.rotationDegrees} onChange={(event) => setActivePlacedAssetRotation(Number(event.target.value) || 0)} className="h-2 border-0 bg-transparent p-0" />
+                            <span className="w-12 text-left text-xs font-semibold text-foreground">{Math.round(activePlacedAsset.rotationDegrees)}°</span>
+                          </div>
+                        </>
                       ) : null}
                       <div className="flex items-center gap-2">
                       <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => activePlacedAssetId ? removePlacedAsset(activePlacedAssetId) : null} disabled={!activePlacedAssetId}><Trash2 className="h-4 w-4" />حذف المحدد</Button>
@@ -1689,8 +1770,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                         >
                           <div
                             className="relative block w-full touch-none"
+                            data-stamp-surface="true"
                             onPointerDown={(event) => {
-                              if (!activePlacedAssetId) {
+                              if (!activePlacedAssetId || rotatingPlacedAssetId) {
                                 return
                               }
 
@@ -1708,7 +1790,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               event.currentTarget.setPointerCapture(event.pointerId)
                             }}
                             onPointerMove={(event) => {
-                              if (!draggingPlacedAssetId) {
+                              if (!draggingPlacedAssetId || rotatingPlacedAssetId) {
                                 return
                               }
 
@@ -1738,7 +1820,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     width: `${placedAsset.scalePercent}%`,
                                     left: `${placedAsset.xPercent}%`,
                                     top: `${placedAsset.yPercent}%`,
-                                    transform: "translate(-50%, -50%)",
+                                    transform: `translate(-50%, -50%) rotate(${placedAsset.rotationDegrees}deg)`,
                                     touchAction: "none",
                                     willChange: draggingPlacedAssetId === placedAsset.id ? "left, top" : undefined,
                                   }}
@@ -1770,7 +1852,20 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   }}
                                   onDragStart={(event) => event.preventDefault()}
                                 >
-                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} draggable={false} onDragStart={(event) => event.preventDefault()} />
+                                  {activePlacedAssetId === placedAsset.id ? (
+                                    <>
+                                      <span className="pointer-events-none absolute inset-0 rounded-md border border-primary/60" />
+                                      <span className="pointer-events-none absolute -top-4 left-1/2 h-4 w-px -translate-x-1/2 bg-primary/60" />
+                                      <span
+                                        data-rotate-handle="true"
+                                        className="absolute -top-7 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-primary/60 bg-white text-primary shadow-sm cursor-alias"
+                                        onPointerDown={(event) => startPlacedAssetRotating(event, placedAsset)}
+                                      >
+                                        <RotateCw className="h-3.5 w-3.5" />
+                                      </span>
+                                    </>
+                                  ) : null}
+                                  <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain rounded-md ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} draggable={false} onDragStart={(event) => event.preventDefault()} />
                                 </button>
                               )
                             })}
@@ -1815,7 +1910,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                     {assetDialogMode === "picker" && isMultiPageStampPdf ? (
                       <div className="space-y-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <Badge variant="secondary" className="rounded-full">الصفحة المختارة {selectedStampInsertPage}</Badge>
+                          <Badge variant="secondary" className="rounded-full">{selectedStampInsertPage}</Badge>
                         </div>
                         <div className="max-h-[420px] overflow-y-auto pr-1">
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -1828,7 +1923,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               >
                                 <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-36 w-full object-contain bg-muted/10" />
                                 <div className="flex items-center justify-between px-3 py-2">
-                                  <Badge variant={selectedStampInsertPage === page.pageNumber ? "default" : "secondary"}>الصفحة {page.pageNumber}</Badge>
+                                  <Badge variant={selectedStampInsertPage === page.pageNumber ? "default" : "secondary"}>{page.pageNumber}</Badge>
                                   <span className="text-xs text-muted-foreground">{selectedStampInsertPage === page.pageNumber ? "محددة" : ""}</span>
                                 </div>
                               </button>

@@ -134,8 +134,8 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-4 text-right md:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-[1280px]">
-            <div className="mb-6 flex items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+          <div className="w-full">
+            <div className="mb-6 flex w-full items-center justify-between rounded-[2rem] border border-white/70 bg-white/90 px-5 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
               <div className="text-right">
                 <p className="text-xs font-medium text-muted-foreground">مرحبًا</p>
                 <p className="text-sm font-bold text-foreground">{userName}</p>
@@ -161,7 +161,7 @@ export function AdminDashboardShell({ userId, userName, userTitle, userPermissio
               </div>
             </div>
 
-            <div className="px-1 md:px-2">
+            <div className="mx-auto w-full max-w-[1280px] px-1 md:px-2">
               {children}
             </div>
           </div>

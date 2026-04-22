@@ -286,6 +286,9 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     [writerTextLayers, activeWriterTextLayerId],
   )
 
+  const editTargetIsPdf = editTargetFile ? isPdfFile(editTargetFile) : false
+  const stampTargetIsPdf = stampTargetFile ? isPdfFile(stampTargetFile) : false
+
   function runTask(task: () => Promise<void>) {
     setMessage(null)
     startTransition(async () => {
@@ -352,7 +355,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   async function prepareWriterBackground(file: File) {
-    if (file.type === "application/pdf") {
+    if (isPdfFile(file)) {
       setIsPreparingWriterBackground(true)
       try {
         const pdfjs = await loadPdfJs()
@@ -847,7 +850,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("تعذر تجهيز الملف للتحرير")
     }
 
-    if (editTargetFile.type === "application/pdf") {
+    if (editTargetIsPdf) {
       const outputPdf = await PDFDocument.create()
 
       for (const previewPage of editPreviewPages) {
@@ -1141,7 +1144,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </div>
       )}
 
-      {message && !isCompactServiceView ? (
+      {message ? (
         <Alert className={message.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}>
           <AlertTitle>{message.type === "success" ? "تم تنفيذ العملية" : "يوجد تنبيه"}</AlertTitle>
           <AlertDescription>{message.text}</AlertDescription>
@@ -1289,7 +1292,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             </button>
                           ))}
                         </button>
-                        {editTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                          {editTargetIsPdf ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                       </div>
                     ))}
                   </div>
@@ -1316,7 +1319,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
-                    <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={data.assets.length === 0}>عرض المحفوظات</Button>
+                    <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}>عرض المحفوظات</Button>
                   </div>
                 </div>
               </CardContent>
@@ -1330,7 +1333,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleStampTargetChange(file) } }} />
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={data.assets.length === 0}><Plus className="h-4 w-4" />إضافة</Button>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
                 {placedAssets.length > 0 ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
@@ -1430,13 +1433,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               )
                             })}
                           </button>
-                          {stampTargetFile?.type === "application/pdf" ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
+                          {stampTargetIsPdf ? <Badge className="absolute left-4 top-4 rounded-full">الصفحة {page.pageNumber}</Badge> : null}
                         </div>
                       ))}
                     </div>
                   ) : <div className="flex h-[420px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع ملفًا ثم اضغط داخل المعاينة لتحديد مكان الختم.</div>}
                 </div>
-                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${stampTargetFile?.type === "application/pdf" ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{activePlacedAsset ? `المحدد: X ${activePlacedAsset.xPercent.toFixed(1)}% • Y ${activePlacedAsset.yPercent.toFixed(1)}%${stampTargetIsPdf ? ` • الصفحة ${activePlacedAsset.pageNumber}` : ""}` : `عدد العناصر المضافة: ${placedAssets.length}`}</p><Button type="button" className="rounded-xl" onClick={() => runTask(handleApplyStamp)} disabled={isPending}><Stamp className="h-4 w-4" />تنزيل الملف</Button></div>
               </CardContent>
             </Card>
           </div>

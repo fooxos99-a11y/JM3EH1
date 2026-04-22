@@ -277,7 +277,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [stampPreviewPages, setStampPreviewPages] = useState<PdfImagePage[]>([])
   const [placedAssets, setPlacedAssets] = useState<PlacedAsset[]>([])
   const [activePlacedAssetId, setActivePlacedAssetId] = useState<string | null>(null)
+  const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false)
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
+  const [selectedPickerAssetId, setSelectedPickerAssetId] = useState<string | null>(null)
+  const [selectedPickerPageNumber, setSelectedPickerPageNumber] = useState<number>(1)
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
   const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
 
@@ -331,6 +334,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     () => writerTextLayers.find((item) => item.id === activeWriterTextLayerId) ?? null,
     [writerTextLayers, activeWriterTextLayerId],
   )
+
+  useEffect(() => {
+    if (!isAssetPickerOpen) {
+      return
+    }
+
+    setSelectedPickerAssetId((current) => current ?? data?.assets[0]?.id ?? null)
+    setSelectedPickerPageNumber((current) => {
+      const firstPageNumber = stampPreviewPages[0]?.pageNumber ?? 1
+      return stampPreviewPages.some((page) => page.pageNumber === current) ? current : firstPageNumber
+    })
+  }, [data?.assets, isAssetPickerOpen, stampPreviewPages])
 
   const editTargetIsPdf = editTargetFile ? isPdfFile(editTargetFile) : false
   const stampTargetIsPdf = stampTargetFile ? isPdfFile(stampTargetFile) : false
@@ -563,6 +578,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   function removePlacedAsset(id: string) {
     setPlacedAssets((current) => current.filter((item) => item.id !== id))
     setActivePlacedAssetId((current) => current === id ? null : current)
+  }
+
+  function handleAddAssetToSelectedPage() {
+    if (!selectedPickerAssetId) {
+      setMessage({ type: "error", text: "اختر ختمًا أو توقيعًا أولًا" })
+      return
+    }
+
+    const newPlacedAsset = createPlacedAsset(selectedPickerAssetId, selectedPickerPageNumber)
+    setPlacedAssets((current) => [...current, newPlacedAsset])
+    setActivePlacedAssetId(newPlacedAsset.id)
+    setIsAssetPickerOpen(false)
   }
 
   async function handleSaveTemplate() {
@@ -1351,22 +1378,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         <TabsContent value="stamps" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-              <CardHeader>
-                <CardTitle>مكتبة الأختام والتواقيع</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
-                  <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
-                </div>
-                <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
-                  <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
-                  {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
-                    <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}>عرض المحفوظات</Button>
-                  </div>
-                </div>
+              <CardContent className="flex min-h-[220px] items-center justify-center p-6">
+                <Button type="button" className="rounded-xl px-6" onClick={() => setIsAssetLibraryOpen(true)}>
+                  <Upload className="h-4 w-4" />مكتبة الختم والتواقيع
+                </Button>
               </CardContent>
             </Card>
 
@@ -1378,7 +1393,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleStampTargetChange(file) } }} />
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}><Plus className="h-4 w-4" />إضافة</Button>
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={stampPreviewPages.length === 0}><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
                 {placedAssets.length > 0 ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
@@ -1490,31 +1505,80 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           </div>
 
           <Dialog open={isAssetPickerOpen} onOpenChange={setIsAssetPickerOpen}>
-            <DialogContent className="max-w-3xl rounded-[1.75rem] p-0 text-right">
+            <DialogContent className="max-w-5xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
                   <DialogTitle>اختر ختمًا أو توقيعًا</DialogTitle>
                 </DialogHeader>
-                {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {data.assets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      className="rounded-[1.25rem] border border-border/60 p-4 text-right transition-colors hover:bg-muted/20"
-                      onClick={() => {
-                        const newPlacedAsset = createPlacedAsset(asset.id, 1)
-                        setPlacedAssets((current) => [...current, newPlacedAsset])
-                        setActivePlacedAssetId(newPlacedAsset.id)
-                        setIsAssetPickerOpen(false)
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-3 text-center">
-                        <img src={asset.imageUrl} alt={asset.name} className="h-24 w-24 rounded-2xl bg-white object-contain" />
-                        <p className="font-semibold text-foreground">{asset.name}</p>
+                {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 space-y-5">
+                  <div>
+                    <p className="mb-3 text-sm font-medium text-foreground">1. اختر الختم أو التوقيع</p>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {data.assets.map((asset) => (
+                        <button
+                          key={asset.id}
+                          type="button"
+                          className={`rounded-[1.25rem] border p-4 text-right transition-colors ${selectedPickerAssetId === asset.id ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/20"}`}
+                          onClick={() => setSelectedPickerAssetId(asset.id)}
+                        >
+                          <div className="flex flex-col items-center gap-3 text-center">
+                            <img src={asset.imageUrl} alt={asset.name} className="h-24 w-24 rounded-2xl bg-white object-contain" />
+                            <p className="font-semibold text-foreground">{asset.name}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-3 text-sm font-medium text-foreground">2. اختر الصفحة</p>
+                    {stampPreviewPages.length > 0 ? (
+                      <div className="grid max-h-[360px] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                        {stampPreviewPages.map((page) => (
+                          <button
+                            key={page.pageNumber}
+                            type="button"
+                            className={`overflow-hidden rounded-[1.25rem] border bg-white text-right transition-colors ${selectedPickerPageNumber === page.pageNumber ? "border-primary shadow-[0_16px_35px_rgba(15,23,42,0.12)]" : "border-border/60 hover:bg-muted/20"}`}
+                            onClick={() => setSelectedPickerPageNumber(page.pageNumber)}
+                          >
+                            <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-48 w-full object-contain bg-muted/10" />
+                            <div className="px-4 py-3 text-sm font-medium text-foreground">الصفحة {page.pageNumber}</div>
+                          </button>
+                        ))}
                       </div>
-                    </button>
-                  ))}
+                    ) : <p className="text-sm text-muted-foreground">ارفع ملف PDF أو صورة أولًا لعرض الصفحات.</p>}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button type="button" className="rounded-xl" onClick={handleAddAssetToSelectedPage} disabled={!selectedPickerAssetId || stampPreviewPages.length === 0}>
+                      <Plus className="h-4 w-4" />إضافة إلى الصفحة المحددة
+                    </Button>
+                  </div>
                 </div>}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAssetLibraryOpen} onOpenChange={setIsAssetLibraryOpen}>
+            <DialogContent className="max-w-4xl rounded-[1.75rem] p-0 text-right">
+              <div className="p-6">
+                <DialogHeader className="text-right">
+                  <DialogTitle>مكتبة الختم والتواقيع</DialogTitle>
+                </DialogHeader>
+                <div className="mt-5 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
+                    <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
+                  </div>
+                  <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
+                    <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
+                    {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
+                      <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}>عرض المحفوظات</Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </DialogContent>
           </Dialog>

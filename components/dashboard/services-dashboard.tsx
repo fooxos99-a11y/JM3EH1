@@ -161,6 +161,49 @@ async function loadPdfJs() {
   return pdfjs
 }
 
+async function embedAssetImageForPdf(pdf: PDFDocument, imageUrl: string) {
+  const response = await fetch(imageUrl)
+  if (!response.ok) {
+    throw new Error("تعذر تحميل صورة الختم أو التوقيع")
+  }
+
+  const blob = await response.blob()
+  const bytes = await blob.arrayBuffer()
+
+  if (blob.type === "image/png") {
+    return pdf.embedPng(bytes)
+  }
+
+  if (blob.type === "image/jpeg") {
+    return pdf.embedJpg(bytes)
+  }
+
+  const image = await loadImage(URL.createObjectURL(blob))
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d")
+
+  if (!context) {
+    throw new Error("تعذر تجهيز صورة الختم أو التوقيع")
+  }
+
+  canvas.width = image.width
+  canvas.height = image.height
+  context.drawImage(image, 0, 0)
+
+  const pngBlob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((nextBlob) => {
+      if (!nextBlob) {
+        reject(new Error("تعذر تحويل صورة الختم أو التوقيع"))
+        return
+      }
+
+      resolve(nextBlob)
+    }, "image/png")
+  })
+
+  return pdf.embedPng(await pngBlob.arrayBuffer())
+}
+
 function parseWriterTemplateConfig(value: string): WriterTemplateConfig {
   try {
     const parsed = JSON.parse(value) as Partial<WriterTemplateConfig>
@@ -1008,8 +1051,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         const pageIndex = clamp(placedAsset.pageNumber, 1, pages.length) - 1
         const page = pages[pageIndex]
         const assetImage = await loadImage(asset.imageUrl)
-        const assetBytes = await fetch(asset.imageUrl).then((response) => response.arrayBuffer())
-        const embeddedAsset = asset.imageUrl.includes(".png") ? await pdf.embedPng(assetBytes) : await pdf.embedJpg(assetBytes)
+        const embeddedAsset = await embedAssetImageForPdf(pdf, asset.imageUrl)
         const stampWidth = page.getWidth() * (placedAsset.scalePercent / 100)
         const scaledHeight = (stampWidth / assetImage.width) * assetImage.height
         const x = (placedAsset.xPercent / 100) * page.getWidth() - (stampWidth / 2)

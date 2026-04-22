@@ -1,7 +1,7 @@
 "use client"
 
 import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib"
+import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -35,6 +35,7 @@ type PlacedAsset = {
   xPercent: number
   yPercent: number
   scalePercent: number
+  rotationDegrees: number
 }
 
 type EditableTextLayer = {
@@ -63,6 +64,10 @@ function formatDateTime(value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function normalizeRotationDegrees(value: number) {
+  return ((value % 360) + 360) % 360
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -279,10 +284,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [activePlacedAssetId, setActivePlacedAssetId] = useState<string | null>(null)
   const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false)
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
+  const [assetPickerMode, setAssetPickerMode] = useState<"add" | "saved">("add")
   const [selectedPickerAssetId, setSelectedPickerAssetId] = useState<string | null>(null)
   const [selectedPickerPageNumber, setSelectedPickerPageNumber] = useState<number>(1)
   const [isPreparingStampPreview, setIsPreparingStampPreview] = useState(false)
   const [draggingPlacedAssetId, setDraggingPlacedAssetId] = useState<string | null>(null)
+  const [rotatingPlacedAssetId, setRotatingPlacedAssetId] = useState<string | null>(null)
 
   async function loadData() {
     setLoading(true)
@@ -336,7 +343,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   )
 
   useEffect(() => {
-    if (!isAssetPickerOpen) {
+    if (!isAssetPickerOpen || assetPickerMode !== "add") {
       return
     }
 
@@ -345,7 +352,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       const firstPageNumber = stampPreviewPages[0]?.pageNumber ?? 1
       return stampPreviewPages.some((page) => page.pageNumber === current) ? current : firstPageNumber
     })
-  }, [data?.assets, isAssetPickerOpen, stampPreviewPages])
+  }, [assetPickerMode, data?.assets, isAssetPickerOpen, stampPreviewPages])
 
   const editTargetIsPdf = editTargetFile ? isPdfFile(editTargetFile) : false
   const stampTargetIsPdf = stampTargetFile ? isPdfFile(stampTargetFile) : false
@@ -568,6 +575,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       xPercent: 50,
       yPercent: 50,
       scalePercent: 22,
+      rotationDegrees: 0,
     }
   }
 
@@ -1047,6 +1055,13 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     return { xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) }
   }
 
+  function getRotationDegreesFromPointer(rect: DOMRect, clientX: number, clientY: number) {
+    const centerX = rect.left + (rect.width / 2)
+    const centerY = rect.top + (rect.height / 2)
+    const angle = (Math.atan2(clientY - centerY, clientX - centerX) * 180) / Math.PI + 90
+    return normalizeRotationDegrees(angle)
+  }
+
   function resizeStamp(step: number) {
     if (!activePlacedAssetId) {
       return
@@ -1081,14 +1096,20 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         const embeddedAsset = await embedAssetImageForPdf(pdf, asset.imageUrl)
         const stampWidth = page.getWidth() * (placedAsset.scalePercent / 100)
         const scaledHeight = (stampWidth / assetImage.width) * assetImage.height
-        const x = (placedAsset.xPercent / 100) * page.getWidth() - (stampWidth / 2)
-        const y = page.getHeight() - ((placedAsset.yPercent / 100) * page.getHeight()) - (scaledHeight / 2)
+        const centerX = (placedAsset.xPercent / 100) * page.getWidth()
+        const centerY = page.getHeight() - ((placedAsset.yPercent / 100) * page.getHeight())
+        const rotationRadians = (placedAsset.rotationDegrees * Math.PI) / 180
+        const rotatedCenterOffsetX = (stampWidth / 2) * Math.cos(rotationRadians) - (scaledHeight / 2) * Math.sin(rotationRadians)
+        const rotatedCenterOffsetY = (stampWidth / 2) * Math.sin(rotationRadians) + (scaledHeight / 2) * Math.cos(rotationRadians)
+        const x = centerX - rotatedCenterOffsetX
+        const y = centerY - rotatedCenterOffsetY
 
         page.drawImage(embeddedAsset, {
-          x: clamp(x, 0, Math.max(0, page.getWidth() - stampWidth)),
-          y: clamp(y, 0, Math.max(0, page.getHeight() - scaledHeight)),
+          x,
+          y,
           width: stampWidth,
           height: scaledHeight,
+          rotate: degrees(placedAsset.rotationDegrees),
         })
       }
 
@@ -1123,9 +1144,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       const assetImage = await loadImage(asset.imageUrl)
       const stampWidth = targetImage.width * (placedAsset.scalePercent / 100)
       const stampHeight = (stampWidth / assetImage.width) * assetImage.height
-      const x = ((placedAsset.xPercent / 100) * targetImage.width) - (stampWidth / 2)
-      const y = ((placedAsset.yPercent / 100) * targetImage.height) - (stampHeight / 2)
-      context.drawImage(assetImage, clamp(x, 0, Math.max(0, targetImage.width - stampWidth)), clamp(y, 0, Math.max(0, targetImage.height - stampHeight)), stampWidth, stampHeight)
+      const centerX = (placedAsset.xPercent / 100) * targetImage.width
+      const centerY = (placedAsset.yPercent / 100) * targetImage.height
+
+      context.save()
+      context.translate(centerX, centerY)
+      context.rotate((placedAsset.rotationDegrees * Math.PI) / 180)
+      context.drawImage(assetImage, -(stampWidth / 2), -(stampHeight / 2), stampWidth, stampHeight)
+      context.restore()
     }
 
     const blob = await new Promise<Blob>((resolve, reject) => {
@@ -1391,7 +1417,16 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                   <Input type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void handleStampTargetChange(file) } }} />
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)} disabled={stampPreviewPages.length === 0}><Plus className="h-4 w-4" />إضافة</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => {
+                      setAssetPickerMode("add")
+                      setIsAssetPickerOpen(true)
+                    }}
+                    disabled={stampPreviewPages.length === 0}
+                  ><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
                 {placedAssets.length > 0 ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
@@ -1443,6 +1478,10 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               event.currentTarget.setPointerCapture(event.pointerId)
                             }}
                             onPointerMove={(event) => {
+                              if (rotatingPlacedAssetId) {
+                                return
+                              }
+
                               if (!draggingPlacedAssetId) {
                                 return
                               }
@@ -1450,8 +1489,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                               const nextPosition = updateStampPositionFromPointer(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
                               updatePlacedAsset(draggingPlacedAssetId, { ...nextPosition, pageNumber: page.pageNumber })
                             }}
-                            onPointerUp={() => setDraggingPlacedAssetId(null)}
-                            onPointerCancel={() => setDraggingPlacedAssetId(null)}
+                            onPointerUp={() => {
+                              setDraggingPlacedAssetId(null)
+                              setRotatingPlacedAssetId(null)
+                            }}
+                            onPointerCancel={() => {
+                              setDraggingPlacedAssetId(null)
+                              setRotatingPlacedAssetId(null)
+                            }}
                           >
                             <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
                             {placedAssets.filter((placedAsset) => placedAsset.pageNumber === page.pageNumber).map((placedAsset) => {
@@ -1464,12 +1509,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                 <button
                                   key={placedAsset.id}
                                   type="button"
-                                  className={`absolute opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
+                                  className={`absolute overflow-visible opacity-85 transition-shadow ${activePlacedAssetId === placedAsset.id ? "drop-shadow-[0_14px_28px_rgba(15,23,42,0.28)]" : "drop-shadow-[0_10px_22px_rgba(15,23,42,0.22)]"}`}
                                   style={{
                                     width: `${placedAsset.scalePercent}%`,
                                     left: `${placedAsset.xPercent}%`,
                                     top: `${placedAsset.yPercent}%`,
-                                    transform: "translate(-50%, -50%)",
+                                    transform: `translate(-50%, -50%) rotate(${placedAsset.rotationDegrees}deg)`,
                                   }}
                                   onPointerDown={(event) => {
                                     event.stopPropagation()
@@ -1487,6 +1532,46 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   }}
                                 >
                                   <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
+                                  <span
+                                    className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[140%] items-center justify-center rounded-full border bg-white text-[10px] font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
+                                    onPointerDown={(event) => {
+                                      event.stopPropagation()
+                                      setActivePlacedAssetId(placedAsset.id)
+                                      setRotatingPlacedAssetId(placedAsset.id)
+                                      const parentRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                      if (parentRect) {
+                                        updatePlacedAsset(placedAsset.id, {
+                                          rotationDegrees: getRotationDegreesFromPointer(parentRect, event.clientX, event.clientY),
+                                        })
+                                      }
+                                      event.currentTarget.setPointerCapture(event.pointerId)
+                                    }}
+                                    onPointerMove={(event) => {
+                                      event.stopPropagation()
+                                      if (rotatingPlacedAssetId !== placedAsset.id) {
+                                        return
+                                      }
+
+                                      const parentRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                      if (!parentRect) {
+                                        return
+                                      }
+
+                                      updatePlacedAsset(placedAsset.id, {
+                                        rotationDegrees: getRotationDegreesFromPointer(parentRect, event.clientX, event.clientY),
+                                      })
+                                    }}
+                                    onPointerUp={(event) => {
+                                      event.stopPropagation()
+                                      setRotatingPlacedAssetId(null)
+                                    }}
+                                    onPointerCancel={(event) => {
+                                      event.stopPropagation()
+                                      setRotatingPlacedAssetId(null)
+                                    }}
+                                  >
+                                    ↻
+                                  </span>
                                 </button>
                               )
                             })}
@@ -1505,52 +1590,73 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             <DialogContent className="max-w-6xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
-                  <DialogTitle>اختر ختمًا أو توقيعًا</DialogTitle>
+                  <DialogTitle>{assetPickerMode === "saved" ? "المحفوظات" : "اختر ختمًا أو توقيعًا"}</DialogTitle>
                 </DialogHeader>
                 {data.assets.length === 0 ? <p className="mt-5 text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : <div className="mt-5 space-y-5">
                   <div>
-                    <p className="mb-3 text-sm font-medium text-foreground">1. اختر الختم أو التوقيع</p>
+                    <p className="mb-3 text-sm font-medium text-foreground">{assetPickerMode === "saved" ? "الأختام والتواقيع المحفوظة" : "1. اختر الختم أو التوقيع"}</p>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                       {data.assets.map((asset) => (
-                        <button
-                          key={asset.id}
-                          type="button"
-                          className={`rounded-[1.1rem] border p-3 text-right transition-colors ${selectedPickerAssetId === asset.id ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/20"}`}
-                          onClick={() => setSelectedPickerAssetId(asset.id)}
-                        >
-                          <div className="flex flex-col items-center gap-2 text-center">
-                            <img src={asset.imageUrl} alt={asset.name} className="h-20 w-20 rounded-xl bg-white object-contain" />
-                            <p className="text-sm font-semibold leading-6 text-foreground">{asset.name}</p>
+                        assetPickerMode === "saved" ? (
+                          <div key={asset.id} className="rounded-[1rem] border border-border/60 p-2.5 text-right">
+                            <div className="flex flex-col items-center gap-1.5 text-center">
+                              <img src={asset.imageUrl} alt={asset.name} className="h-16 w-16 rounded-lg bg-white object-contain" />
+                              <p className="text-xs font-semibold leading-5 text-foreground">{asset.name}</p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-auto rounded-xl px-3 py-1 text-red-600 hover:text-red-700"
+                                onClick={() => runTask(() => handleDeleteAsset(asset.id))}
+                              >
+                                <Trash2 className="h-4 w-4" />حذف
+                              </Button>
+                            </div>
                           </div>
-                        </button>
+                        ) : (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            className={`rounded-[1rem] border p-2.5 text-right transition-colors ${selectedPickerAssetId === asset.id ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/20"}`}
+                            onClick={() => setSelectedPickerAssetId(asset.id)}
+                          >
+                            <div className="flex flex-col items-center gap-1.5 text-center">
+                              <img src={asset.imageUrl} alt={asset.name} className="h-16 w-16 rounded-lg bg-white object-contain" />
+                              <p className="text-xs font-semibold leading-5 text-foreground">{asset.name}</p>
+                            </div>
+                          </button>
+                        )
                       ))}
                     </div>
                   </div>
 
-                  <div>
-                    <p className="mb-3 text-sm font-medium text-foreground">2. اختر الصفحة</p>
-                    {stampPreviewPages.length > 0 ? (
-                      <div className="grid max-h-[360px] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-5">
-                        {stampPreviewPages.map((page) => (
-                          <button
-                            key={page.pageNumber}
-                            type="button"
-                            className={`overflow-hidden rounded-[1rem] border bg-white text-right transition-colors ${selectedPickerPageNumber === page.pageNumber ? "border-primary shadow-[0_16px_35px_rgba(15,23,42,0.12)]" : "border-border/60 hover:bg-muted/20"}`}
-                            onClick={() => setSelectedPickerPageNumber(page.pageNumber)}
-                          >
-                            <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-32 w-full object-contain bg-muted/10" />
-                            <div className="px-3 py-2 text-sm font-medium text-foreground">الصفحة {page.pageNumber}</div>
-                          </button>
-                        ))}
+                  {assetPickerMode === "add" ? (
+                    <>
+                      <div>
+                        <p className="mb-3 text-sm font-medium text-foreground">2. اختر الصفحة</p>
+                        {stampPreviewPages.length > 0 ? (
+                          <div className="grid max-h-[360px] gap-3 overflow-y-auto sm:grid-cols-2 lg:grid-cols-5">
+                            {stampPreviewPages.map((page) => (
+                              <button
+                                key={page.pageNumber}
+                                type="button"
+                                className={`overflow-hidden rounded-[1rem] border bg-white text-right transition-colors ${selectedPickerPageNumber === page.pageNumber ? "border-primary shadow-[0_16px_35px_rgba(15,23,42,0.12)]" : "border-border/60 hover:bg-muted/20"}`}
+                                onClick={() => setSelectedPickerPageNumber(page.pageNumber)}
+                              >
+                                <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-32 w-full object-contain bg-muted/10" />
+                                <div className="px-3 py-2 text-sm font-medium text-foreground">الصفحة {page.pageNumber}</div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : <p className="text-sm text-muted-foreground">ارفع ملف PDF أو صورة أولًا لعرض الصفحات.</p>}
                       </div>
-                    ) : <p className="text-sm text-muted-foreground">ارفع ملف PDF أو صورة أولًا لعرض الصفحات.</p>}
-                  </div>
 
-                  <div className="flex justify-end">
-                    <Button type="button" className="rounded-xl" onClick={handleAddAssetToSelectedPage} disabled={!selectedPickerAssetId || stampPreviewPages.length === 0}>
-                      <Plus className="h-4 w-4" />إضافة إلى الصفحة المحددة
-                    </Button>
-                  </div>
+                      <div className="flex justify-end">
+                        <Button type="button" className="rounded-xl" onClick={handleAddAssetToSelectedPage} disabled={!selectedPickerAssetId || stampPreviewPages.length === 0}>
+                          <Plus className="h-4 w-4" />إضافة إلى الصفحة المحددة
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
                 </div>}
               </div>
             </DialogContent>
@@ -1565,14 +1671,22 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                 <div className="mt-5 space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2 text-right md:order-1"><Label className="block text-right">النوع</Label><Select value={assetKind} onValueChange={(value) => setAssetKind(value as ServiceAssetKind)}><SelectTrigger className="w-full flex-row-reverse text-right [&>span]:text-right"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="stamp">ختم</SelectItem><SelectItem value="signature">توقيع</SelectItem></SelectContent></Select></div>
-                    <div className="space-y-2 text-right md:order-2"><Label className="block text-right">اسم الأصل</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
+                    <div className="space-y-2 text-right md:order-2"><Label className="block text-right">الاسم</Label><Input className="text-right" value={assetName} onChange={(event) => setAssetName(event.target.value)} /></div>
                   </div>
                   <div className="space-y-3 rounded-[1.25rem] border border-dashed border-border/70 bg-muted/10 p-4">
                     <Input className="text-right file:text-right" type="file" accept="image/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) { void uploadAssetFile(file) } }} />
                     {assetImageUrl ? <img src={assetImageUrl} alt="Preview" className="h-40 w-full rounded-[1rem] object-contain bg-white" /> : null}
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Button type="button" variant="outline" className="rounded-xl" onClick={() => runTask(handleCreateAsset)} disabled={isPending || isUploadingAsset}>{isUploadingAsset ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}حفظ</Button>
-                      <Button type="button" variant="ghost" className="rounded-xl" onClick={() => setIsAssetPickerOpen(true)}>عرض المحفوظات</Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="rounded-xl"
+                        onClick={() => {
+                          setAssetPickerMode("saved")
+                          setIsAssetPickerOpen(true)
+                        }}
+                      >عرض المحفوظات</Button>
                     </div>
                   </div>
                 </div>

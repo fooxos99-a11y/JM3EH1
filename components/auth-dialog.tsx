@@ -79,6 +79,13 @@ function normalizePhone(rawPhone: string) {
   return latinDigits.startsWith("+") ? latinDigits : `+${latinDigits}`
 }
 
+function normalizeOtpCode(rawCode: string) {
+  return rawCode
+    .trim()
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/\D/g, "")
+}
+
 export function AuthDialog({ isScrolled }: AuthDialogProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -194,8 +201,15 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
   }
 
   async function verifyOtpCode() {
-    if (!otpCode.trim()) {
+    const normalizedOtpCode = normalizeOtpCode(otpCode)
+
+    if (!normalizedOtpCode) {
       setMessage({ type: "error", text: "أدخل رمز التحقق أولًا" })
+      return
+    }
+
+    if (normalizedOtpCode.length < 4) {
+      setMessage({ type: "error", text: "أدخل رمز تحقق مكوّنًا من 4 أرقام على الأقل" })
       return
     }
 
@@ -205,7 +219,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
     try {
       const { data, error } = await supabaseBrowserClient.auth.verifyOtp({
         phone: normalizePhone(registerForm.phone),
-        token: otpCode,
+        token: normalizedOtpCode,
         type: "sms",
       })
 
@@ -573,9 +587,10 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
                           dir="ltr"
                           className="text-right"
                           inputMode="numeric"
-                          placeholder="123456"
+                          maxLength={4}
+                          placeholder="1234"
                           value={otpCode}
-                          onChange={(event) => setOtpCode(event.target.value)}
+                          onChange={(event) => setOtpCode(normalizeOtpCode(event.target.value).slice(0, 4))}
                         />
                       </div>
                     </div>

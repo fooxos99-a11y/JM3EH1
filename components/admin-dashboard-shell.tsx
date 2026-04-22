@@ -48,7 +48,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 
   useEffect(() => {
     setOpenGroups((current) => {
-      const nextEntries = Object.fromEntries(sections.map((group) => [group.title, current[group.title] ?? true]))
+      const nextEntries = Object.fromEntries(sections.map((group) => [group.title, current[group.title] ?? false]))
       return nextEntries
     })
   }, [sections])
@@ -73,7 +73,7 @@ function SidebarContent({ permissions, logoUrl, logoAlt, logoArabicName, logoEng
 
       <div className="flex-1 overflow-y-auto px-4 py-4 text-right">
         {sections.map((group) => {
-          const isOpen = isMounted ? (openGroups[group.title] ?? true) : true
+          const isOpen = isMounted ? (openGroups[group.title] ?? false) : false
 
           return (
             <section key={group.title} className="border-b border-border/50 py-2 last:border-b-0">

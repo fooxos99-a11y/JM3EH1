@@ -470,8 +470,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     [data],
   )
 
-  const signatureAssets = useMemo(
-    () => (data?.assets ?? []).filter((asset) => asset.kind === "signature"),
+  const selectableAssets = useMemo(
+    () => data?.assets ?? [],
     [data],
   )
 
@@ -1787,7 +1787,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           </div>
 
           <Dialog open={isAssetPickerOpen} onOpenChange={setIsAssetPickerOpen}>
-            <DialogContent className="max-w-5xl rounded-[1.75rem] p-0 text-right">
+            <DialogContent className="max-w-7xl rounded-[1.75rem] p-0 text-right">
               <div className="p-6">
                 <DialogHeader className="text-right">
                   <DialogTitle>{assetDialogMode === "manager" ? "مكتبة الأختام والتواقيع" : "اختر ختمًا أو توقيعًا"}</DialogTitle>
@@ -1811,32 +1811,33 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   ) : null}
 
                   <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{assetDialogMode === "manager" ? "العناصر المحفوظة متاحة للحذف فقط من هذه النافذة." : isMultiPageStampPdf ? "اختر الصفحة أولًا من المعاينات الصغيرة، ثم اضغط على العنصر لإضافته للمعاينة." : "اضغط على العنصر لإضافته للمعاينة"}</p>
+                    <p className="text-sm text-muted-foreground">{assetDialogMode === "manager" ? "العناصر المحفوظة متاحة للحذف فقط من هذه النافذة." : ""}</p>
                     {assetDialogMode === "picker" && isMultiPageStampPdf ? (
                       <div className="space-y-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <Badge variant="secondary" className="rounded-full">الصفحة المختارة {selectedStampInsertPage}</Badge>
-                          <p className="text-sm text-muted-foreground">اختر الصفحة التي تريد وضع الختم أو التوقيع فيها.</p>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                          {stampPreviewPages.map((page) => (
-                            <button
-                              key={page.pageNumber}
-                              type="button"
-                              className={`overflow-hidden rounded-[1.1rem] border bg-white text-right transition-all ${selectedStampInsertPage === page.pageNumber ? "border-primary shadow-[0_16px_36px_rgba(15,23,42,0.14)]" : "border-border/60 hover:border-primary/50 hover:bg-muted/20"}`}
-                              onClick={() => setSelectedStampInsertPage(page.pageNumber)}
-                            >
-                              <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-36 w-full object-contain bg-muted/10" />
-                              <div className="flex items-center justify-between px-3 py-2">
-                                <Badge variant={selectedStampInsertPage === page.pageNumber ? "default" : "secondary"}>الصفحة {page.pageNumber}</Badge>
-                                <span className="text-xs text-muted-foreground">{selectedStampInsertPage === page.pageNumber ? "محددة" : "اختيار"}</span>
-                              </div>
-                            </button>
-                          ))}
+                        <div className="max-h-[420px] overflow-y-auto pr-1">
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                            {stampPreviewPages.map((page) => (
+                              <button
+                                key={page.pageNumber}
+                                type="button"
+                                className={`overflow-hidden rounded-[1.1rem] border bg-white text-right transition-all ${selectedStampInsertPage === page.pageNumber ? "border-primary shadow-[0_16px_36px_rgba(15,23,42,0.14)]" : "border-border/60 hover:border-primary/50 hover:bg-muted/20"}`}
+                                onClick={() => setSelectedStampInsertPage(page.pageNumber)}
+                              >
+                                <img src={page.dataUrl} alt={`Page ${page.pageNumber}`} className="h-36 w-full object-contain bg-muted/10" />
+                                <div className="flex items-center justify-between px-3 py-2">
+                                  <Badge variant={selectedStampInsertPage === page.pageNumber ? "default" : "secondary"}>الصفحة {page.pageNumber}</Badge>
+                                  <span className="text-xs text-muted-foreground">{selectedStampInsertPage === page.pageNumber ? "محددة" : ""}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ) : null}
-                    {(assetDialogMode === "manager" ? data.assets.length === 0 : signatureAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : assetDialogMode === "manager" ? <div className="space-y-3">
+                    {(assetDialogMode === "manager" ? data.assets.length === 0 : selectableAssets.length === 0) ? <p className="text-sm text-muted-foreground">لا توجد عناصر محفوظة بعد.</p> : assetDialogMode === "manager" ? <div className="space-y-3">
                       {data.assets.map((asset) => (
                         <div key={asset.id} className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-white px-4 py-3">
                           <div className="text-right">
@@ -1847,7 +1848,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                         </div>
                       ))}
                     </div> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {signatureAssets.map((asset) => (
+                      {selectableAssets.map((asset) => (
                         <button
                           key={asset.id}
                           type="button"

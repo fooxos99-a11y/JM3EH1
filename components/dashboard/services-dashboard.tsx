@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload } from "lucide-react"
+import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload, X } from "lucide-react"
 import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -1062,12 +1062,14 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     return normalizeRotationDegrees(angle)
   }
 
-  function resizeStamp(step: number) {
-    if (!activePlacedAssetId) {
+  function resizeStamp(step: number, assetId?: string) {
+    const targetAssetId = assetId ?? activePlacedAssetId
+
+    if (!targetAssetId) {
       return
     }
 
-    setPlacedAssets((current) => current.map((item) => item.id === activePlacedAssetId ? { ...item, scalePercent: clamp(item.scalePercent + step, 8, 60) } : item))
+    setPlacedAssets((current) => current.map((item) => item.id === targetAssetId ? { ...item, scalePercent: clamp(item.scalePercent + step, 8, 60) } : item))
   }
 
   async function handleApplyStamp() {
@@ -1429,7 +1431,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                   ><Plus className="h-4 w-4" />إضافة</Button>
                 </div>
                 {placedAssets.length > 0 ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
+                  <div className="flex flex-wrap items-center gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       {placedAssets.map((placedAsset) => {
                         const asset = assetMap.get(placedAsset.assetId)
@@ -1444,16 +1446,22 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             className={`flex items-center gap-2 rounded-full border px-3 py-2 text-right transition-colors ${activePlacedAssetId === placedAsset.id ? "border-primary bg-primary/5" : "border-border/60 bg-white hover:bg-muted/20"}`}
                             onClick={() => setActivePlacedAssetId(placedAsset.id)}
                           >
+                            <span
+                              className="flex h-5 w-5 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:border-red-200 hover:text-red-600"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                removePlacedAsset(placedAsset.id)
+                              }}
+                              aria-label={`حذف ${asset.name}`}
+                              role="button"
+                            >
+                              <X className="h-3 w-3" />
+                            </span>
                             <img src={asset.imageUrl} alt={asset.name} className="h-8 w-8 rounded-full bg-white object-contain" />
                             <span className="text-sm font-medium text-foreground">{asset.name}</span>
                           </button>
                         )
                       })}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => activePlacedAssetId ? removePlacedAsset(activePlacedAssetId) : null} disabled={!activePlacedAssetId}><Trash2 className="h-4 w-4" />حذف المحدد</Button>
-                      <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => resizeStamp(-2)} aria-label="تصغير الأصل">-</Button>
-                      <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => resizeStamp(2)} aria-label="تكبير الأصل">+</Button>
                     </div>
                   </div>
                 ) : null}
@@ -1520,7 +1528,30 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                     event.stopPropagation()
                                     setActivePlacedAssetId(placedAsset.id)
                                     setDraggingPlacedAssetId(placedAsset.id)
+                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                    if (previewRect) {
+                                      updatePlacedAsset(placedAsset.id, {
+                                        ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
+                                        pageNumber: page.pageNumber,
+                                      })
+                                    }
                                     event.currentTarget.setPointerCapture(event.pointerId)
+                                  }}
+                                  onPointerMove={(event) => {
+                                    event.stopPropagation()
+                                    if (draggingPlacedAssetId !== placedAsset.id || rotatingPlacedAssetId) {
+                                      return
+                                    }
+
+                                    const previewRect = event.currentTarget.parentElement?.getBoundingClientRect()
+                                    if (!previewRect) {
+                                      return
+                                    }
+
+                                    updatePlacedAsset(placedAsset.id, {
+                                      ...updateStampPositionFromPointer(previewRect, event.clientX, event.clientY),
+                                      pageNumber: page.pageNumber,
+                                    })
                                   }}
                                   onPointerUp={(event) => {
                                     event.stopPropagation()
@@ -1532,6 +1563,32 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                                   }}
                                 >
                                   <img src={asset.imageUrl} alt={asset.name} className={`w-full object-contain ${activePlacedAssetId === placedAsset.id ? "ring-2 ring-primary/50" : ""}`} />
+                                  <span className="absolute right-0 top-0 flex -translate-y-[120%] translate-x-[35%] items-center gap-1">
+                                    <span
+                                      className={`flex h-5 w-5 items-center justify-center rounded-full border bg-white text-xs font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
+                                      onPointerDown={(event) => {
+                                        event.stopPropagation()
+                                        setActivePlacedAssetId(placedAsset.id)
+                                        resizeStamp(-2, placedAsset.id)
+                                      }}
+                                      role="button"
+                                      aria-label={`تصغير ${asset.name}`}
+                                    >
+                                      -
+                                    </span>
+                                    <span
+                                      className={`flex h-5 w-5 items-center justify-center rounded-full border bg-white text-xs font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
+                                      onPointerDown={(event) => {
+                                        event.stopPropagation()
+                                        setActivePlacedAssetId(placedAsset.id)
+                                        resizeStamp(2, placedAsset.id)
+                                      }}
+                                      role="button"
+                                      aria-label={`تكبير ${asset.name}`}
+                                    >
+                                      +
+                                    </span>
+                                  </span>
                                   <span
                                     className={`absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-[140%] items-center justify-center rounded-full border bg-white text-[10px] font-bold text-foreground shadow ${activePlacedAssetId === placedAsset.id ? "border-primary" : "border-border/60"}`}
                                     onPointerDown={(event) => {

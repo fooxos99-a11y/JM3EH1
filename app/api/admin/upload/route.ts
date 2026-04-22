@@ -5,6 +5,36 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const BUCKET_NAME = "site-assets"
 
+function getFileExtension(fileName: string) {
+  const normalizedName = fileName.trim().toLowerCase()
+  const lastDotIndex = normalizedName.lastIndexOf(".")
+
+  if (lastDotIndex === -1) {
+    return ""
+  }
+
+  return normalizedName.slice(lastDotIndex + 1)
+}
+
+function inferContentType(file: File) {
+  if (file.type) {
+    return file.type
+  }
+
+  const extension = getFileExtension(file.name)
+
+  if (extension === "png") return "image/png"
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg"
+  if (extension === "webp") return "image/webp"
+  if (extension === "gif") return "image/gif"
+  if (extension === "svg") return "image/svg+xml"
+  if (extension === "bmp") return "image/bmp"
+  if (extension === "avif") return "image/avif"
+  if (extension === "pdf") return "application/pdf"
+
+  return "application/octet-stream"
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser()
 
@@ -31,7 +61,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
 
     const { error } = await supabase.storage.from(BUCKET_NAME).upload(path, Buffer.from(arrayBuffer), {
-      contentType: file.type || "application/octet-stream",
+      contentType: inferContentType(file),
       upsert: false,
     })
 

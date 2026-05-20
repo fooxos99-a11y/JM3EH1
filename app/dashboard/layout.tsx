@@ -1,4 +1,4 @@
-import { requireAdminUser } from "@/lib/auth"
+import { requireCurrentUser } from "@/lib/auth"
 import { AdminDashboardShell } from "@/components/admin-dashboard-shell"
 import { getSiteSectionContent } from "@/lib/site-content"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
@@ -11,7 +11,7 @@ type EmployeeProfileSummary = {
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireAdminUser()
+  const user = await requireCurrentUser()
   const logo = await getSiteSectionContent("logo")
   const supabase = createSupabaseAdminClient()
 

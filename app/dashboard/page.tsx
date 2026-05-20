@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation"
 
-import { requireAdminUser } from "@/lib/auth"
+import { requireCurrentUser } from "@/lib/auth"
 import { getFirstAccessibleDashboardPath } from "@/lib/dashboard"
 
 export default async function DashboardIndexPage() {
-  const user = await requireAdminUser()
+  const user = await requireCurrentUser()
   redirect(getFirstAccessibleDashboardPath(user.permissions))
 }

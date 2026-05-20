@@ -306,31 +306,31 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
       <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60 rounded-2xl border-border/70 p-2 text-right" dir="rtl">
+          <DropdownMenuContent align="end" className="flex w-60 flex-col items-stretch rounded-2xl border-border/70 p-2 text-right" dir="rtl">
             <DropdownMenuLabel className="text-right">
-              <div>
+              <div className="w-full text-right">
                 <p className="font-bold text-foreground">{user.name}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="w-full justify-end rounded-xl px-3 py-2 text-right" onSelect={() => router.push("/profile")}>
-              الملف الشخصي
+              <span className="block w-full text-right">الملف الشخصي</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="w-full justify-end rounded-xl px-3 py-2 text-right" onSelect={() => {
               setPasswordMessage(null)
               setPasswordForm(defaultPasswordForm)
               setPasswordDialogOpen(true)
             }}>
-              تغيير كلمة المرور
+              <span className="block w-full text-right">تغيير كلمة المرور</span>
             </DropdownMenuItem>
             {user.role === "admin" ? (
               <DropdownMenuItem className="w-full justify-end rounded-xl px-3 py-2 text-right" onSelect={() => router.push("/dashboard")}>
-                لوحة التحكم
+                <span className="block w-full text-right">لوحة التحكم</span>
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="w-full justify-end rounded-xl px-3 py-2 text-right" disabled={isPending} onSelect={() => void handleLogout()} variant="destructive">
-              تسجيل الخروج
+              <span className="block w-full text-right">تسجيل الخروج</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

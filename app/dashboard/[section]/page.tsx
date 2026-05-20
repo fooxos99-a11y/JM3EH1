@@ -20,7 +20,7 @@ import { PermissionsEditor } from "@/components/dashboard/permissions-editor"
 import { ProjectsEditor } from "@/components/dashboard/projects-editor"
 import { SupportersDashboard } from "@/components/dashboard/supporters-dashboard"
 import { ServicesDashboard } from "@/components/dashboard/services-dashboard"
-import { requireAdminUser } from "@/lib/auth"
+import { hasPermission, requireCurrentUser } from "@/lib/auth"
 import { getDashboardSection } from "@/lib/dashboard"
 import { getGovernancePageBySection, governanceSectionKeys } from "@/lib/governance"
 import { getSiteSectionContent } from "@/lib/site-content"
@@ -43,7 +43,13 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     notFound()
   }
 
-  const currentUser = await requireAdminUser(currentSection.autoAccess ? undefined : currentSection.permission)
+  const currentUser = await requireCurrentUser()
+
+  if (!currentSection.autoAccess) {
+    if (currentUser.role !== "admin" || !hasPermission(currentUser, currentSection.permission)) {
+      redirect("/dashboard")
+    }
+  }
 
   if (currentSection.managerOnly && !currentUser.permissions.includes("*")) {
     redirect("/dashboard")

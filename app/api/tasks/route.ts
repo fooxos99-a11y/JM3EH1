@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireCurrentUser } from "@/lib/auth"
-import { createDriveFolder, resolveTaskAttachmentFolder } from "@/lib/google-drive"
+import { createDriveFolder } from "@/lib/google-drive"
 import type { TaskAssignableUser, TaskKind, TaskNotification, TaskRecord, TasksPageData, TaskStatus } from "@/lib/tasks"
 import { taskKindValues, taskStatusValues } from "@/lib/tasks"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
@@ -340,13 +340,6 @@ export async function POST(request: Request) {
 
     const supabase = createSupabaseAdminClient()
     const isSelfAssignedTask = payload.assignedToUserId === user.id
-    let taskFolder: { folderId: string; folderName: string } | null = null
-
-    try {
-      taskFolder = await resolveTaskAttachmentFolder(user)
-    } catch {
-      taskFolder = null
-    }
 
     const { data: insertedRows, error } = await supabase.from("user_tasks").insert({
       task_kind: "task",
@@ -358,8 +351,8 @@ export async function POST(request: Request) {
       status: isSelfAssignedTask ? "completed" : "in_progress",
       completed_at: isSelfAssignedTask ? new Date().toISOString() : null,
       attachment_url: payload.attachmentUrl ?? null,
-      drive_folder_id: taskFolder?.folderId ?? null,
-      drive_folder_name: taskFolder?.folderName ?? null,
+      drive_folder_id: null,
+      drive_folder_name: null,
     }).select("id,title")
 
     if (error) {
@@ -399,8 +392,8 @@ export async function POST(request: Request) {
         status: isSelfAssignedTask ? "completed" : "in_progress",
         completedAt: isSelfAssignedTask ? new Date().toISOString() : null,
         attachmentUrl: payload.attachmentUrl ?? null,
-        driveFolderId: taskFolder?.folderId ?? null,
-        driveFolderName: taskFolder?.folderName ?? null,
+        driveFolderId: null,
+        driveFolderName: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },

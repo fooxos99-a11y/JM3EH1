@@ -353,11 +353,8 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     }
 
     const assignedToUserId = isPersonalTaskPage ? (data?.currentUserId ?? "") : taskForm.assignedToUserId
-    let attachmentUrl: string | null = null
-
-    if (createAttachmentFile) {
-      attachmentUrl = await uploadAttachmentFile(createAttachmentFile, taskForm.title)
-    }
+    const pendingAttachmentFile = createAttachmentFile
+    const pendingTaskTitle = taskForm.title
 
     const response = await fetch(tasksApiUrl, {
       method: "POST",
@@ -368,7 +365,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
         title: taskForm.title,
         description: taskForm.description,
         dueAt: new Date(taskForm.dueAt).toISOString(),
-        attachmentUrl,
+        attachmentUrl: null,
       }),
     })
 
@@ -405,9 +402,35 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     }
 
     resetCreateTaskState()
-    setMessage({ type: "success", text: "تم إنشاء المهمة" })
+    setMessage({ type: "success", text: pendingAttachmentFile ? "تم إنشاء المهمة ويجري رفع المرفق" : "تم إنشاء المهمة" })
     setIsCreateDialogOpen(false)
-    void loadData()
+
+    if (payload.task?.id && pendingAttachmentFile) {
+      void (async () => {
+        try {
+          const attachmentUrl = await uploadAttachmentFile(pendingAttachmentFile, pendingTaskTitle)
+          const attachmentResponse = await fetch(tasksApiUrl, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "update_attachment",
+              taskId: payload.task?.id,
+              attachmentUrl,
+            }),
+          })
+
+          const attachmentPayload = await attachmentResponse.json() as TasksPageData & { error?: string }
+          if (!attachmentResponse.ok) {
+            throw new Error(attachmentPayload.error ?? "تعذر حفظ المرفق")
+          }
+
+          setData(attachmentPayload)
+          setMessage({ type: "success", text: "تم رفع مرفق المهمة" })
+        } catch (error) {
+          setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ أثناء رفع المرفق" })
+        }
+      })()
+    }
   }
 
   async function handleEditTask() {

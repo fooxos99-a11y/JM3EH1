@@ -49,6 +49,7 @@ const createTaskSchema = z.object({
   title: z.string().trim().min(3, "عنوان المهمة مطلوب"),
   description: z.string().trim().optional().transform((value) => value ?? ""),
   dueAt: z.string().datetime("موعد التسليم غير صالح"),
+  attachmentUrl: z.string().trim().url("رابط الملف غير صالح").nullable().optional(),
 })
 
 const patchSchema = z.discriminatedUnion("action", [
@@ -327,16 +328,16 @@ export async function POST(request: Request) {
     const user = await requireCurrentUser()
     const isManager = user.role === "admin" && user.permissions.includes("*")
 
-    if (!isManager) {
-      return NextResponse.json({ error: "غير مصرح بإضافة المهام" }, { status: 403 })
-    }
-
     const parsed = createTaskSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "بيانات المهمة غير صحيحة" }, { status: 400 })
     }
 
     const payload = parsed.data
+    if (!isManager && payload.assignedToUserId !== user.id) {
+      return NextResponse.json({ error: "يمكنك إنشاء مهمة لنفسك فقط" }, { status: 403 })
+    }
+
     const supabase = createSupabaseAdminClient()
 
     const { data: insertedRows, error } = await supabase.from("user_tasks").insert({
@@ -347,6 +348,7 @@ export async function POST(request: Request) {
       assigned_by_user_id: user.id,
       due_at: payload.dueAt,
       status: "in_progress",
+      attachment_url: payload.attachmentUrl ?? null,
     }).select("id,title")
 
     if (error) {

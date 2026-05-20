@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bell, ChevronDown, FolderPlus, MapPinned, Menu, Upload, UserRound } from "lucide-react"
+import { Bell, ChevronDown, FolderPlus, MapPinned, Menu, Plus, Upload, UserRound } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { AdminChatPanel } from "@/components/admin-chat-panel"
@@ -262,6 +262,7 @@ export function AdminDashboardShell({ userId, userName, userTitle, userProfileSu
   }, [pathname])
 
   const isDriveFilesPage = pathname === "/dashboard/my_files"
+  const isMyTasksPage = pathname === "/dashboard/my_tasks"
 
   return (
     <div dir="rtl" className="dashboard-rtl min-h-screen bg-[linear-gradient(180deg,#f8fbfb,#eef5f5)] text-right">
@@ -324,6 +325,17 @@ export function AdminDashboardShell({ userId, userName, userTitle, userProfileSu
                       رفع ملف
                     </Button>
                   </>
+                ) : null}
+                {isMyTasksPage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-2xl border-primary/15 bg-white/80"
+                    onClick={() => window.dispatchEvent(new Event("tasks-open-create-task"))}
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة مهمة
+                  </Button>
                 ) : null}
                 <Sheet>
                   <SheetTrigger asChild>

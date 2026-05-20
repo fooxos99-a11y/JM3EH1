@@ -78,9 +78,32 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   const [folderSearchQuery, setFolderSearchQuery] = useState("")
   const [selectedDefaultFolderId, setSelectedDefaultFolderId] = useState("")
   const [defaultFolderName, setDefaultFolderName] = useState<string | null>(null)
+  const [loadingFolderOptions, setLoadingFolderOptions] = useState(false)
   const [renameItem, setRenameItem] = useState<DriveItem | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isVirtualAllFilesRoot = Boolean(data && scope === "all_files" && data.currentFolderId === VIRTUAL_ALL_FILES_ROOT_ID)
+
+  function getMutationParentId() {
+    if (!data) {
+      return null
+    }
+
+    return isVirtualAllFilesRoot ? "root" : data.currentFolderId
+  }
+
+  async function reloadCurrentView() {
+    if (!data) {
+      return
+    }
+
+    if (isVirtualAllFilesRoot) {
+      await loadData(scope)
+      return
+    }
+
+    await loadData(scope, data.currentFolderId)
+  }
 
   async function loadGoogleDriveStatus() {
     const response = await fetch("/api/auth/google/status", { cache: "no-store" })
@@ -95,17 +118,23 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   }
 
   async function loadFolderOptions() {
-    const response = await fetch("/api/drive/folders", { cache: "no-store" })
-    const payload = (await response.json()) as FolderOptionsPayload
+    setLoadingFolderOptions(true)
 
-    if (!response.ok || !payload.folders) {
-      throw new Error(payload.error ?? "تعذر تحميل مجلدات الموقع")
+    try {
+      const response = await fetch("/api/drive/folders", { cache: "no-store" })
+      const payload = (await response.json()) as FolderOptionsPayload
+
+      if (!response.ok || !payload.folders) {
+        throw new Error(payload.error ?? "تعذر تحميل مجلدات الموقع")
+      }
+
+      setFolderOptions(payload.folders)
+      setSelectedDefaultFolderId(payload.defaultFolderId ?? "")
+      setDefaultFolderName(payload.defaultFolderName ?? null)
+      return payload
+    } finally {
+      setLoadingFolderOptions(false)
     }
-
-    setFolderOptions(payload.folders)
-    setSelectedDefaultFolderId(payload.defaultFolderId ?? "")
-    setDefaultFolderName(payload.defaultFolderName ?? null)
-    return payload
   }
 
   async function loadData(nextScope = scope, folderId?: string | null, query?: string) {
@@ -157,6 +186,16 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     })()
   }, [scope])
 
+  useEffect(() => {
+    if (!googleDriveStatus?.connected || folderOptions.length > 0 || loadingFolderOptions) {
+      return
+    }
+
+    void loadFolderOptions().catch(() => {
+      // Keep the page usable even if preloading folder options fails.
+    })
+  }, [googleDriveStatus?.connected, folderOptions.length, loadingFolderOptions])
+
   function runAction(task: () => Promise<void>) {
     setMessage(null)
     startTransition(async () => {
@@ -169,7 +208,8 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   }
 
   async function handleCreateFolder() {
-    if (!data) {
+    const parentId = getMutationParentId()
+    if (!parentId) {
       return
     }
 
@@ -178,7 +218,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "create_folder",
-        parentId: data.currentFolderId,
+        parentId,
         name: createFolderName,
       }),
     })
@@ -190,20 +230,21 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
 
     setCreateFolderName("")
     setIsCreateDialogOpen(false)
-    await loadData(scope, data.currentFolderId)
+    await reloadCurrentView()
     setMessage({ type: "success", text: "تم إنشاء المجلد" })
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
-    if (!file || !data) {
+    const parentId = getMutationParentId()
+    if (!file || !parentId) {
       return
     }
 
     runAction(async () => {
       const formData = new FormData()
       formData.append("file", file)
-      formData.append("parentId", data.currentFolderId)
+      formData.append("parentId", parentId)
 
       const response = await fetch("/api/drive/upload", {
         method: "POST",
@@ -215,7 +256,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
         throw new Error(payload.error ?? "تعذر رفع الملف")
       }
 
-      await loadData(scope, data.currentFolderId)
+      await reloadCurrentView()
       setMessage({ type: "success", text: "تم رفع الملف" })
     })
 
@@ -244,7 +285,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
 
     setRenameItem(null)
     setRenameValue("")
-    await loadData(scope, data.currentFolderId)
+    await reloadCurrentView()
     setMessage({ type: "success", text: "تم تحديث الاسم" })
   }
 
@@ -267,7 +308,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       throw new Error(payload.error ?? "تعذر الحذف")
     }
 
-    await loadData(scope, data.currentFolderId)
+    await reloadCurrentView()
     setMessage({ type: "success", text: "تم حذف العنصر" })
   }
 
@@ -322,8 +363,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     }
   }
 
-  const isVirtualAllFilesRoot = Boolean(data && scope === "all_files" && data.currentFolderId === VIRTUAL_ALL_FILES_ROOT_ID)
-  const canUseTopBarActions = Boolean(data && !isVirtualAllFilesRoot && !(googleDriveStatus?.configured && !googleDriveStatus.connected))
+  const canUseTopBarActions = Boolean(data && !(googleDriveStatus?.configured && !googleDriveStatus.connected))
 
   useEffect(() => {
     function handleUploadRequest() {
@@ -349,11 +389,14 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
         return
       }
 
-      runAction(async () => {
-        await loadFolderOptions()
-        setFolderSearchQuery("")
-        setIsLocationDialogOpen(true)
-      })
+      setFolderSearchQuery("")
+      setIsLocationDialogOpen(true)
+
+      if (folderOptions.length === 0 && !loadingFolderOptions) {
+        runAction(async () => {
+          await loadFolderOptions()
+        })
+      }
     }
 
     window.addEventListener("drive-files-upload", handleUploadRequest)
@@ -367,7 +410,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       window.removeEventListener("drive-files-disconnect", handleDisconnectRequest)
       window.removeEventListener("drive-files-open-location", handleOpenLocationRequest)
     }
-  }, [canUseTopBarActions, googleDriveStatus?.connected])
+  }, [canUseTopBarActions, folderOptions.length, googleDriveStatus?.connected, loadingFolderOptions])
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("drive-files-actions-state", {
@@ -452,14 +495,6 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
             </div>
           </div>
 
-          {!canUseTopBarActions && googleDriveStatus?.connected ? (
-            <p className="text-right text-xs text-muted-foreground">
-              لإنشاء مجلد أو رفع ملف، افتح `ملفاتي` أو ادخل إلى مجلد فعلي داخل `جميع الملفات` أولًا.
-            </p>
-          ) : null}
-          {defaultFolderName ? (
-            <p className="text-right text-xs text-muted-foreground">مكان ملفاتي الحالي: {defaultFolderName}</p>
-          ) : null}
         </CardHeader>
         <CardContent>
           {!data || data.items.length === 0 ? (
@@ -559,7 +594,11 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
               <Input value={folderSearchQuery} onChange={(event) => setFolderSearchQuery(event.target.value)} placeholder="ابحث في المجلدات" className="text-right" />
             </div>
             <div className="max-h-[22rem] space-y-2 overflow-y-auto rounded-[1.25rem] border border-border/60 p-2">
-              {filteredFolderOptions.length === 0 ? (
+              {loadingFolderOptions ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                </div>
+              ) : filteredFolderOptions.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">لا توجد مجلدات مطابقة.</p>
               ) : filteredFolderOptions.map((folder) => (
                 <button

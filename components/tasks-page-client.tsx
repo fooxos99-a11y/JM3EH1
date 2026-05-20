@@ -37,7 +37,7 @@ const initialTaskForm = {
   assignedToUserId: "",
   title: "",
   description: "",
-  dueAt: "",
+  dueAt: getDefaultDueAtInput(),
 }
 
 const DEFAULT_DUE_TIME = "23:59"
@@ -145,6 +145,15 @@ function mergeDueAtValue(dateValue: string, timeValue: string) {
   return `${dateValue}T${timeValue || DEFAULT_DUE_TIME}`
 }
 
+function getDefaultDueAtInput() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${day}T${DEFAULT_DUE_TIME}`
+}
+
 function isImageAttachment(url: string) {
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url)
 }
@@ -162,11 +171,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   const [selectedPersonalFilter, setSelectedPersonalFilter] = useState<PersonalTaskFilter>("in_progress")
   const [selectedTransactionView, setSelectedTransactionView] = useState<PersonalTransactionView>("incoming")
   const [attachmentTaskId, setAttachmentTaskId] = useState<string | null>(null)
+  const [createAttachmentFile, setCreateAttachmentFile] = useState<File | null>(null)
   const [previewAttachment, setPreviewAttachment] = useState<{ title: string; url: string } | null>(null)
   const [folderOptions, setFolderOptions] = useState<DriveFolderOption[]>([])
   const [taskFolderDialog, setTaskFolderDialog] = useState<TaskFolderDialogState | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const createAttachmentInputRef = useRef<HTMLInputElement>(null)
+  const isPersonalTaskPage = view === "personal" && kind === "task"
 
   function applyPayload(payload: TasksPageData) {
     setData(payload)
@@ -300,6 +312,24 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     })
   }
 
+  function resetCreateTaskState() {
+    setTaskForm({
+      ...initialTaskForm,
+      assignedToUserId: isPersonalTaskPage ? (data?.currentUserId ?? "") : (data?.assignableUsers[0]?.id ?? ""),
+      dueAt: getDefaultDueAtInput(),
+    })
+    setCreateAttachmentFile(null)
+
+    if (createAttachmentInputRef.current) {
+      createAttachmentInputRef.current.value = ""
+    }
+  }
+
+  function openCreateTaskDialog() {
+    resetCreateTaskState()
+    setIsCreateDialogOpen(true)
+  }
+
   async function loadFolderOptions() {
     const response = await fetch("/api/drive/folders", { cache: "no-store" })
     const payload = await response.json() as { folders?: DriveFolderOption[]; error?: string }
@@ -313,15 +343,23 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   }
 
   async function handleCreateTask() {
+    const assignedToUserId = isPersonalTaskPage ? (data?.currentUserId ?? "") : taskForm.assignedToUserId
+    let attachmentUrl: string | null = null
+
+    if (createAttachmentFile) {
+      attachmentUrl = await uploadAttachmentFile(createAttachmentFile, taskForm.title)
+    }
+
     const response = await fetch(tasksApiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "create_task",
-        assignedToUserId: taskForm.assignedToUserId,
+        assignedToUserId,
         title: taskForm.title,
         description: taskForm.description,
         dueAt: new Date(taskForm.dueAt).toISOString(),
+        attachmentUrl,
       }),
     })
 
@@ -331,7 +369,8 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     }
 
     setData(payload)
-    setTaskForm((current) => ({ ...initialTaskForm, assignedToUserId: current.assignedToUserId }))
+    resetCreateTaskState()
+    setMessage({ type: "success", text: "تم إنشاء المهمة" })
     setIsCreateDialogOpen(false)
   }
 
@@ -588,6 +627,22 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     setMessage({ type: "success", text: "تم إنشاء مجلد المهمة وربطه بها" })
   }
 
+  useEffect(() => {
+    if (kind !== "task") {
+      return
+    }
+
+    function handleOpenCreateTask() {
+      openCreateTaskDialog()
+    }
+
+    window.addEventListener("tasks-open-create-task", handleOpenCreateTask)
+
+    return () => {
+      window.removeEventListener("tasks-open-create-task", handleOpenCreateTask)
+    }
+  }, [kind, data?.currentUserId, data?.assignableUsers])
+
   const filteredManagedTasks = useMemo(() => {
     const tasks = data?.managedTasks ?? []
     if (selectedManagedUserId === "all") {
@@ -758,7 +813,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
           {view === "manager" && data.isManager ? (
             <>
               <div className="flex justify-end">
-                <Button type="button" className="rounded-xl" onClick={() => setIsCreateDialogOpen(true)}>
+                <Button type="button" className="rounded-xl" onClick={openCreateTaskDialog}>
                   <Plus className="h-4 w-4" />
                   إضافة مهمة
                 </Button>
@@ -871,29 +926,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   </Table>
                 </CardContent>
               </Card>
-              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-2xl" showCloseButton={false}>
-                  <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
-                    <DialogHeader className="items-start text-left">
-                      <DialogTitle className="text-2xl">إضافة مهمة جديدة</DialogTitle>
-                    </DialogHeader>
-                  </div>
-
-                  <div className="grid gap-4 p-6 pt-2 md:grid-cols-2">
-                    <div className="space-y-2 text-right"><Label>إسناد إلى</Label><Select value={taskForm.assignedToUserId} onValueChange={(value) => setTaskForm((current) => ({ ...current, assignedToUserId: value }))}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{data.assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2 text-right">
-                      <Label>موعد التسليم</Label>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <DatePickerField value={getDueDateValue(taskForm.dueAt)} onChange={(value) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(value, getDueTimeValue(current.dueAt)) }))} placeholder="اختر التاريخ" />
-                        <Input type="time" value={getDueTimeValue(taskForm.dueAt)} onChange={(event) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(getDueDateValue(current.dueAt), event.target.value) }))} />
-                      </div>
-                    </div>
-                    <div className="space-y-2 text-right md:col-span-2"><Label>العنوان</Label><Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} /></div>
-                    <div className="space-y-2 text-right md:col-span-2"><Label>الوصف</Label><Textarea rows={5} value={taskForm.description} onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))} placeholder="اختياري" /></div>
-                  </div>
-                  <div className="px-6 pb-6"><Button type="button" className="rounded-xl" onClick={() => runAction(handleCreateTask)} disabled={isPending}><Plus className="h-4 w-4" />إضافة المهمة</Button></div>
-                </DialogContent>
-              </Dialog>
               <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-2xl" showCloseButton={false}>
                   <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
@@ -959,6 +991,77 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
               </Dialog>
             </>
           ) : null}
+
+        <Dialog
+          open={isCreateDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open)
+
+            if (!open) {
+              resetCreateTaskState()
+            }
+          }}
+        >
+          <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-2xl" showCloseButton={false}>
+            <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
+              <DialogHeader className="items-start text-left">
+                <DialogTitle className="text-2xl">إضافة مهمة جديدة</DialogTitle>
+              </DialogHeader>
+            </div>
+
+            <div className="grid gap-4 p-6 pt-2 md:grid-cols-2">
+              {!isPersonalTaskPage ? (
+                <div className="space-y-2 text-right">
+                  <Label>إسناد إلى</Label>
+                  <Select value={taskForm.assignedToUserId} onValueChange={(value) => setTaskForm((current) => ({ ...current, assignedToUserId: value }))}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {data.assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <div className="space-y-2 text-right">
+                <Label>موعد التسليم</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DatePickerField value={getDueDateValue(taskForm.dueAt)} onChange={(value) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(value, getDueTimeValue(current.dueAt)) }))} placeholder="اختر التاريخ" />
+                  <Input type="time" value={getDueTimeValue(taskForm.dueAt)} onChange={(event) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(getDueDateValue(current.dueAt), event.target.value) }))} />
+                </div>
+              </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label>اسم المهمة</Label>
+                <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label>الصورة</Label>
+                <input
+                  ref={createAttachmentInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => setCreateAttachmentFile(event.target.files?.[0] ?? null)}
+                />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => createAttachmentInputRef.current?.click()}>
+                    <Paperclip className="h-4 w-4" />
+                    {createAttachmentFile ? "تغيير الصورة" : "اختيار صورة"}
+                  </Button>
+                  <span className="text-sm text-muted-foreground">{createAttachmentFile?.name ?? "لم يتم اختيار صورة"}</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label>الوصف</Label>
+                <Textarea rows={5} value={taskForm.description} onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))} placeholder="اختياري" />
+              </div>
+            </div>
+            <div className="px-6 pb-6">
+              <Button type="button" className="rounded-xl" onClick={() => runAction(handleCreateTask)} disabled={isPending || !taskForm.title.trim() || !taskForm.dueAt}>
+                <Plus className="h-4 w-4" />
+                إضافة المهمة
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={Boolean(previewAttachment)} onOpenChange={(open) => { if (!open) setPreviewAttachment(null) }}>
           <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-4xl" showCloseButton={false}>

@@ -1,7 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { Eye, FolderOpen, FolderPlus, LoaderCircle, Paperclip, Pencil, Plus, Trash2 } from "lucide-react"
+import { Eye, LoaderCircle, Paperclip, Pencil, Plus, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -26,7 +25,6 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import type { DriveFolderOption } from "@/lib/drive"
 import { getTaskStatusLabel, type TaskKind, type TaskRecord, type TaskStatus, type TasksPageData } from "@/lib/tasks"
 
 type PersonalTaskFilter = "all" | "in_progress" | "under_review" | "finished" | "stalled"
@@ -40,13 +38,6 @@ const initialTaskForm = {
   title: "",
   description: "",
   dueAt: getDefaultDueAtInput(),
-}
-
-type TaskFolderDialogState = {
-  taskId: string
-  taskTitle: string
-  currentFolderId: string | null
-  currentFolderName: string | null
 }
 
 function formatDateTime(value: string) {
@@ -160,6 +151,33 @@ function isImageAttachment(url: string) {
   return /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url)
 }
 
+function extractGoogleDriveFileId(url: string) {
+  const patterns = [
+    /\/file\/d\/([^/]+)/i,
+    /[?&]id=([^&#]+)/i,
+    /\/thumbnail\?id=([^&#]+)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match?.[1]) {
+      return match[1]
+    }
+  }
+
+  return null
+}
+
+function getAttachmentPreviewUrl(url: string) {
+  const driveFileId = extractGoogleDriveFileId(url)
+
+  if (!driveFileId) {
+    return url
+  }
+
+  return `https://drive.google.com/file/d/${driveFileId}/preview`
+}
+
 export function TasksPageClient({ embedded = false, view = "personal", kind = "task" }: { embedded?: boolean; view?: "personal" | "manager"; kind?: TaskKind }) {
   const tasksApiUrl = `/api/tasks?kind=${kind}`
   const [data, setData] = useState<TasksPageData | null>(null)
@@ -175,9 +193,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   const [attachmentTaskId, setAttachmentTaskId] = useState<string | null>(null)
   const [createAttachmentFile, setCreateAttachmentFile] = useState<File | null>(null)
   const [previewAttachment, setPreviewAttachment] = useState<{ title: string; url: string } | null>(null)
-  const [folderOptions, setFolderOptions] = useState<DriveFolderOption[]>([])
-  const [taskFolderDialog, setTaskFolderDialog] = useState<TaskFolderDialogState | null>(null)
-  const [selectedFolderId, setSelectedFolderId] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const createAttachmentInputRef = useRef<HTMLInputElement>(null)
   const isPersonalTaskPage = view === "personal" && kind === "task"
@@ -330,18 +345,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   function openCreateTaskDialog() {
     resetCreateTaskState()
     setIsCreateDialogOpen(true)
-  }
-
-  async function loadFolderOptions() {
-    const response = await fetch("/api/drive/folders", { cache: "no-store" })
-    const payload = await response.json() as { folders?: DriveFolderOption[]; error?: string }
-
-    if (!response.ok || !payload.folders) {
-      throw new Error(payload.error ?? "تعذر تحميل قائمة المجلدات")
-    }
-
-    setFolderOptions(payload.folders)
-    return payload.folders
   }
 
   async function handleCreateTask() {
@@ -589,76 +592,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       return
     }
 
-    setPreviewAttachment(null)
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
-
-  function openTaskFolderDialog(task: TasksPageData["assignedTasks"][number]) {
-    setTaskFolderDialog({
-      taskId: task.id,
-      taskTitle: task.title,
-      currentFolderId: task.driveFolderId,
-      currentFolderName: task.driveFolderName,
-    })
-    setSelectedFolderId(task.driveFolderId ?? "")
-
-    if (folderOptions.length === 0) {
-      void loadFolderOptions().catch((error) => {
-        setMessage({ type: "error", text: error instanceof Error ? error.message : "تعذر تحميل المجلدات" })
-      })
-    }
-  }
-
-  async function handleLinkTaskFolder() {
-    if (!taskFolderDialog || !selectedFolderId) {
-      throw new Error("اختر مجلدًا أولًا")
-    }
-
-    const selectedFolder = folderOptions.find((folder) => folder.id === selectedFolderId)
-    const response = await fetch(tasksApiUrl, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "link_task_folder",
-        taskId: taskFolderDialog.taskId,
-        driveFolderId: selectedFolderId,
-        driveFolderName: selectedFolder?.name ?? "مجلد",
-      }),
-    })
-
-    const payload = await response.json() as TasksPageData & { error?: string }
-    if (!response.ok) {
-      throw new Error(payload.error ?? "تعذر ربط المجلد")
-    }
-
-    setData(payload)
-    setTaskFolderDialog(null)
-    setMessage({ type: "success", text: "تم ربط المجلد بالمهمة" })
-  }
-
-  async function handleCreateTaskFolder() {
-    if (!taskFolderDialog || !selectedFolderId) {
-      throw new Error("اختر المجلد الأب أولًا")
-    }
-
-    const response = await fetch(tasksApiUrl, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "create_task_folder",
-        taskId: taskFolderDialog.taskId,
-        parentFolderId: selectedFolderId,
-      }),
-    })
-
-    const payload = await response.json() as TasksPageData & { error?: string }
-    if (!response.ok) {
-      throw new Error(payload.error ?? "تعذر إنشاء مجلد المهمة")
-    }
-
-    setData(payload)
-    setTaskFolderDialog(null)
-    setMessage({ type: "success", text: "تم إنشاء مجلد المهمة وربطه بها" })
+    setPreviewAttachment({ title, url: getAttachmentPreviewUrl(url) })
   }
 
   useEffect(() => {
@@ -775,13 +709,12 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                         <TableHead className="text-right">تاريخ التسليم</TableHead>
                         {kind === "internal_transaction" ? <TableHead className="text-right">{selectedTransactionView === "incoming" ? "من" : "إلى"}</TableHead> : null}
                         <TableHead className="text-right">الحالة</TableHead>
-                        <TableHead className="text-right">مجلد المهمة</TableHead>
                         <TableHead className="text-right">المرفق</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).length === 0 ? (
-                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 7 : 6} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 6 : 5} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
                       ) : (kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).map((task) => (
                         <TableRow key={task.id}>
                           <TableCell className="text-right font-semibold text-foreground">{task.title}</TableCell>
@@ -802,36 +735,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                 </SelectContent>
                               </Select>
                             )}
-                          </TableCell>
-                          <TableCell className="text-right align-top">
-                            <div className="inline-flex flex-col items-end gap-2">
-                              {task.driveFolderId ? (
-                                <a href={`https://drive.google.com/drive/folders/${task.driveFolderId}`} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                                  {task.driveFolderName ?? "فتح المجلد"}
-                                </a>
-                              ) : isPersonalTaskPage ? (
-                                <Link href="/dashboard/my_files" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                                  ملفاتي
-                                </Link>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">غير مرتبط</span>
-                              )}
-                              {kind === "internal_transaction" && selectedTransactionView === "outgoing" ? null : (
-                                isPersonalTaskPage && !task.driveFolderId ? (
-                                  <Button asChild type="button" variant="outline" size="sm" className="rounded-xl">
-                                    <Link href="/dashboard/my_files">
-                                      <FolderOpen className="h-4 w-4" />
-                                      فتح ملفاتي
-                                    </Link>
-                                  </Button>
-                                ) : (
-                                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openTaskFolderDialog(task)}>
-                                    <FolderOpen className="h-4 w-4" />
-                                    {task.driveFolderId ? "تغيير المجلد" : "ربط مجلد"}
-                                  </Button>
-                                )
-                              )}
-                            </div>
                           </TableCell>
                           <TableCell className="text-right align-top">
                             <div className="inline-flex items-center justify-end gap-2 text-right">
@@ -892,13 +795,12 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                         <TableHead className="text-right">المستخدم</TableHead>
                         <TableHead className="text-right">موعد التسليم</TableHead>
                         <TableHead className="text-right">الحالة</TableHead>
-                        <TableHead className="text-right">مجلد المهمة</TableHead>
                         <TableHead className="text-right">المرفق</TableHead>
                         <TableHead className="w-[120px] text-center">الإجراء</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredManagedTasks.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">لا توجد مهام مطابقة لهذا الموظف.</TableCell></TableRow> : filteredManagedTasks.map((task) => (
+                      {filteredManagedTasks.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">لا توجد مهام مطابقة لهذا الموظف.</TableCell></TableRow> : filteredManagedTasks.map((task) => (
                         <TableRow key={task.id}>
                           <TableCell className="max-w-[320px] whitespace-normal text-right"><p className="font-semibold text-foreground">{task.title}</p>{task.description ? <p className="mt-2 text-xs leading-6 text-muted-foreground">{task.description}</p> : null}</TableCell>
                           <TableCell className="text-right">{task.assignedToName}</TableCell>
@@ -918,21 +820,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                 </Badge>
                               </Button>
                             )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="inline-flex flex-col items-end gap-2">
-                              {task.driveFolderId ? (
-                                <a href={`https://drive.google.com/drive/folders/${task.driveFolderId}`} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                                  {task.driveFolderName ?? "فتح المجلد"}
-                                </a>
-                              ) : (
-                                <span className="text-sm text-muted-foreground">غير مرتبط</span>
-                              )}
-                              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openTaskFolderDialog(task)}>
-                                <FolderOpen className="h-4 w-4" />
-                                {task.driveFolderId ? "تغيير المجلد" : "ربط مجلد"}
-                              </Button>
-                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             {task.attachmentUrl ? (
@@ -997,45 +884,6 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={Boolean(taskFolderDialog)} onOpenChange={(open) => { if (!open) { setTaskFolderDialog(null); setSelectedFolderId("") } }}>
-                <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-xl" showCloseButton={false}>
-                  <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
-                    <DialogHeader className="items-start text-left">
-                      <DialogTitle className="text-2xl">ربط مجلد المهمة</DialogTitle>
-                    </DialogHeader>
-                  </div>
-
-                  <div className="space-y-4 p-6 pt-2 text-right">
-                    <div>
-                      <p className="font-semibold text-foreground">{taskFolderDialog?.taskTitle}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{taskFolderDialog?.currentFolderName ? `المجلد الحالي: ${taskFolderDialog.currentFolderName}` : "لا يوجد مجلد مرتبط بعد"}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>اختر مجلدًا من Google Drive</Label>
-                      <Select value={selectedFolderId} onValueChange={setSelectedFolderId}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="اختر المجلد" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {folderOptions.map((folder) => (
-                            <SelectItem key={folder.id} value={folder.id}>{folder.path}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => runAction(handleLinkTaskFolder)} disabled={isPending || !selectedFolderId}>
-                        <FolderOpen className="h-4 w-4" />
-                        ربط المجلد المحدد
-                      </Button>
-                      <Button type="button" className="rounded-xl" onClick={() => runAction(handleCreateTaskFolder)} disabled={isPending || !selectedFolderId}>
-                        <FolderPlus className="h-4 w-4" />
-                        إنشاء مجلد للمهمة هنا
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
             </>
           ) : null}
 
@@ -1078,10 +926,10 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   onChange={(event) => setCreateAttachmentFile(event.target.files?.[0] ?? null)}
                 />
                 <div className="flex items-center gap-2">
+                  <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
                   <Button type="button" variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => createAttachmentInputRef.current?.click()} aria-label="رفع صورة المهمة">
                     <Paperclip className="h-4 w-4" />
                   </Button>
-                  <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
                 </div>
               </div>
               <div className="space-y-2 text-right md:col-span-2">

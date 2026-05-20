@@ -710,11 +710,12 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                         {kind === "internal_transaction" ? <TableHead className="text-right">{selectedTransactionView === "incoming" ? "من" : "إلى"}</TableHead> : null}
                         <TableHead className="text-right">الحالة</TableHead>
                         <TableHead className="text-right">المرفق</TableHead>
+                        {isPersonalTaskPage && selectedPersonalFilter === "finished" ? <TableHead className="w-[88px] text-center">الحذف</TableHead> : null}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).length === 0 ? (
-                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 6 : 5} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 6 : (isPersonalTaskPage && selectedPersonalFilter === "finished" ? 6 : 5)} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
                       ) : (kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).map((task) => (
                         <TableRow key={task.id}>
                           <TableCell className="text-right font-semibold text-foreground">{task.title}</TableCell>
@@ -744,13 +745,41 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                 </Button>
                               ) : null}
                               {kind === "internal_transaction" && selectedTransactionView === "outgoing" ? null : (
-                                <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openAttachmentPicker(task)} disabled={attachmentTaskId === task.id}>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9 rounded-xl"
+                                  onClick={() => openAttachmentPicker(task)}
+                                  disabled={attachmentTaskId === task.id}
+                                  aria-label={task.attachmentUrl ? "تعديل المرفق" : "إرفاق ملف"}
+                                >
                                   {attachmentTaskId === task.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                                  {attachmentTaskId === task.id ? "جارٍ الرفع..." : task.attachmentUrl ? "تعديل المرفق" : "إرفاق ملف"}
                                 </Button>
                               )}
                             </div>
                           </TableCell>
+                          {isPersonalTaskPage && selectedPersonalFilter === "finished" ? (
+                            <TableCell className="text-center align-top">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:text-red-700">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent dir="rtl">
+                                  <AlertDialogHeader className="text-right">
+                                    <AlertDialogTitle>حذف المهمة</AlertDialogTitle>
+                                    <AlertDialogDescription>سيتم حذف المهمة فقط من قائمة المهام، ولن يتم حذف الملف المحفوظ في Google Drive.</AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => runAction(() => handleDeleteTask(task.id))}>حذف</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>
+                          ) : null}
                         </TableRow>
                       ))}
                     </TableBody>

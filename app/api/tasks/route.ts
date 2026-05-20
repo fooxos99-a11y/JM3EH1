@@ -563,7 +563,27 @@ export async function PATCH(request: Request) {
       }
     } else if (payload.action === "delete_task") {
       if (!isManager) {
-        return NextResponse.json({ error: "غير مصرح بحذف المهام" }, { status: 403 })
+        const { data: task, error: taskError } = await supabase
+          .from("user_tasks")
+          .select("id,task_kind,assigned_to_user_id,status")
+          .eq("id", payload.taskId)
+          .maybeSingle<{ id: string; task_kind: TaskKind; assigned_to_user_id: string; status: TaskStatus }>()
+
+        if (taskError) {
+          if (isSchemaMissing(taskError)) {
+            return schemaResponse()
+          }
+          throw new Error(taskError.message)
+        }
+
+        if (!task) {
+          return NextResponse.json({ error: "المهمة غير موجودة" }, { status: 404 })
+        }
+
+        const canDeleteOwnCompletedTask = task.task_kind === "task" && task.assigned_to_user_id === user.id && task.status === "completed"
+        if (!canDeleteOwnCompletedTask) {
+          return NextResponse.json({ error: "غير مصرح بحذف هذه المهمة" }, { status: 403 })
+        }
       }
 
       const { error } = await supabase.from("user_tasks").delete().eq("id", payload.taskId)

@@ -15,11 +15,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const logo = await getSiteSectionContent("logo")
   const supabase = createSupabaseAdminClient()
 
-  const { data: profile } = await supabase
-    .from("employee_profiles")
-    .select("national_id,job_rank")
-    .eq("user_id", user.id)
-    .maybeSingle<{ national_id: string | null; job_rank: string | null }>()
+  let profile: { national_id: string | null; job_rank: string | null } | null = null
+
+  try {
+    const result = await supabase
+      .from("employee_profiles")
+      .select("national_id,job_rank")
+      .eq("user_id", user.id)
+      .maybeSingle<{ national_id: string | null; job_rank: string | null }>()
+
+    if (!result.error) {
+      profile = result.data ?? null
+    }
+  } catch {
+    profile = null
+  }
 
   const profileSummary: EmployeeProfileSummary = {
     phone: user.phone,

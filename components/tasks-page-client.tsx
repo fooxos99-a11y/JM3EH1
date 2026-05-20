@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import type { DriveFolderOption } from "@/lib/drive"
-import { getTaskStatusLabel, type TaskKind, type TaskStatus, type TasksPageData } from "@/lib/tasks"
+import { getTaskStatusLabel, type TaskKind, type TaskRecord, type TaskStatus, type TasksPageData } from "@/lib/tasks"
 
 type PersonalTaskFilter = "all" | "in_progress" | "under_review" | "finished" | "stalled"
 type PersonalTransactionView = "incoming" | "outgoing"
@@ -150,8 +150,10 @@ function getDefaultDueAtInput() {
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
   const day = String(now.getDate()).padStart(2, "0")
+  const hours = String(now.getHours()).padStart(2, "0")
+  const minutes = String(now.getMinutes()).padStart(2, "0")
 
-  return `${year}-${month}-${day}T${DEFAULT_DUE_TIME}`
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 function isImageAttachment(url: string) {
@@ -343,6 +345,10 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   }
 
   async function handleCreateTask() {
+    if (!data) {
+      return
+    }
+
     const assignedToUserId = isPersonalTaskPage ? (data?.currentUserId ?? "") : taskForm.assignedToUserId
     let attachmentUrl: string | null = null
 
@@ -363,15 +369,42 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       }),
     })
 
-    const payload = await response.json() as TasksPageData & { error?: string }
+    const payload = await response.json() as { task?: Omit<TaskRecord, "assignedToName" | "assignedByName" | "canUpdateStatus">; error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر إنشاء المهمة")
     }
 
-    setData(payload)
+    if (payload.task) {
+      const currentUserName = data.assignableUsers.find((user) => user.id === data.currentUserId)?.name ?? "-"
+      const assignedUserName = data.assignableUsers.find((user) => user.id === assignedToUserId)?.name ?? currentUserName
+      const optimisticTask: TaskRecord = {
+        ...payload.task,
+        assignedToName: assignedUserName,
+        assignedByName: currentUserName,
+        canUpdateStatus: true,
+      }
+
+      setData((current) => {
+        if (!current) {
+          return current
+        }
+
+        return {
+          ...current,
+          assignedTasks: assignedToUserId === current.currentUserId ? [optimisticTask, ...current.assignedTasks] : current.assignedTasks,
+          managedTasks: current.isManager ? [optimisticTask, ...current.managedTasks] : current.managedTasks,
+          pendingTasksCount:
+            assignedToUserId === current.currentUserId && optimisticTask.status !== "completed"
+              ? current.pendingTasksCount + 1
+              : current.pendingTasksCount,
+        }
+      })
+    }
+
     resetCreateTaskState()
     setMessage({ type: "success", text: "تم إنشاء المهمة" })
     setIsCreateDialogOpen(false)
+    void loadData()
   }
 
   async function handleEditTask() {
@@ -556,7 +589,8 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       return
     }
 
-    setPreviewAttachment({ title, url })
+    setPreviewAttachment(null)
+    window.open(url, "_blank", "noopener,noreferrer")
   }
 
   function openTaskFolderDialog(task: TasksPageData["assignedTasks"][number]) {
@@ -775,14 +809,27 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                 <a href={`https://drive.google.com/drive/folders/${task.driveFolderId}`} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
                                   {task.driveFolderName ?? "فتح المجلد"}
                                 </a>
+                              ) : isPersonalTaskPage ? (
+                                <Link href="/dashboard/my_files" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+                                  ملفاتي
+                                </Link>
                               ) : (
                                 <span className="text-sm text-muted-foreground">غير مرتبط</span>
                               )}
                               {kind === "internal_transaction" && selectedTransactionView === "outgoing" ? null : (
-                                <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openTaskFolderDialog(task)}>
-                                  <FolderOpen className="h-4 w-4" />
-                                  {task.driveFolderId ? "تغيير المجلد" : "ربط مجلد"}
-                                </Button>
+                                isPersonalTaskPage && !task.driveFolderId ? (
+                                  <Button asChild type="button" variant="outline" size="sm" className="rounded-xl">
+                                    <Link href="/dashboard/my_files">
+                                      <FolderOpen className="h-4 w-4" />
+                                      فتح ملفاتي
+                                    </Link>
+                                  </Button>
+                                ) : (
+                                  <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => openTaskFolderDialog(task)}>
+                                    <FolderOpen className="h-4 w-4" />
+                                    {task.driveFolderId ? "تغيير المجلد" : "ربط مجلد"}
+                                  </Button>
+                                )
                               )}
                             </div>
                           </TableCell>
@@ -1021,19 +1068,8 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   </Select>
                 </div>
               ) : null}
-              <div className="space-y-2 text-right">
-                <Label>موعد التسليم</Label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <DatePickerField value={getDueDateValue(taskForm.dueAt)} onChange={(value) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(value, getDueTimeValue(current.dueAt)) }))} placeholder="اختر التاريخ" />
-                  <Input type="time" value={getDueTimeValue(taskForm.dueAt)} onChange={(event) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(getDueDateValue(current.dueAt), event.target.value) }))} />
-                </div>
-              </div>
               <div className="space-y-2 text-right md:col-span-2">
                 <Label>اسم المهمة</Label>
-                <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
-              </div>
-              <div className="space-y-2 text-right md:col-span-2">
-                <Label>الصورة</Label>
                 <input
                   ref={createAttachmentInputRef}
                   type="file"
@@ -1041,23 +1077,29 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   className="hidden"
                   onChange={(event) => setCreateAttachmentFile(event.target.files?.[0] ?? null)}
                 />
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => createAttachmentInputRef.current?.click()}>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 rounded-xl shrink-0" onClick={() => createAttachmentInputRef.current?.click()} aria-label="رفع صورة المهمة">
                     <Paperclip className="h-4 w-4" />
-                    {createAttachmentFile ? "تغيير الصورة" : "اختيار صورة"}
                   </Button>
-                  <span className="text-sm text-muted-foreground">{createAttachmentFile?.name ?? "لم يتم اختيار صورة"}</span>
+                  <Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} />
                 </div>
               </div>
               <div className="space-y-2 text-right md:col-span-2">
                 <Label>الوصف</Label>
                 <Textarea rows={5} value={taskForm.description} onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))} placeholder="اختياري" />
               </div>
+              <div className="space-y-2 text-right md:col-span-2">
+                <Label>موعد التسليم</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DatePickerField value={getDueDateValue(taskForm.dueAt)} onChange={(value) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(value, getDueTimeValue(current.dueAt)) }))} placeholder="اختر التاريخ" />
+                  <Input type="time" value={getDueTimeValue(taskForm.dueAt)} onChange={(event) => setTaskForm((current) => ({ ...current, dueAt: mergeDueAtValue(getDueDateValue(current.dueAt), event.target.value) }))} />
+                </div>
+              </div>
             </div>
             <div className="px-6 pb-6">
               <Button type="button" className="rounded-xl" onClick={() => runAction(handleCreateTask)} disabled={isPending || !taskForm.title.trim() || !taskForm.dueAt}>
                 <Plus className="h-4 w-4" />
-                إضافة المهمة
+                {isPending ? "جارٍ إضافة المهمة..." : "إضافة المهمة"}
               </Button>
             </div>
           </DialogContent>

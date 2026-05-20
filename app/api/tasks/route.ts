@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireCurrentUser } from "@/lib/auth"
-import { createDriveFolder } from "@/lib/google-drive"
+import { createDriveFolder, resolveTaskAttachmentFolder } from "@/lib/google-drive"
 import type { TaskAssignableUser, TaskKind, TaskNotification, TaskRecord, TasksPageData, TaskStatus } from "@/lib/tasks"
 import { taskKindValues, taskStatusValues } from "@/lib/tasks"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
@@ -339,6 +339,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseAdminClient()
+    const isSelfAssignedTask = payload.assignedToUserId === user.id
+    let taskFolder: { folderId: string; folderName: string } | null = null
+
+    try {
+      taskFolder = await resolveTaskAttachmentFolder(user)
+    } catch {
+      taskFolder = null
+    }
 
     const { data: insertedRows, error } = await supabase.from("user_tasks").insert({
       task_kind: "task",
@@ -347,8 +355,11 @@ export async function POST(request: Request) {
       assigned_to_user_id: payload.assignedToUserId,
       assigned_by_user_id: user.id,
       due_at: payload.dueAt,
-      status: "in_progress",
+      status: isSelfAssignedTask ? "completed" : "in_progress",
+      completed_at: isSelfAssignedTask ? new Date().toISOString() : null,
       attachment_url: payload.attachmentUrl ?? null,
+      drive_folder_id: taskFolder?.folderId ?? null,
+      drive_folder_name: taskFolder?.folderName ?? null,
     }).select("id,title")
 
     if (error) {
@@ -359,22 +370,41 @@ export async function POST(request: Request) {
     }
 
     const insertedTask = insertedRows?.[0]
-    const { error: notificationError } = await supabase.from("task_notifications").insert({
-      user_id: payload.assignedToUserId,
-      task_id: insertedTask?.id ?? null,
-      notification_type: "new_task",
-      title: `مهمة جديدة: ${payload.title}`,
-      body: `تم إسناد مهمة جديدة لك مع موعد تسليم ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeStyle: "short" }).format(new Date(payload.dueAt))}`,
-    })
+    if (!isSelfAssignedTask) {
+      const { error: notificationError } = await supabase.from("task_notifications").insert({
+        user_id: payload.assignedToUserId,
+        task_id: insertedTask?.id ?? null,
+        notification_type: "new_task",
+        title: `مهمة جديدة: ${payload.title}`,
+        body: `تم إسناد مهمة جديدة لك مع موعد تسليم ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeStyle: "short" }).format(new Date(payload.dueAt))}`,
+      })
 
-    if (notificationError) {
-      if (isSchemaMissing(notificationError)) {
-        return schemaResponse()
+      if (notificationError) {
+        if (isSchemaMissing(notificationError)) {
+          return schemaResponse()
+        }
+        throw new Error(notificationError.message)
       }
-      throw new Error(notificationError.message)
     }
 
-    return NextResponse.json(await loadTasksPageData(user.id, true, parseTaskKindFilter(request)))
+    return NextResponse.json({
+      task: {
+        id: insertedTask?.id ?? null,
+        kind: "task" as const,
+        title: payload.title,
+        description: payload.description,
+        assignedToUserId: payload.assignedToUserId,
+        assignedByUserId: user.id,
+        dueAt: payload.dueAt,
+        status: isSelfAssignedTask ? "completed" : "in_progress",
+        completedAt: isSelfAssignedTask ? new Date().toISOString() : null,
+        attachmentUrl: payload.attachmentUrl ?? null,
+        driveFolderId: taskFolder?.folderId ?? null,
+        driveFolderName: taskFolder?.folderName ?? null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    })
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -501,7 +531,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "غير مصرح بإنشاء مجلد لهذه المهمة" }, { status: 403 })
       }
 
-      const folder = await createDriveFolder(payload.parentFolderId, task.title)
+      const folder = await createDriveFolder(user, payload.parentFolderId, task.title)
       const { error } = await supabase.from("user_tasks").update({
         drive_folder_id: folder.id,
         drive_folder_name: folder.name,

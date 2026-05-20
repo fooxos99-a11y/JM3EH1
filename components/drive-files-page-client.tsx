@@ -4,6 +4,16 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { ExternalLink, FileImage, FileText, Folder, FolderPlus, LoaderCircle, Pencil, Search, Trash2, Upload } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -21,6 +31,12 @@ type FolderOptionsPayload = {
   folders?: Array<{ id: string; name: string; path: string }>
   defaultFolderId?: string | null
   defaultFolderName?: string | null
+  currentFolderId?: string
+  currentFolderName?: string
+  currentFolderPath?: string
+  parentFolderId?: string | null
+  rootFolderId?: string
+  isSearchResult?: boolean
   error?: string
 }
 
@@ -76,11 +92,16 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false)
   const [folderOptions, setFolderOptions] = useState<Array<{ id: string; name: string; path: string }>>([])
   const [folderSearchQuery, setFolderSearchQuery] = useState("")
-  const [selectedDefaultFolderId, setSelectedDefaultFolderId] = useState("")
   const [defaultFolderName, setDefaultFolderName] = useState<string | null>(null)
   const [loadingFolderOptions, setLoadingFolderOptions] = useState(false)
+  const [locationFolderId, setLocationFolderId] = useState<string>("root")
+  const [locationFolderName, setLocationFolderName] = useState<string>("ملفاتي")
+  const [locationFolderPath, setLocationFolderPath] = useState<string>("ملفاتي")
+  const [locationParentFolderId, setLocationParentFolderId] = useState<string | null>(null)
+  const [isLocationSearchResult, setIsLocationSearchResult] = useState(false)
   const [renameItem, setRenameItem] = useState<DriveItem | null>(null)
   const [renameValue, setRenameValue] = useState("")
+  const [deleteItem, setDeleteItem] = useState<DriveItem | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isVirtualAllFilesRoot = Boolean(data && scope === "all_files" && data.currentFolderId === VIRTUAL_ALL_FILES_ROOT_ID)
 
@@ -129,8 +150,41 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       }
 
       setFolderOptions(payload.folders)
-      setSelectedDefaultFolderId(payload.defaultFolderId ?? "")
       setDefaultFolderName(payload.defaultFolderName ?? null)
+      return payload
+    } finally {
+      setLoadingFolderOptions(false)
+    }
+  }
+
+  async function loadLocationFolders(options?: { parentId?: string | null; query?: string }) {
+    setLoadingFolderOptions(true)
+
+    try {
+      const searchParams = new URLSearchParams({ mode: "browser" })
+
+      if (options?.parentId) {
+        searchParams.set("parentId", options.parentId)
+      }
+
+      if (options?.query?.trim()) {
+        searchParams.set("q", options.query.trim())
+      }
+
+      const response = await fetch(`/api/drive/folders?${searchParams.toString()}`, { cache: "no-store" })
+      const payload = (await response.json()) as FolderOptionsPayload
+
+      if (!response.ok || !payload.folders || !payload.currentFolderId || !payload.currentFolderName || !payload.currentFolderPath) {
+        throw new Error(payload.error ?? "تعذر تحميل مجلدات الموقع")
+      }
+
+      setFolderOptions(payload.folders)
+      setDefaultFolderName(payload.defaultFolderName ?? null)
+      setLocationFolderId(payload.currentFolderId)
+      setLocationFolderName(payload.currentFolderName)
+      setLocationFolderPath(payload.currentFolderPath)
+      setLocationParentFolderId(payload.parentFolderId ?? null)
+      setIsLocationSearchResult(Boolean(payload.isSearchResult))
       return payload
     } finally {
       setLoadingFolderOptions(false)
@@ -185,16 +239,6 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       }
     })()
   }, [scope])
-
-  useEffect(() => {
-    if (!googleDriveStatus?.connected || folderOptions.length > 0 || loadingFolderOptions) {
-      return
-    }
-
-    void loadFolderOptions().catch(() => {
-      // Keep the page usable even if preloading folder options fails.
-    })
-  }, [googleDriveStatus?.connected, folderOptions.length, loadingFolderOptions])
 
   function runAction(task: () => Promise<void>) {
     setMessage(null)
@@ -290,7 +334,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   }
 
   async function handleDelete(item: DriveItem) {
-    if (!data || !window.confirm(`سيتم حذف ${item.isFolder ? "المجلد" : "الملف"} نهائيًا. هل تريد المتابعة؟`)) {
+    if (!data) {
       return
     }
 
@@ -309,6 +353,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     }
 
     await reloadCurrentView()
+    setDeleteItem(null)
     setMessage({ type: "success", text: "تم حذف العنصر" })
   }
 
@@ -326,19 +371,10 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
   }
 
   async function handleSaveDefaultFolder() {
-    if (!selectedDefaultFolderId) {
-      throw new Error("اختر مجلدًا أولًا")
-    }
-
-    const selectedFolder = folderOptions.find((folder) => folder.id === selectedDefaultFolderId)
-    if (!selectedFolder) {
-      throw new Error("المجلد المحدد غير موجود")
-    }
-
     const response = await fetch("/api/drive/folders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId: selectedFolder.id, folderName: selectedFolder.name }),
+      body: JSON.stringify({ folderId: locationFolderId, folderName: locationFolderName }),
     })
     const payload = (await response.json()) as { defaultFolderId?: string; defaultFolderName?: string; error?: string }
 
@@ -346,10 +382,15 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       throw new Error(payload.error ?? "تعذر حفظ مكان ملفاتي")
     }
 
-    setDefaultFolderName(payload.defaultFolderName ?? selectedFolder.name)
+    setDefaultFolderName(payload.defaultFolderName ?? locationFolderName)
     setIsLocationDialogOpen(false)
     await loadData(scope)
     setMessage({ type: "success", text: "تم حفظ مكان ملفاتي" })
+  }
+
+  async function handleOpenLocationFolder(folderId: string) {
+    setFolderSearchQuery("")
+    await loadLocationFolders({ parentId: folderId })
   }
 
   async function handleOpenItem(item: DriveItem) {
@@ -392,9 +433,9 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       setFolderSearchQuery("")
       setIsLocationDialogOpen(true)
 
-      if (folderOptions.length === 0 && !loadingFolderOptions) {
+      if (!loadingFolderOptions) {
         runAction(async () => {
-          await loadFolderOptions()
+          await loadLocationFolders()
         })
       }
     }
@@ -410,7 +451,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       window.removeEventListener("drive-files-disconnect", handleDisconnectRequest)
       window.removeEventListener("drive-files-open-location", handleOpenLocationRequest)
     }
-  }, [canUseTopBarActions, folderOptions.length, googleDriveStatus?.connected, loadingFolderOptions])
+  }, [canUseTopBarActions, googleDriveStatus?.connected, loadingFolderOptions])
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("drive-files-actions-state", {
@@ -527,7 +568,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
                       className="h-7 w-7 rounded-lg bg-white/95 text-red-600 hover:text-red-700"
                       onClick={(event) => {
                         event.stopPropagation()
-                        runAction(() => handleDelete(item))
+                        setDeleteItem(item)
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -581,6 +622,23 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
         </DialogContent>
       </Dialog>
 
+      <AlertDialog open={Boolean(deleteItem)} onOpenChange={(open) => { if (!open) { setDeleteItem(null) } }}>
+        <AlertDialogContent className="rounded-[1.75rem] border-border/60" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>حذف {deleteItem?.isFolder ? "المجلد" : "الملف"}</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              سيتم حذف {deleteItem?.isFolder ? "هذا المجلد" : "هذا الملف"} نهائيًا. هل تريد المتابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">إلغاء</AlertDialogCancel>
+            <AlertDialogAction className="rounded-xl bg-red-600 text-white hover:bg-red-700" onClick={() => deleteItem ? runAction(() => handleDelete(deleteItem)) : undefined}>
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
         <DialogContent className="rounded-[1.75rem]" showCloseButton={false}>
           <DialogHeader className="text-right">
@@ -588,10 +646,60 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Button type="button" className="rounded-xl" onClick={() => runAction(handleSaveDefaultFolder)} disabled={!selectedDefaultFolderId || isPending}>
+              <Button type="button" className="rounded-xl" onClick={() => runAction(handleSaveDefaultFolder)} disabled={isPending || loadingFolderOptions || !locationFolderId}>
                 حفظ
               </Button>
-              <Input value={folderSearchQuery} onChange={(event) => setFolderSearchQuery(event.target.value)} placeholder="ابحث في المجلدات" className="text-right" />
+              <Input
+                value={folderSearchQuery}
+                onChange={(event) => setFolderSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    runAction(async () => {
+                      if (folderSearchQuery.trim()) {
+                        await loadLocationFolders({ query: folderSearchQuery })
+                      } else {
+                        await loadLocationFolders({ parentId: locationFolderId })
+                      }
+                    })
+                  }
+                }}
+                placeholder="ابحث في المجلدات"
+                className="text-right"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => runAction(async () => {
+                  if (folderSearchQuery.trim()) {
+                    await loadLocationFolders({ query: folderSearchQuery })
+                  } else {
+                    await loadLocationFolders({ parentId: locationFolderId })
+                  }
+                })}
+                disabled={loadingFolderOptions}
+              >
+                <Search className="h-4 w-4" />
+                بحث
+              </Button>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-border/60 px-4 py-3 text-sm">
+              <div className="text-right">
+                <p className="font-semibold text-foreground">{locationFolderName}</p>
+                <p className="text-xs text-muted-foreground">{locationFolderPath}</p>
+              </div>
+              {locationParentFolderId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => runAction(() => loadLocationFolders({ parentId: locationParentFolderId }))}
+                  disabled={loadingFolderOptions}
+                >
+                  رجوع
+                </Button>
+              ) : null}
             </div>
             <div className="max-h-[22rem] space-y-2 overflow-y-auto rounded-[1.25rem] border border-border/60 p-2">
               {loadingFolderOptions ? (
@@ -604,14 +712,17 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
                 <button
                   key={folder.id}
                   type="button"
-                  className={`flex w-full flex-col items-end rounded-[1rem] border px-4 py-3 text-right transition ${selectedDefaultFolderId === folder.id ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/30 hover:bg-muted/30"}`}
-                  onClick={() => setSelectedDefaultFolderId(folder.id)}
+                  className="flex w-full flex-col items-end rounded-[1rem] border border-border/60 px-4 py-3 text-right transition hover:border-primary/30 hover:bg-muted/30"
+                  onClick={() => runAction(() => handleOpenLocationFolder(folder.id))}
                 >
-                  <span className="font-semibold text-foreground">{folder.name}</span>
-                  <span className="text-xs text-muted-foreground">{folder.path}</span>
+                  <span className="block w-full text-right font-semibold text-foreground">{folder.name}</span>
+                  <span className="block w-full text-right text-xs text-muted-foreground">{folder.path}</span>
                 </button>
               ))}
             </div>
+            {isLocationSearchResult ? (
+              <p className="text-right text-xs text-muted-foreground">اضغط على أي مجلد من نتائج البحث لفتحه ثم احفظه إذا أردته مكانًا افتراضيًا.</p>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

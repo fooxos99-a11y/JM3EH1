@@ -523,6 +523,92 @@ export async function deleteDriveItem(user: AuthUser, itemId: string) {
   await drive.files.delete(withAllDriveSupport({ fileId: itemId }))
 }
 
+async function buildFolderPath(drive: drive_v3.Drive, folderId: string, rootFolderId: string, rootFolderName: string) {
+  if (folderId === rootFolderId) {
+    return rootFolderName
+  }
+
+  const segments: string[] = []
+  const seen = new Set<string>()
+  let currentId: string | null = folderId
+
+  while (currentId && currentId !== rootFolderId && !seen.has(currentId)) {
+    seen.add(currentId)
+
+    const current = await getDriveFile(drive, currentId)
+    segments.unshift(current.name ?? "مجلد")
+    currentId = current.parents?.[0] ?? null
+  }
+
+  return segments.length > 0 ? `${rootFolderName} / ${segments.join(" / ")}` : rootFolderName
+}
+
+export async function browseDriveFolders(user: AuthUser, parentId?: string | null, query?: string | null) {
+  const access = await getDriveAccess(user)
+  const { drive, mode } = access
+  const root = await resolveScopeRoot(user, "my_files", mode)
+  const currentFolderId = parentId?.trim() || root.rootFolderId
+
+  if (query?.trim()) {
+    const queryParts = [
+      `mimeType = '${DRIVE_FOLDER_MIME}'`,
+      `name contains '${escapeDriveQueryValue(query.trim())}'`,
+      "trashed = false",
+    ]
+
+    if (mode === "oauth") {
+      queryParts.push("'me' in owners")
+    }
+
+    const response = await drive.files.list(
+      withAllDriveSupport({
+        q: queryParts.join(" and "),
+        fields: "files(id,name,parents)",
+        orderBy: "name",
+        pageSize: 100,
+      }),
+    )
+
+    const folders = await Promise.all(
+      (response.data.files ?? []).map(async (folder) => ({
+        id: folder.id ?? "",
+        name: folder.name ?? "مجلد",
+        path: await buildFolderPath(drive, folder.id ?? root.rootFolderId, root.rootFolderId, root.rootFolderName),
+      })),
+    )
+
+    return {
+      folders,
+      currentFolderId,
+      currentFolderName: root.rootFolderName,
+      currentFolderPath: root.rootFolderName,
+      parentFolderId: null,
+      rootFolderId: root.rootFolderId,
+      isSearchResult: true,
+    }
+  }
+
+  const currentFolder = currentFolderId === root.rootFolderId
+    ? { id: root.rootFolderId, name: root.rootFolderName, parents: [] as string[] }
+    : await getDriveFile(drive, currentFolderId)
+  const currentFolderPath = await buildFolderPath(drive, currentFolderId, root.rootFolderId, root.rootFolderName)
+  const childFolders = await listDirectChildren(drive, currentFolderId, true)
+
+  return {
+    folders: childFolders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      path: `${currentFolderPath} / ${folder.name}`,
+    })),
+    currentFolderId,
+    currentFolderName: currentFolder.name ?? root.rootFolderName,
+    currentFolderPath,
+    parentFolderId: currentFolderId === root.rootFolderId ? null : (currentFolder.parents?.[0] ?? root.rootFolderId),
+    rootFolderId: root.rootFolderId,
+    isSearchResult: false,
+  }
+}
+
 export async function listDriveFolderOptions(user: AuthUser): Promise<DriveFolderOption[]> {
   const access = await getDriveAccess(user)
   const drive = access.drive

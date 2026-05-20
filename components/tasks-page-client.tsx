@@ -32,6 +32,8 @@ import { getTaskStatusLabel, type TaskKind, type TaskStatus, type TasksPageData 
 type PersonalTaskFilter = "all" | "in_progress" | "under_review" | "finished" | "stalled"
 type PersonalTransactionView = "incoming" | "outgoing"
 
+const DEFAULT_DUE_TIME = "23:59"
+
 const initialTaskForm = {
   taskId: "",
   assignedToUserId: "",
@@ -39,8 +41,6 @@ const initialTaskForm = {
   description: "",
   dueAt: getDefaultDueAtInput(),
 }
-
-const DEFAULT_DUE_TIME = "23:59"
 
 type TaskFolderDialogState = {
   taskId: string

@@ -20,6 +20,7 @@ import { PermissionsEditor } from "@/components/dashboard/permissions-editor"
 import { ProjectsEditor } from "@/components/dashboard/projects-editor"
 import { SupportersDashboard } from "@/components/dashboard/supporters-dashboard"
 import { ServicesDashboard } from "@/components/dashboard/services-dashboard"
+import { OperationalPlansPageClient } from "@/components/operational-plans-page-client"
 import { hasPermission, requireCurrentUser } from "@/lib/auth"
 import { getDashboardSection } from "@/lib/dashboard"
 import { getGovernancePageBySection, governanceSectionKeys } from "@/lib/governance"
@@ -133,6 +134,10 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
 
   if (section === "staff_tasks") {
     return <TasksPageClient embedded view="manager" />
+  }
+
+  if (section === "operational_plans") {
+    return <OperationalPlansPageClient embedded />
   }
 
   if (section === "logo") {

@@ -3,6 +3,8 @@ import { z } from "zod"
 
 import { requireCurrentUser } from "@/lib/auth"
 import { createDriveFolder } from "@/lib/google-drive"
+import { triggerTasksRealtimeUpdate } from "@/lib/pusher-server"
+import { deleteRedisCacheByPrefix, getRedisCache, setRedisCache } from "@/lib/redis-cache"
 import type { TaskAssignableUser, TaskKind, TaskNotification, TaskRecord, TasksPageData, TaskStatus } from "@/lib/tasks"
 import { taskKindValues, taskStatusValues } from "@/lib/tasks"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
@@ -20,6 +22,8 @@ type TaskRow = {
   attachment_url: string | null
   drive_folder_id: string | null
   drive_folder_name: string | null
+  operational_plan_id: string | null
+  operational_plan_occurrence_id: string | null
   created_at: string
   updated_at: string
 }
@@ -40,8 +44,8 @@ type UserRow = {
   role: "admin" | "user"
 }
 
-const taskSelectWithAttachment = "id,task_kind,title,description,assigned_to_user_id,assigned_by_user_id,due_at,status,completed_at,attachment_url,drive_folder_id,drive_folder_name,created_at,updated_at"
-const taskSelectWithoutAttachment = "id,task_kind,title,description,assigned_to_user_id,assigned_by_user_id,due_at,status,completed_at,drive_folder_id,drive_folder_name,created_at,updated_at"
+const taskSelectWithAttachment = "id,task_kind,title,description,assigned_to_user_id,assigned_by_user_id,due_at,status,completed_at,attachment_url,drive_folder_id,drive_folder_name,operational_plan_id,operational_plan_occurrence_id,created_at,updated_at"
+const taskSelectWithoutAttachment = "id,task_kind,title,description,assigned_to_user_id,assigned_by_user_id,due_at,status,completed_at,drive_folder_id,drive_folder_name,operational_plan_id,operational_plan_occurrence_id,created_at,updated_at"
 
 const createTaskSchema = z.object({
   action: z.literal("create_task"),
@@ -127,6 +131,8 @@ function mapTask(row: TaskRow, usersById: Map<string, UserRow>, currentUserId: s
     attachmentUrl: row.attachment_url,
     driveFolderId: row.drive_folder_id,
     driveFolderName: row.drive_folder_name,
+    operationalPlanId: row.operational_plan_id,
+    operationalPlanOccurrenceId: row.operational_plan_occurrence_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     canUpdateStatus: isManager || row.assigned_to_user_id === currentUserId,
@@ -245,6 +251,44 @@ async function ensureDueSoonNotifications(currentUserId: string) {
   return true
 }
 
+async function syncOperationalPlanOccurrenceFromTask(taskId: string, status: TaskStatus, completedAt: string | null) {
+  const supabase = createSupabaseAdminClient()
+  const { data: taskRow, error: taskError } = await supabase
+    .from("user_tasks")
+    .select("operational_plan_occurrence_id")
+    .eq("id", taskId)
+    .maybeSingle<{ operational_plan_occurrence_id: string | null }>()
+
+  if (taskError) {
+    if (isSchemaMissing(taskError)) {
+      throw new Error("SCHEMA_MISSING")
+    }
+
+    throw new Error(taskError.message)
+  }
+
+  if (!taskRow?.operational_plan_occurrence_id) {
+    return
+  }
+
+  const { error: occurrenceError } = await supabase
+    .from("operational_plan_occurrences")
+    .update({
+      status: status === "completed" ? "completed" : "pending",
+      completed_at: status === "completed" ? completedAt : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", taskRow.operational_plan_occurrence_id)
+
+  if (occurrenceError) {
+    if (isSchemaMissing(occurrenceError)) {
+      throw new Error("SCHEMA_MISSING")
+    }
+
+    throw new Error(occurrenceError.message)
+  }
+}
+
 function parseTaskKindFilter(request: Request): TaskKind {
   const searchParams = new URL(request.url).searchParams
   const kind = searchParams.get("kind")
@@ -254,6 +298,15 @@ function parseTaskKindFilter(request: Request): TaskKind {
   }
 
   return "task"
+}
+
+function getTasksCacheKey(currentUserId: string, isManager: boolean, taskKind: TaskKind) {
+  return `tasks:${taskKind}:${currentUserId}:${isManager ? "manager" : "user"}`
+}
+
+async function invalidateTaskCachesAndBroadcast(taskKind: TaskKind) {
+  await deleteRedisCacheByPrefix("tasks:")
+  await triggerTasksRealtimeUpdate(taskKind)
 }
 
 async function loadTasksPageData(currentUserId: string, isManager: boolean, taskKind: TaskKind): Promise<TasksPageData> {
@@ -313,7 +366,18 @@ export async function GET(request: Request) {
   try {
     const user = await requireCurrentUser()
     const isManager = user.role === "admin" && user.permissions.includes("*")
-    return NextResponse.json(await loadTasksPageData(user.id, isManager, parseTaskKindFilter(request)))
+    const taskKind = parseTaskKindFilter(request)
+    const cacheKey = getTasksCacheKey(user.id, isManager, taskKind)
+    const cachedPayload = await getRedisCache<TasksPageData>(cacheKey)
+
+    if (cachedPayload) {
+      return NextResponse.json(cachedPayload)
+    }
+
+    const payload = await loadTasksPageData(user.id, isManager, taskKind)
+    void setRedisCache(cacheKey, payload, 45)
+
+    return NextResponse.json(payload)
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -380,6 +444,8 @@ export async function POST(request: Request) {
       }
     }
 
+    void invalidateTaskCachesAndBroadcast("task")
+
     return NextResponse.json({
       task: {
         id: insertedTask?.id ?? null,
@@ -394,6 +460,8 @@ export async function POST(request: Request) {
         attachmentUrl: payload.attachmentUrl ?? null,
         driveFolderId: null,
         driveFolderName: null,
+        operationalPlanId: null,
+        operationalPlanOccurrenceId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -436,9 +504,10 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "غير مصرح بتعديل هذه المهمة" }, { status: 403 })
       }
 
+      const completedAt = payload.status === "completed" ? new Date().toISOString() : null
       const { error } = await supabase.from("user_tasks").update({
         status: payload.status,
-        completed_at: payload.status === "completed" ? new Date().toISOString() : null,
+        completed_at: completedAt,
       }).eq("id", payload.taskId)
 
       if (error) {
@@ -447,6 +516,8 @@ export async function PATCH(request: Request) {
         }
         throw new Error(error.message)
       }
+
+      await syncOperationalPlanOccurrenceFromTask(payload.taskId, payload.status, completedAt)
     } else if (payload.action === "update_attachment") {
       const { data: task, error: taskError } = await supabase.from("user_tasks").select("id,assigned_to_user_id").eq("id", payload.taskId).maybeSingle<{ id: string; assigned_to_user_id: string }>()
       if (taskError) {
@@ -558,9 +629,9 @@ export async function PATCH(request: Request) {
       if (!isManager) {
         const { data: task, error: taskError } = await supabase
           .from("user_tasks")
-          .select("id,task_kind,assigned_to_user_id,status")
+          .select("id,task_kind,assigned_to_user_id,status,operational_plan_occurrence_id")
           .eq("id", payload.taskId)
-          .maybeSingle<{ id: string; task_kind: TaskKind; assigned_to_user_id: string; status: TaskStatus }>()
+          .maybeSingle<{ id: string; task_kind: TaskKind; assigned_to_user_id: string; status: TaskStatus; operational_plan_occurrence_id: string | null }>()
 
         if (taskError) {
           if (isSchemaMissing(taskError)) {
@@ -571,6 +642,10 @@ export async function PATCH(request: Request) {
 
         if (!task) {
           return NextResponse.json({ error: "المهمة غير موجودة" }, { status: 404 })
+        }
+
+        if (task.operational_plan_occurrence_id) {
+          return NextResponse.json({ error: "لا يمكن حذف مهام الخطة التشغيلية من هذه الصفحة" }, { status: 400 })
         }
 
         const canDeleteOwnCompletedTask = task.task_kind === "task" && task.assigned_to_user_id === user.id && task.status === "completed"
@@ -627,7 +702,9 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return NextResponse.json(await loadTasksPageData(user.id, isManager, parseTaskKindFilter(request)))
+    const taskKind = parseTaskKindFilter(request)
+    void invalidateTaskCachesAndBroadcast(taskKind)
+    return NextResponse.json(await loadTasksPageData(user.id, isManager, taskKind))
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()

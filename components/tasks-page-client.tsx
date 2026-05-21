@@ -249,6 +249,43 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     void loadData()
   }, [kind])
 
+  useEffect(() => {
+    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY
+    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER
+
+    if (!pusherKey || !pusherCluster) {
+      return
+    }
+
+    let cancelled = false
+    let pusherClient: { subscribe: (channelName: string) => { bind: (eventName: string, callback: (payload: { kind?: TaskKind }) => void) => void; unbind_all: () => void }; disconnect: () => void } | null = null
+    let channel: { bind: (eventName: string, callback: (payload: { kind?: TaskKind }) => void) => void; unbind_all: () => void } | null = null
+
+    void import("pusher-js").then(({ default: Pusher }) => {
+      if (cancelled) {
+        return
+      }
+
+      pusherClient = new Pusher(pusherKey, {
+        cluster: pusherCluster,
+      })
+
+      channel = pusherClient.subscribe("tasks")
+      channel.bind("tasks-updated", (payload: { kind?: TaskKind }) => {
+        if (!payload.kind || payload.kind === kind) {
+          void loadData()
+          window.dispatchEvent(new Event("dashboard-badges-changed"))
+        }
+      })
+    })
+
+    return () => {
+      cancelled = true
+      channel?.unbind_all()
+      pusherClient?.disconnect()
+    }
+  }, [kind])
+
   const personalStats = useMemo(() => {
     const tasks = data?.assignedTasks ?? []
 
@@ -784,23 +821,25 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                           </TableCell>
                           {isPersonalTaskPage && selectedPersonalFilter === "finished" ? (
                             <TableCell className="text-center align-top">
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:text-red-700">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent dir="rtl">
-                                  <AlertDialogHeader className="text-right">
-                                    <AlertDialogTitle>حذف المهمة</AlertDialogTitle>
-                                    <AlertDialogDescription>سيتم حذف المهمة فقط من قائمة المهام، ولن يتم حذف الملف المحفوظ في Google Drive.</AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => runAction(() => handleDeleteTask(task.id))}>حذف</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              {task.operationalPlanOccurrenceId ? null : (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:text-red-700">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent dir="rtl">
+                                    <AlertDialogHeader className="text-right">
+                                      <AlertDialogTitle>حذف المهمة</AlertDialogTitle>
+                                      <AlertDialogDescription>سيتم حذف المهمة فقط من قائمة المهام، ولن يتم حذف الملف المحفوظ في Google Drive.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => runAction(() => handleDeleteTask(task.id))}>حذف</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
                             </TableCell>
                           ) : null}
                         </TableRow>

@@ -258,6 +258,59 @@ alter table public.user_tasks drop constraint if exists user_tasks_status_check;
 alter table public.user_tasks add constraint user_tasks_status_check check (status in ('not_started', 'in_progress', 'under_review', 'completed', 'stalled'));
 alter table public.user_tasks alter column status set default 'in_progress';
 
+create table if not exists public.operational_plans (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text not null default '',
+  plan_year integer not null,
+  recurrence text not null check (recurrence in ('weekly', 'monthly', 'quarterly', 'semiannual', 'annual')),
+  target_count integer not null check (target_count > 0),
+  owner_user_id uuid references public.app_users(id) on delete set null,
+  created_by_user_id uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.operational_plans add column if not exists description text not null default '';
+alter table public.operational_plans add column if not exists plan_year integer;
+alter table public.operational_plans add column if not exists recurrence text;
+alter table public.operational_plans add column if not exists target_count integer;
+alter table public.operational_plans add column if not exists owner_user_id uuid references public.app_users(id) on delete set null;
+alter table public.operational_plans add column if not exists created_by_user_id uuid references public.app_users(id) on delete set null;
+alter table public.operational_plans add column if not exists created_at timestamptz not null default timezone('utc', now());
+alter table public.operational_plans add column if not exists updated_at timestamptz not null default timezone('utc', now());
+alter table public.operational_plans drop constraint if exists operational_plans_recurrence_check;
+alter table public.operational_plans add constraint operational_plans_recurrence_check check (recurrence in ('weekly', 'monthly', 'quarterly', 'semiannual', 'annual'));
+
+create table if not exists public.operational_plan_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references public.operational_plans(id) on delete cascade,
+  sequence_number integer not null,
+  label text not null,
+  due_at timestamptz not null,
+  status text not null default 'pending' check (status in ('pending', 'completed')),
+  completed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.operational_plan_occurrences add column if not exists sequence_number integer;
+alter table public.operational_plan_occurrences add column if not exists label text;
+alter table public.operational_plan_occurrences add column if not exists due_at timestamptz;
+alter table public.operational_plan_occurrences add column if not exists status text not null default 'pending';
+alter table public.operational_plan_occurrences add column if not exists completed_at timestamptz;
+alter table public.operational_plan_occurrences add column if not exists created_at timestamptz not null default timezone('utc', now());
+alter table public.operational_plan_occurrences add column if not exists updated_at timestamptz not null default timezone('utc', now());
+alter table public.operational_plan_occurrences drop constraint if exists operational_plan_occurrences_status_check;
+alter table public.operational_plan_occurrences add constraint operational_plan_occurrences_status_check check (status in ('pending', 'completed'));
+
+create unique index if not exists operational_plan_occurrences_plan_id_sequence_number_key on public.operational_plan_occurrences(plan_id, sequence_number);
+create index if not exists operational_plans_plan_year_idx on public.operational_plans(plan_year);
+create index if not exists operational_plan_occurrences_plan_id_idx on public.operational_plan_occurrences(plan_id);
+alter table public.user_tasks add column if not exists operational_plan_id uuid references public.operational_plans(id) on delete set null;
+alter table public.user_tasks add column if not exists operational_plan_occurrence_id uuid references public.operational_plan_occurrences(id) on delete set null;
+create unique index if not exists user_tasks_operational_plan_occurrence_id_key on public.user_tasks(operational_plan_occurrence_id) where operational_plan_occurrence_id is not null;
+
 update public.user_tasks
 set status = 'in_progress'
 where status = 'not_started';

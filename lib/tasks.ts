@@ -19,6 +19,8 @@ export type TaskRecord = {
   attachmentUrl: string | null
   driveFolderId: string | null
   driveFolderName: string | null
+  operationalPlanId: string | null
+  operationalPlanOccurrenceId: string | null
   createdAt: string
   updatedAt: string
   canUpdateStatus: boolean

@@ -73,6 +73,13 @@ export const dashboardSections: DashboardGroup[] = [
         permission: "tasks",
       },
       {
+        slug: "operational_plans",
+        label: "الخطة التشغيلية",
+        description: "إدارة الخطط التشغيلية السنوية مع التكرار ونسبة الإنجاز وشريط التقدم.",
+        permission: "tasks",
+        managerOnly: true,
+      },
+      {
         slug: "staff_requests",
         label: "طلبات الموظفين",
         description: "مراجعة الطلبات المرفوعة من الموظفين مع اعتمادها أو رفضها.",

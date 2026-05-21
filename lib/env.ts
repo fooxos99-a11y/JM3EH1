@@ -7,6 +7,13 @@ const serverEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   AUTH_SESSION_COOKIE_NAME: z.string().min(1).default("nm_session"),
+  REDIS_URL: z.string().url().optional(),
+  PUSHER_APP_ID: z.string().min(1).optional(),
+  PUSHER_KEY: z.string().min(1).optional(),
+  PUSHER_SECRET: z.string().min(1).optional(),
+  PUSHER_CLUSTER: z.string().min(1).optional(),
+  NEXT_PUBLIC_PUSHER_KEY: z.string().min(1).optional(),
+  NEXT_PUBLIC_PUSHER_CLUSTER: z.string().min(1).optional(),
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   GOOGLE_DRIVE_CLIENT_EMAIL: z.string().email().optional(),
@@ -37,6 +44,17 @@ export function hasGoogleDriveEnv() {
   return Boolean(process.env.GOOGLE_DRIVE_CLIENT_EMAIL && process.env.GOOGLE_DRIVE_PRIVATE_KEY)
 }
 
+export function hasPusherEnv() {
+  return Boolean(
+    process.env.PUSHER_APP_ID &&
+      process.env.PUSHER_KEY &&
+      process.env.PUSHER_SECRET &&
+      process.env.PUSHER_CLUSTER &&
+      process.env.NEXT_PUBLIC_PUSHER_KEY &&
+      process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
+  )
+}
+
 export function getServerEnv(): ServerEnv {
   if (cachedEnv) {
     return cachedEnv
@@ -48,6 +66,13 @@ export function getServerEnv(): ServerEnv {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY?.replace(/^servic:/, ""),
     AUTH_SESSION_COOKIE_NAME: process.env.AUTH_SESSION_COOKIE_NAME ?? "nm_session",
+    REDIS_URL: process.env.REDIS_URL,
+    PUSHER_APP_ID: process.env.PUSHER_APP_ID,
+    PUSHER_KEY: process.env.PUSHER_KEY,
+    PUSHER_SECRET: process.env.PUSHER_SECRET,
+    PUSHER_CLUSTER: process.env.PUSHER_CLUSTER,
+    NEXT_PUBLIC_PUSHER_KEY: process.env.NEXT_PUBLIC_PUSHER_KEY,
+    NEXT_PUBLIC_PUSHER_CLUSTER: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
     GOOGLE_OAUTH_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID,
     GOOGLE_OAUTH_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_DRIVE_CLIENT_EMAIL: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
@@ -59,4 +84,8 @@ export function getServerEnv(): ServerEnv {
   })
 
   return cachedEnv
+}
+
+export function hasRedisEnv() {
+  return Boolean(process.env.REDIS_URL)
 }

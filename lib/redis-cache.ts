@@ -8,9 +8,39 @@ type RedisClient = ReturnType<typeof createClient>
 
 let cachedClient: RedisClient | null = null
 let connectPromise: Promise<RedisClient | null> | null = null
+let redisDisabledUntil = 0
+
+const REDIS_TIMEOUT_MS = 1200
+const REDIS_COOLDOWN_MS = 60_000
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs = REDIS_TIMEOUT_MS) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("REDIS_TIMEOUT"))
+    }, timeoutMs)
+
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
+}
+
+function disableRedisTemporarily() {
+  redisDisabledUntil = Date.now() + REDIS_COOLDOWN_MS
+}
 
 async function getRedisClient() {
   if (!hasRedisEnv()) {
+    return null
+  }
+
+  if (Date.now() < redisDisabledUntil) {
     return null
   }
 
@@ -27,12 +57,14 @@ async function getRedisClient() {
       const client = createClient({ url: getServerEnv().REDIS_URL })
       client.on("error", () => {
         cachedClient = null
+        disableRedisTemporarily()
       })
-      await client.connect()
+      await withTimeout(client.connect())
       cachedClient = client
       return client
     } catch {
       cachedClient = null
+      disableRedisTemporarily()
       return null
     } finally {
       connectPromise = null
@@ -48,12 +80,18 @@ export async function getRedisCache<T>(key: string) {
     return null
   }
 
-  const value = await client.get(key)
-  if (!value) {
+  try {
+    const value = await withTimeout(client.get(key))
+    if (!value) {
+      return null
+    }
+
+    return JSON.parse(value) as T
+  } catch {
+    cachedClient = null
+    disableRedisTemporarily()
     return null
   }
-
-  return JSON.parse(value) as T
 }
 
 export async function setRedisCache(key: string, value: unknown, ttlSeconds = 60) {
@@ -62,9 +100,15 @@ export async function setRedisCache(key: string, value: unknown, ttlSeconds = 60
     return false
   }
 
-  await client.set(key, JSON.stringify(value), {
-    EX: ttlSeconds,
-  })
+  try {
+    await withTimeout(client.set(key, JSON.stringify(value), {
+      EX: ttlSeconds,
+    }))
+  } catch {
+    cachedClient = null
+    disableRedisTemporarily()
+    return false
+  }
 
   return true
 }
@@ -75,7 +119,13 @@ export async function deleteRedisCacheKeys(keys: string[]) {
     return 0
   }
 
-  return client.del(keys)
+  try {
+    return await withTimeout(client.del(keys))
+  } catch {
+    cachedClient = null
+    disableRedisTemporarily()
+    return 0
+  }
 }
 
 export async function deleteRedisCacheByPrefix(prefix: string) {
@@ -84,10 +134,16 @@ export async function deleteRedisCacheByPrefix(prefix: string) {
     return 0
   }
 
-  const keys = await client.keys(`${prefix}*`)
-  if (keys.length === 0) {
+  try {
+    const keys = await withTimeout(client.keys(`${prefix}*`))
+    if (keys.length === 0) {
+      return 0
+    }
+
+    return await withTimeout(client.del(keys))
+  } catch {
+    cachedClient = null
+    disableRedisTemporarily()
     return 0
   }
-
-  return client.del(keys)
 }

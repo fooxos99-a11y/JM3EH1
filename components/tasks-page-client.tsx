@@ -33,6 +33,7 @@ type PersonalTaskFilter = "all" | "in_progress" | "under_review" | "finished" | 
 type PersonalTransactionView = "incoming" | "outgoing"
 
 const DEFAULT_DUE_TIME = "23:59"
+const TASKS_FETCH_TIMEOUT_MS = 12_000
 
 const initialTaskForm = {
   taskId: "",
@@ -47,6 +48,29 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value))
+}
+
+async function fetchJsonWithTimeout<T>(url: string, init?: RequestInit, timeoutMs = TASKS_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      ...init,
+      signal: controller.signal,
+    })
+    const payload = (await response.json().catch(() => ({}))) as T
+    return { response, payload }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("REQUEST_TIMEOUT")
+    }
+
+    throw error
+  } finally {
+    window.clearTimeout(timer)
+  }
 }
 
 function isVisibleTaskForList(task: TaskRecord, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]) {
@@ -295,8 +319,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   async function loadData() {
     setLoading(true)
     try {
-      const response = await fetch(tasksApiUrl, { cache: "no-store" })
-      const payload = (await response.json().catch(() => ({}))) as TasksPageData & { error?: string }
+      const { response, payload } = await fetchJsonWithTimeout<TasksPageData & { error?: string }>(tasksApiUrl)
 
       if (!response.ok) {
         setMessage({ type: "error", text: payload.error ?? "تعذر تحميل المهام" })
@@ -304,8 +327,9 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       }
 
       applyPayload(payload)
-    } catch {
-      setMessage({ type: "error", text: "تعذر تحميل المهام" })
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === "REQUEST_TIMEOUT"
+      setMessage({ type: "error", text: isTimeout ? "انتهت مهلة تحميل المهام، حاول مرة أخرى" : "تعذر تحميل المهام" })
     } finally {
       setLoading(false)
     }
@@ -314,12 +338,11 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   async function markKindNotificationsRead(targetKind: TaskKind) {
     setLoading(true)
     try {
-      const response = await fetch(`/api/tasks?kind=${targetKind}`, {
+      const { response, payload } = await fetchJsonWithTimeout<TasksPageData & { error?: string }>(`/api/tasks?kind=${targetKind}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark_kind_notifications_read", kind: targetKind }),
       })
-      const payload = (await response.json().catch(() => ({}))) as TasksPageData & { error?: string }
 
       if (!response.ok) {
         setMessage({ type: "error", text: payload.error ?? "تعذر تحديث الإشعارات" })
@@ -328,8 +351,9 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
 
       applyPayload(payload)
       window.dispatchEvent(new Event("dashboard-badges-changed"))
-    } catch {
-      setMessage({ type: "error", text: "تعذر تحديث الإشعارات" })
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === "REQUEST_TIMEOUT"
+      setMessage({ type: "error", text: isTimeout ? "انتهت مهلة تحديث الإشعارات" : "تعذر تحديث الإشعارات" })
     } finally {
       setLoading(false)
     }

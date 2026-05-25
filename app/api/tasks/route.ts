@@ -419,11 +419,27 @@ async function loadTasksPageData(currentUserId: string, isManager: boolean, task
 
   const settings = await getSiteSectionContent("settings")
   const operationalPlanWeekEndDay = settings.operationalPlanWeekEndDay ?? defaultOperationalPlanWeekEndDay
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  monthStart.setHours(0, 0, 0, 0)
+  const monthStartIso = monthStart.toISOString()
 
   const supabase = createSupabaseAdminClient()
 
   const [{ data: assignedRows, supportsAttachment }, { data: notificationRows, error: notificationError }, { data: userRows, error: userError }, outgoingResult] = await Promise.all([
-    loadTaskRows(async (selectClause) => await supabase.from("user_tasks").select(selectClause).eq("assigned_to_user_id", currentUserId).eq("task_kind", taskKind).order("due_at", { ascending: true })),
+    loadTaskRows(async (selectClause) => {
+      let query = supabase
+        .from("user_tasks")
+        .select(selectClause)
+        .eq("assigned_to_user_id", currentUserId)
+        .eq("task_kind", taskKind)
+
+      if (taskKind === "task") {
+        query = query.gte("due_at", monthStartIso)
+      }
+
+      return query.order("due_at", { ascending: true })
+    }),
     supabase.from("task_notifications").select("id,task_id,notification_type,title,body,is_read,created_at").eq("user_id", currentUserId).order("created_at", { ascending: false }).limit(30),
     supabase.from("app_users").select("id,full_name,role").order("full_name", { ascending: true }),
     taskKind === "internal_transaction"
@@ -450,13 +466,17 @@ async function loadTasksPageData(currentUserId: string, isManager: boolean, task
 
   let managedRows: TaskRow[] = []
   if (isManager && taskKind === "task") {
-    const managedResult = await loadTaskRows(async (selectClause) => await supabase.from("user_tasks").select(selectClause).eq("task_kind", "task").order("created_at", { ascending: false }))
+    const managedResult = await loadTaskRows(async (selectClause) => await supabase.from("user_tasks").select(selectClause).eq("task_kind", "task").gte("due_at", monthStartIso).order("created_at", { ascending: false }).limit(400))
     managedRows = managedResult.data
   }
 
-  const mappedAssignedTasks = assignedTaskRows.map((row) => mapTask(row, usersById, currentUserId, isManager))
+  const mappedAssignedTasks = assignedTaskRows
+    .map((row) => mapTask(row, usersById, currentUserId, isManager))
+    .filter((task) => taskKind !== "task" || isVisibleCurrentTask(task, operationalPlanWeekEndDay))
   const mappedOutgoingTasks = outgoingTaskRows.map((row) => mapTask(row, usersById, currentUserId, isManager))
-  const mappedManagedTasks = managedRows.map((row) => mapTask(row, usersById, currentUserId, isManager))
+  const mappedManagedTasks = managedRows
+    .map((row) => mapTask(row, usersById, currentUserId, isManager))
+    .filter((task) => isVisibleCurrentTask(task, operationalPlanWeekEndDay))
 
   return {
     currentUserId,

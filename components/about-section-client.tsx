@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 import { ArrowLeft, CheckCircle, Eye, Target } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ function useInView(ref: React.RefObject<HTMLElement | null>) {
 export function AboutSectionClient({ content }: { content: AboutContent }) {
   const sectionRef = useRef<HTMLElement>(null)
   const isInView = useInView(sectionRef)
+  const imageSrc = content.image?.trim() || null
 
   return (
     <section id="about" ref={sectionRef} className="relative overflow-hidden bg-card py-24">
@@ -61,8 +63,12 @@ export function AboutSectionClient({ content }: { content: AboutContent }) {
 
           <div className={`transition-all delay-200 duration-700 ${isInView ? "translate-x-0 opacity-100" : "-translate-x-8 opacity-0"}`}>
             <div className="relative">
-              <div className="relative overflow-hidden rounded-3xl shadow-2xl">
-                <img src={content.image} alt={content.highlight} className="h-[400px] w-full object-cover" />
+              <div className="relative h-[400px] overflow-hidden rounded-3xl shadow-2xl">
+                {imageSrc ? (
+                  <Image src={imageSrc} alt={content.highlight} fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover" />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-card" />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent" />
 
                 <div className="absolute bottom-0 left-0 right-0 p-8">

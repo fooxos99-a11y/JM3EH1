@@ -28,7 +28,80 @@ export type LeaveBalance = {
   lateUsedMinutes: number
   permissionQuotaMinutes: number
   permissionUsedMinutes: number
+  monthlySalary: number
+  weeklyRequiredMinutes: number
+  lateGraceMinutes: number
+  scheduleTemplateId: string | null
   workStartTime: string
+  workEndTime: string
+}
+
+export type EmployeeLeaveTypeBalance = {
+  id: string
+  userId: string
+  name: string
+  allowedDays: number
+  usedDays: number
+  sortOrder: number
+}
+
+export type EmployeeAttendancePeriodOverride = {
+  id: string
+  userId: string
+  overrideDate: string | null
+  weekday: number | null
+  startTime: string
+  endTime: string
+  isRemoved: boolean
+  note: string
+}
+
+export type OfficialHoliday = {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  createdAt: string
+}
+
+export type AttendanceScheduleTemplatePeriod = {
+  id: string
+  weekday: number
+  startTime: string
+  endTime: string
+  sortOrder: number
+}
+
+export type AttendanceScheduleTemplateLeaveType = {
+  id: string
+  name: string
+  allowedDays: number
+  sortOrder: number
+}
+
+export type AttendanceScheduleTemplate = {
+  id: string
+  name: string
+  description: string
+  monthlySalary: number
+  leaveQuotaDays: number
+  lateQuotaMinutes: number
+  permissionQuotaMinutes: number
+  weeklyRequiredMinutes: number
+  lateGraceMinutes: number
+  workStartTime: string
+  workEndTime: string
+  periods: AttendanceScheduleTemplatePeriod[]
+  leaveTypes: AttendanceScheduleTemplateLeaveType[]
+}
+
+export type MonthlyDeductionSummary = {
+  year: number
+  month: number
+  lateMinutes: number
+  earlyLeaveMinutes: number
+  totalDeductionAmount: number
+  isLocked: boolean
 }
 
 export type AdministrativeRequestRecord = {
@@ -48,6 +121,8 @@ export type AdministrativeRequestRecord = {
   fromTime: string | null
   toTime: string | null
   leaveAllocationType: LeaveAllocationType | null
+  leaveTypeBalanceId: string | null
+  leaveTypeName: string | null
   reviewedBy: string | null
   reviewerName: string | null
   reviewedAt: string | null
@@ -66,6 +141,9 @@ export type AdministrativeAccountSummary = {
   jobTitle: string
   profile: EmployeeProfile
   leaveBalance: LeaveBalance
+  leaveTypeBalances: EmployeeLeaveTypeBalance[]
+  attendancePeriodOverrides: EmployeeAttendancePeriodOverride[]
+  monthlyDeduction: MonthlyDeductionSummary | null
   createdAt: string
   createdByName: string | null
 }
@@ -148,6 +226,8 @@ export type AdministrativeDashboardData = {
   internalRecipients: Array<{ userId: string; name: string }>
   profile: EmployeeProfile
   leaveBalance: LeaveBalance
+  leaveTypeBalances: EmployeeLeaveTypeBalance[]
+  attendancePeriodOverrides: EmployeeAttendancePeriodOverride[]
   employmentRecord: {
     createdAt: string | null
     accountType: string
@@ -156,13 +236,17 @@ export type AdministrativeDashboardData = {
     jobRank: string
   }
   workLocation: WorkLocationSettings
+  monthlyDeduction: MonthlyDeductionSummary | null
   todayAttendance: AttendanceDaySummary | null
   weeklyAttendance: WeeklyAttendanceSummary[]
   attendanceHistory: AttendanceRecord[]
   allAttendanceHistory: AttendanceRecord[]
   myRequests: AdministrativeRequestRecord[]
+  allRequests: AdministrativeRequestRecord[]
   reviewableRequests: AdministrativeRequestRecord[]
   accounts: AdministrativeAccountSummary[]
+  scheduleTemplates: AttendanceScheduleTemplate[]
+  officialHolidays: OfficialHoliday[]
 }
 
 export const SAUDI_TIME_ZONE = "Asia/Riyadh"
@@ -188,7 +272,12 @@ export function createEmptyLeaveBalance(userId = ""): LeaveBalance {
     lateUsedMinutes: 0,
     permissionQuotaMinutes: 0,
     permissionUsedMinutes: 0,
+    monthlySalary: 0,
+    weeklyRequiredMinutes: 0,
+    lateGraceMinutes: 0,
+    scheduleTemplateId: null,
     workStartTime: "08:00",
+    workEndTime: "16:00",
   }
 }
 
@@ -284,6 +373,25 @@ export function calculateLeaveDays(startDate: string, endDate: string) {
 
   const differenceMs = end.getTime() - start.getTime()
   return Math.floor(differenceMs / (1000 * 60 * 60 * 24)) + 1
+}
+
+export function getDateKeysBetween(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00Z`)
+  const end = new Date(`${endDate}T00:00:00Z`)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return [] as string[]
+  }
+
+  const keys: string[] = []
+  const cursor = new Date(start)
+
+  while (cursor <= end) {
+    keys.push(cursor.toISOString().slice(0, 10))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+
+  return keys
 }
 
 export function formatDate(value: string | null) {

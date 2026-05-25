@@ -1,12 +1,12 @@
 import { DonationCardsClient } from "@/components/donation-cards-client"
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
-export async function ProjectsSection() {
-  const content = await getSiteSectionContent("projects")
+export async function ProjectsSection({ content }: { content?: SiteContentMap["projects"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("projects")
 
   return (
     <DonationCardsClient
-      content={content}
+      content={resolvedContent}
       contentType="projects"
       sectionId="projects"
       emptyTitle="لا توجد مشاريع ظاهرة حالياً"

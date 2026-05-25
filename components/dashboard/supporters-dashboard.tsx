@@ -1,8 +1,7 @@
 "use client"
 
-import { Download, FileSpreadsheet, LoaderCircle, Pencil, Plus, Search, Upload, Users } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
-import * as XLSX from "xlsx"
+import { FileSpreadsheet, LoaderCircle, Pencil, Plus, Search } from "lucide-react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -29,7 +28,6 @@ import {
 } from "@/components/ui/pagination"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SupporterAccountType, SupporterRecord, SupportersDashboardData } from "@/lib/supporters"
 
 type DashboardTab = "accounts" | "database"
@@ -63,7 +61,12 @@ const initialForm: ManualSupporterForm = {
   email: "",
 }
 
-function exportRowsToExcel(fileName: string, rows: Array<Record<string, string>>) {
+async function loadXlsx() {
+  return import("xlsx")
+}
+
+async function exportRowsToExcel(fileName: string, rows: Array<Record<string, string>>) {
+  const XLSX = await loadXlsx()
   const workbook = XLSX.utils.book_new()
   const worksheet = XLSX.utils.json_to_sheet(rows)
   XLSX.utils.book_append_sheet(workbook, worksheet, "الداعمين")
@@ -125,8 +128,9 @@ function parseSupportersFromExcel(file: File) {
   return new Promise<ManualSupporterForm[]>((resolve, reject) => {
     const reader = new FileReader()
 
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
+        const XLSX = await loadXlsx()
         const workbook = XLSX.read(event.target?.result, { type: "array" })
         const firstSheetName = workbook.SheetNames[0]
         const firstSheet = workbook.Sheets[firstSheetName]
@@ -198,7 +202,6 @@ function PaginationSection({
   onPageChange: (page: number) => void
 }) {
   if (totalPages <= 1) {
-    return null
   }
 
   const pageNumbers = buildPageNumbers(currentPage, totalPages)
@@ -268,6 +271,7 @@ export function SupportersDashboard() {
   const [editingSupporter, setEditingSupporter] = useState<EditableSupporterForm | null>(null)
   const accountsExcelInputRef = useRef<HTMLInputElement>(null)
   const databaseExcelInputRef = useRef<HTMLInputElement>(null)
+  const deferredQuery = useDeferredValue(query)
 
   async function loadData() {
     setLoading(true)
@@ -288,16 +292,32 @@ export function SupportersDashboard() {
     void loadData()
   }, [])
 
+  useEffect(() => {
+    function handleExportSupporters() {
+      void exportRowsToExcel(
+        "supporters.xlsx",
+        filteredSupporters.map((supporter) => ({
+          الاسم: supporter.name,
+          "نوع الحساب": accountTypeLabel(supporter.accountType),
+          "رقم الجوال": supporter.phone,
+          "البريد الإلكتروني": supporter.email ?? "",
+        })),
+      )
+    }
+
+    function handleImportSupporters() {
+      triggerExcelPicker(activeTab)
+    }
+
+    window.addEventListener("supporters-export-excel", handleExportSupporters)
+    window.addEventListener("supporters-import-excel", handleImportSupporters)
+
+    return () => {
+      window.removeEventListener("supporters-export-excel", handleExportSupporters)
+      window.removeEventListener("supporters-import-excel", handleImportSupporters)
+    }
+  }, [activeTab, filteredSupporters])
   const filteredSupporters = useMemo(() => {
-    if (!data) {
-      return []
-    }
-
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) {
-      return data.supporters
-    }
-
     return data.supporters.filter((supporter) => {
       const haystack = [
         supporter.name,
@@ -308,12 +328,12 @@ export function SupportersDashboard() {
 
       return haystack.includes(normalizedQuery)
     })
-  }, [data, query])
+  }, [data, deferredQuery])
 
   useEffect(() => {
     setAccountsPage(1)
     setDatabasePage(1)
-  }, [query])
+  }, [deferredQuery])
 
   const accountsPagination = useMemo(() => paginateRows(filteredSupporters, accountsPage, 50), [accountsPage, filteredSupporters])
   const databasePagination = useMemo(() => paginateRows(filteredSupporters, databasePage, 100), [databasePage, filteredSupporters])
@@ -469,86 +489,21 @@ export function SupportersDashboard() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardContent className="p-5 text-right">
-            <p className="text-xs text-muted-foreground">إجمالي الداعمين</p>
-            <p className="mt-2 text-3xl font-bold text-foreground">{data.stats.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardContent className="p-5 text-right">
-            <p className="text-xs text-muted-foreground">الداعمون من الحسابات</p>
-            <p className="mt-2 text-3xl font-bold text-foreground">{data.stats.registered}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardContent className="p-5 text-right">
-            <p className="text-xs text-muted-foreground">الداعمون المضافون يدويًا</p>
-            <p className="mt-2 text-3xl font-bold text-foreground">{data.stats.manual}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-          <CardContent className="p-5 text-right">
-            <p className="text-xs text-muted-foreground">الداعمون مع بريد</p>
-            <p className="mt-2 text-3xl font-bold text-foreground">{data.stats.withEmail}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as DashboardTab)} className="gap-4">
-        <TabsList className="h-auto w-full flex-wrap justify-end gap-2 rounded-[1.5rem] bg-white/90 p-2">
-          <TabsTrigger value="accounts" className="rounded-xl px-4 py-2">حسابات الداعمين</TabsTrigger>
-          <TabsTrigger value="database" className="rounded-xl px-4 py-2">قاعدة بيانات الداعمين</TabsTrigger>
-        </TabsList>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-white/80 bg-white/95 px-4 py-4 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => exportRowsToExcel(
-                activeTab === "accounts" ? "supporters-accounts.xlsx" : "supporters-database.xlsx",
-                filteredSupporters.map((supporter) => ({
-                  الاسم: supporter.name,
-                  "نوع الحساب": accountTypeLabel(supporter.accountType),
-                  "رقم الجوال": supporter.phone,
-                  "البريد الإلكتروني": supporter.email ?? "",
-                })),
-              )}
-            >
-              <Download className="h-4 w-4" />
-              تصدير Excel
-            </Button>
-            <Button type="button" variant="outline" className="rounded-xl" onClick={() => triggerExcelPicker(activeTab)}>
-              <Upload className="h-4 w-4" />
-              رفع Excel
-            </Button>
-          </div>
-
-          <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input className="pr-10 text-right" placeholder="بحث بالاسم أو النوع أو الجوال أو البريد" value={query} onChange={(event) => setQuery(event.target.value)} />
-          </div>
-        </div>
-
-        <TabsContent value="accounts" className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+      <div className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>إضافة داعم يدويًا</CardTitle>
-                <CardDescription>يمكنك إدخال داعم جديد يدويًا، أو استخدام رفع Excel لإضافة مجموعة دفعة واحدة.</CardDescription>
+                <CardTitle className="text-right">إضافة داعم</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="supporter-name">اسم الداعم</Label>
+                  <Label htmlFor="supporter-name" className="block text-right">اسم الداعم</Label>
                   <Input id="supporter-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
                 </div>
                 <div className="space-y-2 text-right">
-                  <Label>نوع الحساب</Label>
+                  <Label className="block text-right">نوع الحساب</Label>
                   <Select value={form.accountType} onValueChange={(value) => setForm((current) => ({ ...current, accountType: value as SupporterAccountType }))}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full text-right [&>span]:text-right">
                       <SelectValue placeholder="اختر نوع الحساب" />
                     </SelectTrigger>
                     <SelectContent>
@@ -559,11 +514,11 @@ export function SupportersDashboard() {
                   </Select>
                 </div>
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="supporter-phone">رقم الجوال</Label>
+                  <Label htmlFor="supporter-phone" className="block text-right">رقم الجوال</Label>
                   <Input id="supporter-phone" dir="ltr" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
                 </div>
                 <div className="space-y-2 text-right">
-                  <Label htmlFor="supporter-email">البريد الإلكتروني</Label>
+                  <Label htmlFor="supporter-email" className="block text-right">البريد الإلكتروني</Label>
                   <Input id="supporter-email" dir="ltr" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="اختياري" />
                 </div>
                 <div className="flex justify-end">
@@ -578,17 +533,11 @@ export function SupportersDashboard() {
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
                 <CardTitle>حسابات الداعمين</CardTitle>
-                <CardDescription>يعرض الجدول 50 داعمًا في كل صفحة، مع ترقيم تلقائي عند زيادة العدد.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3">
-                  <div className="text-sm text-muted-foreground">
-                    {filteredSupporters.length === 0 ? "لا توجد نتائج" : `${accountsPagination.startIndex + 1}–${accountsPagination.endIndex} من ${filteredSupporters.length}`}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Users className="h-4 w-4 text-primary" />
-                    50 داعم لكل صفحة
-                  </div>
+                <div className="relative w-full">
+                  <Search className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input className="pr-10 text-right" placeholder="بحث بالاسم أو النوع أو الجوال أو البريد" value={query} onChange={(event) => setQuery(event.target.value)} />
                 </div>
 
                 <Table>
@@ -628,63 +577,60 @@ export function SupportersDashboard() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
 
-        <TabsContent value="database" className="space-y-4">
-          <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
-            <CardHeader>
-              <CardTitle>قاعدة بيانات الداعمين</CardTitle>
-              <CardDescription>هذه الصفحة تعرض الجدول فقط بدون نموذج يدوي، مع رفع Excel وتصفح 100 داعم في كل صفحة.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3">
-                <div className="text-sm text-muted-foreground">
-                  {filteredSupporters.length === 0 ? "لا توجد نتائج" : `${databasePagination.startIndex + 1}–${databasePagination.endIndex} من ${filteredSupporters.length}`}
-                </div>
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <FileSpreadsheet className="h-4 w-4 text-primary" />
-                  100 داعم لكل صفحة
-                </div>
+        <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
+          <CardHeader>
+            <CardTitle>قاعدة بيانات الداعمين</CardTitle>
+            <CardDescription>هذه الصفحة تعرض الجدول فقط بدون نموذج يدوي، مع رفع Excel وتصفح 100 داعم في كل صفحة.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-3 rounded-[1.25rem] border border-border/60 bg-muted/10 px-4 py-3">
+              <div className="text-sm text-muted-foreground">
+                {filteredSupporters.length === 0 ? "لا توجد نتائج" : `${databasePagination.startIndex + 1}–${databasePagination.endIndex} من ${filteredSupporters.length}`}
               </div>
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <FileSpreadsheet className="h-4 w-4 text-primary" />
+                100 داعم لكل صفحة
+              </div>
+            </div>
 
-              <Table>
-                <TableHeader>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">الاسم</TableHead>
+                  <TableHead className="text-right">نوع الحساب</TableHead>
+                  <TableHead className="text-right">رقم الجوال</TableHead>
+                  <TableHead className="text-right">البريد الإلكتروني</TableHead>
+                  <TableHead className="text-right">الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {databasePagination.rows.length === 0 ? (
                   <TableRow>
-                    <TableHead className="text-right">الاسم</TableHead>
-                    <TableHead className="text-right">نوع الحساب</TableHead>
-                    <TableHead className="text-right">رقم الجوال</TableHead>
-                    <TableHead className="text-right">البريد الإلكتروني</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {databasePagination.rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
+                ) : (
+                  databasePagination.rows.map((supporter) => (
+                    <TableRow key={supporter.id}>
+                      <TableCell className="text-right font-medium text-foreground">{supporter.name}</TableCell>
+                      <TableCell className="text-right"><Badge variant="outline">{accountTypeLabel(supporter.accountType)}</Badge></TableCell>
+                      <TableCell className="text-right" dir="ltr">{supporter.phone}</TableCell>
+                      <TableCell className="text-right" dir="ltr">{supporter.email ?? "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => openEditDialog(supporter)} aria-label={`تعديل ${supporter.name}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  ) : (
-                    databasePagination.rows.map((supporter) => (
-                      <TableRow key={supporter.id}>
-                        <TableCell className="text-right font-medium text-foreground">{supporter.name}</TableCell>
-                        <TableCell className="text-right"><Badge variant="outline">{accountTypeLabel(supporter.accountType)}</Badge></TableCell>
-                        <TableCell className="text-right" dir="ltr">{supporter.phone}</TableCell>
-                        <TableCell className="text-right" dir="ltr">{supporter.email ?? "-"}</TableCell>
-                        <TableCell className="text-right">
-                          <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => openEditDialog(supporter)} aria-label={`تعديل ${supporter.name}`}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                  ))
+                )}
+              </TableBody>
+            </Table>
 
-              <PaginationSection currentPage={databasePagination.page} totalPages={databasePagination.totalPages} onPageChange={setDatabasePage} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            <PaginationSection currentPage={databasePagination.page} totalPages={databasePagination.totalPages} onPageChange={setDatabasePage} />
+          </CardContent>
+        </Card>
+      </div>
 
       <Dialog open={Boolean(editingSupporter)} onOpenChange={(open) => !open && setEditingSupporter(null)}>
         {editingSupporter ? (

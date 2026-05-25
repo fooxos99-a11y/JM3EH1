@@ -15,6 +15,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import type { AchievementsPageData, WeeklyAchievementEntry } from "@/lib/achievements-log"
 
+type AchievementMutationPayload = {
+  entry: WeeklyAchievementEntry
+}
+
+type AchievementDeletePayload = {
+  entryId: string
+}
+
 const initialForm = {
   achievementText: "",
   imageUrl: "",
@@ -35,6 +43,10 @@ function shiftWeek(value: string, weeks: number) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0")
   const day = `${date.getDate()}`.padStart(2, "0")
   return `${year}-${month}-${day}`
+}
+
+function sortEntries(entries: WeeklyAchievementEntry[]) {
+  return [...entries].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
 }
 
 export function AchievementsPageClient({ embedded = false, view = "personal" }: { embedded?: boolean; view?: "personal" | "manager" }) {
@@ -144,6 +156,56 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
     })
   }
 
+  function upsertEntryLocally(entry: WeeklyAchievementEntry) {
+    setData((current) => {
+      if (!current) {
+        return current
+      }
+
+      const nextMyEntries = sortEntries([
+        entry,
+        ...current.myEntries.filter((currentEntry) => currentEntry.id !== entry.id),
+      ])
+
+      const nextTeamGroups = current.teamGroups.map((group) => {
+        if (group.userId !== entry.userId) {
+          return group
+        }
+
+        return {
+          ...group,
+          entries: sortEntries([
+            entry,
+            ...group.entries.filter((currentEntry) => currentEntry.id !== entry.id),
+          ]),
+        }
+      })
+
+      return {
+        ...current,
+        myEntries: nextMyEntries,
+        teamGroups: nextTeamGroups,
+      }
+    })
+  }
+
+  function removeEntryLocally(entryId: string) {
+    setData((current) => {
+      if (!current) {
+        return current
+      }
+
+      return {
+        ...current,
+        myEntries: current.myEntries.filter((entry) => entry.id !== entryId),
+        teamGroups: current.teamGroups.map((group) => ({
+          ...group,
+          entries: group.entries.filter((entry) => entry.id !== entryId),
+        })),
+      }
+    })
+  }
+
   async function handleCreateAchievement() {
     const response = await fetch("/api/achievements", {
       method: "POST",
@@ -155,12 +217,12 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
       }),
     })
 
-    const payload = await response.json() as AchievementsPageData & { error?: string }
+    const payload = await response.json() as AchievementMutationPayload & { error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر حفظ الإنجاز")
     }
 
-    setData(payload)
+    upsertEntryLocally(payload.entry)
     setForm(initialForm)
     setMessage({ type: "success", text: "تم حفظ الإنجاز في الأسبوع الحالي" })
   }
@@ -177,12 +239,12 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
         }),
       })
 
-      const payload = await response.json() as AchievementsPageData & { error?: string }
+      const payload = await response.json() as AchievementMutationPayload & { error?: string }
       if (!response.ok) {
         throw new Error(payload.error ?? "تعذر تعديل الإنجاز")
       }
 
-      setData(payload)
+      upsertEntryLocally(payload.entry)
       setForm(initialForm)
       setEditingEntryId(null)
       setMessage({ type: "success", text: "تم تعديل الإنجاز" })
@@ -199,12 +261,12 @@ export function AchievementsPageClient({ embedded = false, view = "personal" }: 
       body: JSON.stringify({ entryId }),
     })
 
-    const payload = await response.json() as AchievementsPageData & { error?: string }
+    const payload = await response.json() as AchievementDeletePayload & { error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر حذف الإنجاز")
     }
 
-    setData(payload)
+    removeEntryLocally(payload.entryId)
     if (editingEntryId === entryId) {
       setForm(initialForm)
       setEditingEntryId(null)

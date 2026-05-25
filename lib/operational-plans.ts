@@ -3,13 +3,18 @@ export const operationalPlanOccurrenceStatusValues = ["pending", "completed"] as
 
 export type OperationalPlanRecurrence = (typeof operationalPlanRecurrenceValues)[number]
 export type OperationalPlanOccurrenceStatus = (typeof operationalPlanOccurrenceStatusValues)[number]
+export type OperationalPlanDistributionMode = "automatic" | "manual"
 
 export type OperationalPlanOccurrenceRecord = {
   id: string
   planId: string
+  monthNumber: number
   sequenceNumber: number
   label: string
   dueAt: string
+  targetValue: number
+  achievedValue: number
+  progressPercentage: number
   status: OperationalPlanOccurrenceStatus
   completedAt: string | null
 }
@@ -19,7 +24,8 @@ export type OperationalPlanRecord = {
   title: string
   description: string
   year: number
-  recurrence: OperationalPlanRecurrence
+  annualTarget: number
+  achievedTotal: number
   targetCount: number
   completedCount: number
   progressPercentage: number
@@ -44,20 +50,8 @@ export type OperationalPlansPageData = {
 }
 
 export function getOperationalPlanTargetCount(recurrence: OperationalPlanRecurrence) {
-  switch (recurrence) {
-    case "weekly":
-      return 52
-    case "monthly":
-      return 12
-    case "quarterly":
-      return 4
-    case "semiannual":
-      return 2
-    case "annual":
-      return 1
-    default:
-      return 1
-  }
+  void recurrence
+  return 12
 }
 
 export function getOperationalPlanRecurrenceLabel(recurrence: OperationalPlanRecurrence) {
@@ -89,56 +83,87 @@ export function getOperationalPlanStatusLabel(progressPercentage: number) {
   return "جارية"
 }
 
-export function buildOperationalPlanOccurrences(year: number, recurrence: OperationalPlanRecurrence) {
-  const targetCount = getOperationalPlanTargetCount(recurrence)
+export function normalizeOperationalPlanProgressPercentage(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
 
-  return Array.from({ length: targetCount }, (_, index) => {
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+export function normalizeOperationalPlanCount(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Math.max(0, Math.round(value))
+}
+
+export function calculateOperationalPlanProgress(achievedValue: number, targetValue: number) {
+  const normalizedAchievedValue = normalizeOperationalPlanCount(achievedValue)
+  const normalizedTargetValue = normalizeOperationalPlanCount(targetValue)
+
+  if (normalizedTargetValue <= 0) {
+    return normalizedAchievedValue > 0 ? 100 : 0
+  }
+
+  return normalizeOperationalPlanProgressPercentage((normalizedAchievedValue / normalizedTargetValue) * 100)
+}
+
+export function getOperationalPlanOccurrenceStatus(progressPercentage: number): OperationalPlanOccurrenceStatus {
+  return normalizeOperationalPlanProgressPercentage(progressPercentage) >= 100 ? "completed" : "pending"
+}
+
+export function getOperationalPlanMonthLabel(value: string | Date, month: "long" | "short" = "long") {
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { month }).format(typeof value === "string" ? new Date(value) : value)
+}
+
+export function getOperationalPlanPeriodRange(recurrence: OperationalPlanRecurrence, sequenceNumber: number) {
+  void recurrence
+  return { startMonth: sequenceNumber, endMonth: sequenceNumber }
+}
+
+export function buildOperationalPlanDistribution(annualTarget: number) {
+  const normalizedAnnualTarget = normalizeOperationalPlanCount(annualTarget)
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const current = Math.round(((index + 1) * normalizedAnnualTarget) / 12)
+    const previous = Math.round((index * normalizedAnnualTarget) / 12)
+    return current - previous
+  })
+}
+
+export function normalizeOperationalPlanMonthlyTargets(values: number[] | null | undefined) {
+  return Array.from({ length: 12 }, (_, index) => normalizeOperationalPlanCount(values?.[index] ?? 0))
+}
+
+export function buildOperationalPlanOccurrences(year: number, annualTarget: number, monthlyTargets?: number[] | null) {
+  const distribution = monthlyTargets ? normalizeOperationalPlanMonthlyTargets(monthlyTargets) : buildOperationalPlanDistribution(annualTarget)
+
+  return Array.from({ length: 12 }, (_, index) => {
     const sequenceNumber = index + 1
-    const dueAt = getOperationalPlanOccurrenceDate(year, recurrence, index)
+    const dueAt = getOperationalPlanOccurrenceDate(year, sequenceNumber)
+    const targetValue = distribution[index] ?? 0
+    const achievedValue = 0
+    const progressPercentage = calculateOperationalPlanProgress(achievedValue, targetValue)
 
     return {
       sequenceNumber,
-      label: getOperationalPlanOccurrenceLabel(recurrence, sequenceNumber, dueAt),
+      label: getOperationalPlanOccurrenceLabel(sequenceNumber, dueAt),
       dueAt: dueAt.toISOString(),
-      status: "pending" as const,
+      targetValue,
+      achievedValue,
+      progressPercentage,
+      status: getOperationalPlanOccurrenceStatus(progressPercentage),
       completedAt: null,
     }
   })
 }
 
-function getOperationalPlanOccurrenceDate(year: number, recurrence: OperationalPlanRecurrence, index: number) {
-  switch (recurrence) {
-    case "weekly": {
-      const date = new Date(Date.UTC(year, 0, 1))
-      date.setUTCDate(date.getUTCDate() + (index * 7))
-      return date
-    }
-    case "monthly":
-      return new Date(Date.UTC(year, index, 1))
-    case "quarterly":
-      return new Date(Date.UTC(year, index * 3, 1))
-    case "semiannual":
-      return new Date(Date.UTC(year, index * 6, 1))
-    case "annual":
-      return new Date(Date.UTC(year, 0, 1))
-    default:
-      return new Date(Date.UTC(year, 0, 1))
-  }
+function getOperationalPlanOccurrenceDate(year: number, sequenceNumber: number) {
+  return new Date(Date.UTC(year, sequenceNumber - 1, 1))
 }
 
-function getOperationalPlanOccurrenceLabel(recurrence: OperationalPlanRecurrence, sequenceNumber: number, dueAt: Date) {
-  switch (recurrence) {
-    case "weekly":
-      return `الأسبوع ${sequenceNumber}`
-    case "monthly":
-      return new Intl.DateTimeFormat("ar-SA", { month: "long" }).format(dueAt)
-    case "quarterly":
-      return `الربع ${sequenceNumber}`
-    case "semiannual":
-      return `النصف ${sequenceNumber}`
-    case "annual":
-      return `العام ${dueAt.getUTCFullYear()}`
-    default:
-      return `الدورة ${sequenceNumber}`
-  }
+function getOperationalPlanOccurrenceLabel(sequenceNumber: number, dueAt: Date) {
+  return `${getOperationalPlanMonthLabel(dueAt)} (${sequenceNumber})`
 }

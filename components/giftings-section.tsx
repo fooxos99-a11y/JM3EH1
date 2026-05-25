@@ -1,8 +1,8 @@
 import { GiftingsClient } from "@/components/giftings-client"
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
-export async function GiftingsSection() {
-  const content = await getSiteSectionContent("giftings")
+export async function GiftingsSection({ content }: { content?: SiteContentMap["giftings"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("giftings")
 
-  return <GiftingsClient content={content} />
+  return <GiftingsClient content={resolvedContent} />
 }

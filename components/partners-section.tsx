@@ -1,8 +1,10 @@
-import { getSiteSectionContent } from "@/lib/site-content"
+import Image from "next/image"
 
-export async function PartnersSection() {
-  const content = await getSiteSectionContent("partners")
-  const marqueePartners = [...content.items, ...content.items]
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
+
+export async function PartnersSection({ content }: { content?: SiteContentMap["partners"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("partners")
+  const marqueePartners = [...resolvedContent.items, ...resolvedContent.items]
 
   return (
     <section className="relative overflow-hidden bg-white py-16">
@@ -11,13 +13,13 @@ export async function PartnersSection() {
       <div className="container relative mx-auto mb-8 px-4">
         <div className="text-center">
           <span className="mb-4 inline-block rounded-full border border-border bg-white px-4 py-1.5 text-sm font-medium text-primary">
-            {content.badge}
+            {resolvedContent.badge}
           </span>
           <h2 className="text-3xl font-bold text-foreground md:text-4xl">
-            {content.title}
+            {resolvedContent.title}
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-muted-foreground md:text-base">
-            {content.description}
+            {resolvedContent.description}
           </p>
         </div>
       </div>
@@ -35,7 +37,7 @@ export async function PartnersSection() {
               >
                 {partner.logo ? (
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50 transition-all duration-500 group-hover:scale-105 group-hover:border-primary/20">
-                    <img src={partner.logo} alt={partner.name} className="h-full w-full object-cover" />
+                    <Image src={partner.logo} alt={partner.name} width={64} height={64} sizes="64px" className="h-full w-full object-cover" />
                   </div>
                 ) : (
                   <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] border border-slate-200 bg-slate-50 text-lg font-bold text-primary transition-all duration-500 group-hover:scale-105 group-hover:border-primary/20">

@@ -33,9 +33,21 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
   const googleMapRef = useRef<any>(null)
   const googleMarkerRef = useRef<any>(null)
   const googleCircleRef = useRef<any>(null)
+  const onChangeRef = useRef(onChange)
+  const coordinatesRef = useRef(value ?? RIYADH_COORDINATES)
+  const radiusMetersRef = useRef(radiusMeters)
   const [mapStatus, setMapStatus] = useState<"loading" | "ready" | "error">("loading")
   const coordinates = value ?? RIYADH_COORDINATES
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    coordinatesRef.current = coordinates
+    radiusMetersRef.current = radiusMeters
+  }, [coordinates, radiusMeters])
 
   useEffect(() => {
     if (!googleMapsApiKey || !mapRef.current) {
@@ -50,7 +62,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
         return
       }
 
-      const center = { lat: coordinates.latitude, lng: coordinates.longitude }
+      const center = { lat: coordinatesRef.current.latitude, lng: coordinatesRef.current.longitude }
 
       if (!googleMapRef.current) {
         googleMapRef.current = new window.google.maps.Map(mapElement, {
@@ -66,7 +78,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
             return
           }
 
-          onChange({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
+          onChangeRef.current({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
         })
       }
 
@@ -82,7 +94,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
             return
           }
 
-          onChange({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
+          onChangeRef.current({ latitude: event.latLng.lat(), longitude: event.latLng.lng() })
         })
       }
 
@@ -90,7 +102,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
         googleCircleRef.current = new window.google.maps.Circle({
           map: googleMapRef.current,
           center,
-          radius: radiusMeters,
+          radius: radiusMetersRef.current,
           fillColor: "#019A97",
           fillOpacity: 0.18,
           strokeColor: "#019A97",
@@ -150,7 +162,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
       script.removeEventListener("load", renderGoogleMap)
       script.removeEventListener("error", handleLoadError)
     }
-  }, [coordinates.latitude, coordinates.longitude, googleMapsApiKey, onChange, radiusMeters])
+  }, [googleMapsApiKey])
 
   useEffect(() => {
     if (googleMapsApiKey) {
@@ -170,7 +182,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
       }
 
       const Leaflet = window.L
-      const center: [number, number] = [coordinates.latitude, coordinates.longitude]
+      const center: [number, number] = [coordinatesRef.current.latitude, coordinatesRef.current.longitude]
 
       if (!leafletMapRef.current) {
         leafletMapRef.current = Leaflet.map(mapElement, {
@@ -191,7 +203,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
             longitude: event.latlng.lng,
           }
 
-          onChange(nextCoordinates)
+          onChangeRef.current(nextCoordinates)
         })
       }
 
@@ -205,7 +217,7 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
 
         markerRef.current.on("dragend", () => {
           const nextPosition = markerRef.current.getLatLng()
-          onChange({ latitude: nextPosition.lat, longitude: nextPosition.lng })
+          onChangeRef.current({ latitude: nextPosition.lat, longitude: nextPosition.lng })
         })
       }
 
@@ -279,7 +291,28 @@ export function WorkLocationMapPicker({ value, radiusMeters, onChange }: WorkLoc
       script.removeEventListener("load", renderMap)
       script.removeEventListener("error", handleLoadError)
     }
-  }, [coordinates.latitude, coordinates.longitude, googleMapsApiKey, onChange, radiusMeters])
+  }, [googleMapsApiKey])
+
+  useEffect(() => {
+    const center = { lat: coordinates.latitude, lng: coordinates.longitude }
+
+    if (googleMapRef.current && googleMarkerRef.current && googleCircleRef.current) {
+      googleMapRef.current.setCenter(center)
+      googleMarkerRef.current.setPosition(center)
+      googleCircleRef.current.setCenter(center)
+      googleCircleRef.current.setRadius(radiusMeters)
+      setMapStatus("ready")
+    }
+
+    if (leafletMapRef.current && markerRef.current && circleRef.current) {
+      const leafletCenter: [number, number] = [coordinates.latitude, coordinates.longitude]
+      leafletMapRef.current.setView(leafletCenter, leafletMapRef.current.getZoom() ?? 15)
+      markerRef.current.setLatLng(leafletCenter)
+      circleRef.current.setLatLng(leafletCenter)
+      circleRef.current.setRadius(radiusMeters)
+      setMapStatus("ready")
+    }
+  }, [coordinates.latitude, coordinates.longitude, radiusMeters])
 
   useEffect(() => {
     return () => {

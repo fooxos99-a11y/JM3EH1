@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import Image from "next/image"
 import { Calendar, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -93,10 +94,13 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
                 >
                   <div className="group h-full overflow-hidden rounded-3xl border border-border/50 bg-card shadow-sm transition-all duration-500 hover:-translate-y-2 hover:shadow-xl">
                     <div className="relative h-56 overflow-hidden">
-                      <img
+                      <Image
                         src={item.image}
                         alt={item.title}
-                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        fill
+                        priority={index < itemsPerView}
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        className="object-cover transition-transform duration-700 group-hover:scale-110"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 

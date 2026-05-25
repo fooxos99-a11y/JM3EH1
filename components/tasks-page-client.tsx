@@ -25,7 +25,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { getTaskStatusLabel, type TaskKind, type TaskRecord, type TaskStatus, type TasksPageData } from "@/lib/tasks"
+import { countVisiblePendingTasks, getTaskEffectiveDueAt, getTaskStatusLabel, isVisibleCurrentTask, type TaskKind, type TaskRecord, type TaskStatus, type TasksPageData } from "@/lib/tasks"
+
+type TaskMutationPayload = Omit<TaskRecord, "assignedToName" | "assignedByName" | "canUpdateStatus">
 
 type PersonalTaskFilter = "all" | "in_progress" | "under_review" | "finished" | "stalled"
 type PersonalTransactionView = "incoming" | "outgoing"
@@ -41,10 +43,14 @@ const initialTaskForm = {
 }
 
 function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ar-SA", {
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value))
+}
+
+function isVisibleTaskForList(task: TaskRecord, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]) {
+  return isVisibleCurrentTask(task, operationalPlanWeekEndDay)
 }
 
 function statusVariant(status: TaskStatus) {
@@ -55,7 +61,7 @@ function statusVariant(status: TaskStatus) {
   return "secondary"
 }
 
-function getStatusBadgeClass(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt">) {
+function getStatusBadgeClass(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt" | "operationalPlanOccurrenceId" | "operationalPlanTaskCount" | "operationalPlanReleaseAt">) {
   if (task.status === "under_review") {
     return "border-transparent bg-orange-100 text-orange-700 hover:bg-orange-100"
   }
@@ -67,16 +73,16 @@ function getStatusBadgeClass(task: Pick<TasksPageData["assignedTasks"][number], 
   return ""
 }
 
-function isTaskStalled(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt">) {
-  return task.status === "stalled" || (task.status !== "completed" && task.status !== "under_review" && new Date(task.dueAt).getTime() < Date.now())
+function isTaskStalled(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt" | "operationalPlanOccurrenceId" | "operationalPlanTaskCount" | "operationalPlanReleaseAt">, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]) {
+  return task.status === "stalled" || (task.status !== "completed" && task.status !== "under_review" && new Date(getTaskEffectiveDueAt(task, operationalPlanWeekEndDay)).getTime() < Date.now())
 }
 
-function getTaskCategory(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt">): Exclude<PersonalTaskFilter, "all"> {
+function getTaskCategory(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt" | "operationalPlanOccurrenceId" | "operationalPlanTaskCount" | "operationalPlanReleaseAt">, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]): Exclude<PersonalTaskFilter, "all"> {
   if (task.status === "completed") {
     return "finished"
   }
 
-  if (isTaskStalled(task)) {
+  if (isTaskStalled(task, operationalPlanWeekEndDay)) {
     return "stalled"
   }
 
@@ -87,8 +93,8 @@ function getTaskCategory(task: Pick<TasksPageData["assignedTasks"][number], "sta
   return "in_progress"
 }
 
-function getTaskDisplayLabel(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt">) {
-  const category = getTaskCategory(task)
+function getTaskDisplayLabel(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt" | "operationalPlanOccurrenceId" | "operationalPlanTaskCount" | "operationalPlanReleaseAt">, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]) {
+  const category = getTaskCategory(task, operationalPlanWeekEndDay)
 
   switch (category) {
     case "in_progress":
@@ -104,8 +110,8 @@ function getTaskDisplayLabel(task: Pick<TasksPageData["assignedTasks"][number], 
   }
 }
 
-function getTaskDisplayVariant(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt">) {
-  if (getTaskCategory(task) === "stalled") {
+function getTaskDisplayVariant(task: Pick<TasksPageData["assignedTasks"][number], "status" | "dueAt" | "operationalPlanOccurrenceId" | "operationalPlanTaskCount" | "operationalPlanReleaseAt">, operationalPlanWeekEndDay?: TasksPageData["operationalPlanWeekEndDay"]) {
+  if (getTaskCategory(task, operationalPlanWeekEndDay) === "stalled") {
     return "destructive"
   }
 
@@ -184,6 +190,9 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [isCreatingTask, setIsCreatingTask] = useState(false)
+  const [isEditingTask, setIsEditingTask] = useState(false)
+  const [pendingDeleteTaskIds, setPendingDeleteTaskIds] = useState<string[]>([])
   const [taskForm, setTaskForm] = useState(initialTaskForm)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -196,6 +205,84 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   const fileInputRef = useRef<HTMLInputElement>(null)
   const createAttachmentInputRef = useRef<HTMLInputElement>(null)
   const isPersonalTaskPage = view === "personal" && kind === "task"
+  const operationalPlanWeekEndDay = data?.operationalPlanWeekEndDay
+  const assignableUsers = data?.assignableUsers ?? []
+
+  function enrichTask(task: TaskMutationPayload, current: TasksPageData, existing?: TaskRecord): TaskRecord {
+    return {
+      ...task,
+      assignedToName: current.assignableUsers.find((user) => user.id === task.assignedToUserId)?.name ?? existing?.assignedToName ?? "-",
+      assignedByName: current.assignableUsers.find((user) => user.id === task.assignedByUserId)?.name ?? existing?.assignedByName ?? "-",
+      canUpdateStatus: current.isManager || task.assignedToUserId === current.currentUserId,
+    }
+  }
+
+  function recalculateTaskMeta(current: TasksPageData, nextAssignedTasks: TaskRecord[], nextNotifications = current.notifications) {
+    const assignedTaskIds = new Set(nextAssignedTasks.map((task) => task.id))
+
+    return {
+      pendingTasksCount: countVisiblePendingTasks(nextAssignedTasks, current.operationalPlanWeekEndDay),
+      unreadNotificationsCount: nextNotifications.filter((notification) => !notification.isRead && notification.type === "new_task" && !!notification.taskId && assignedTaskIds.has(notification.taskId)).length,
+    }
+  }
+
+  function applyTaskMutation(task: TaskMutationPayload) {
+    setData((current) => {
+      if (!current) {
+        return current
+      }
+
+      const existing = [...current.assignedTasks, ...current.managedTasks, ...current.outgoingTasks].find((entry) => entry.id === task.id)
+      const nextTask = enrichTask(task, current, existing)
+
+      const nextAssignedTasks = nextTask.assignedToUserId === current.currentUserId
+        ? (current.assignedTasks.some((entry) => entry.id === nextTask.id)
+          ? current.assignedTasks.map((entry) => (entry.id === nextTask.id ? nextTask : entry))
+          : [nextTask, ...current.assignedTasks])
+        : current.assignedTasks.filter((entry) => entry.id !== nextTask.id)
+
+      const nextManagedTasks = current.isManager && nextTask.kind === "task"
+        ? (current.managedTasks.some((entry) => entry.id === nextTask.id)
+          ? current.managedTasks.map((entry) => (entry.id === nextTask.id ? nextTask : entry))
+          : [nextTask, ...current.managedTasks])
+        : current.managedTasks.filter((entry) => entry.id !== nextTask.id)
+
+      const shouldAppearInOutgoing = nextTask.kind === "internal_transaction" && nextTask.assignedByUserId === current.currentUserId
+      const nextOutgoingTasks = shouldAppearInOutgoing
+        ? (current.outgoingTasks.some((entry) => entry.id === nextTask.id)
+          ? current.outgoingTasks.map((entry) => (entry.id === nextTask.id ? nextTask : entry))
+          : [nextTask, ...current.outgoingTasks])
+        : current.outgoingTasks.filter((entry) => entry.id !== nextTask.id)
+
+      return {
+        ...current,
+        assignedTasks: nextAssignedTasks,
+        managedTasks: nextManagedTasks,
+        outgoingTasks: nextOutgoingTasks,
+        ...recalculateTaskMeta(current, nextAssignedTasks),
+      }
+    })
+  }
+
+  function removeTaskLocally(taskId: string) {
+    setData((current) => {
+      if (!current) {
+        return current
+      }
+
+      const nextAssignedTasks = current.assignedTasks.filter((task) => task.id !== taskId)
+      const nextNotifications = current.notifications.filter((notification) => notification.taskId !== taskId)
+
+      return {
+        ...current,
+        assignedTasks: nextAssignedTasks,
+        managedTasks: current.managedTasks.filter((task) => task.id !== taskId),
+        outgoingTasks: current.outgoingTasks.filter((task) => task.id !== taskId),
+        notifications: nextNotifications,
+        ...recalculateTaskMeta(current, nextAssignedTasks, nextNotifications),
+      }
+    })
+  }
 
   function applyPayload(payload: TasksPageData) {
     setData(payload)
@@ -286,26 +373,46 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     }
   }, [kind])
 
-  const personalStats = useMemo(() => {
+  const currentMonthAssignedTasks = useMemo(() => {
     const tasks = data?.assignedTasks ?? []
+
+    if (kind !== "task") {
+      return tasks
+    }
+
+    return tasks.filter((task) => isVisibleTaskForList(task, operationalPlanWeekEndDay))
+  }, [data?.assignedTasks, kind, operationalPlanWeekEndDay])
+
+  const currentMonthManagedTasks = useMemo(() => {
+    const tasks = data?.managedTasks ?? []
+
+    if (kind !== "task") {
+      return tasks
+    }
+
+    return tasks.filter((task) => isVisibleTaskForList(task, operationalPlanWeekEndDay))
+  }, [data?.managedTasks, kind, operationalPlanWeekEndDay])
+
+  const personalStats = useMemo(() => {
+    const tasks = currentMonthAssignedTasks
 
     return {
-      inProgress: tasks.filter((task) => getTaskCategory(task) === "in_progress").length,
-      underReview: tasks.filter((task) => getTaskCategory(task) === "under_review").length,
-      finished: tasks.filter((task) => getTaskCategory(task) === "finished").length,
-      stalled: tasks.filter((task) => getTaskCategory(task) === "stalled").length,
+      inProgress: tasks.filter((task) => getTaskCategory(task, operationalPlanWeekEndDay) === "in_progress").length,
+      underReview: tasks.filter((task) => getTaskCategory(task, operationalPlanWeekEndDay) === "under_review").length,
+      finished: tasks.filter((task) => getTaskCategory(task, operationalPlanWeekEndDay) === "finished").length,
+      stalled: tasks.filter((task) => getTaskCategory(task, operationalPlanWeekEndDay) === "stalled").length,
     }
-  }, [data])
+  }, [currentMonthAssignedTasks, operationalPlanWeekEndDay])
 
   const filteredAssignedTasks = useMemo(() => {
-    const tasks = data?.assignedTasks ?? []
+    const tasks = currentMonthAssignedTasks
 
     if (selectedPersonalFilter === "all") {
       return tasks
     }
 
-    return tasks.filter((task) => getTaskCategory(task) === selectedPersonalFilter)
-  }, [data?.assignedTasks, selectedPersonalFilter])
+    return tasks.filter((task) => getTaskCategory(task, operationalPlanWeekEndDay) === selectedPersonalFilter)
+  }, [currentMonthAssignedTasks, selectedPersonalFilter, operationalPlanWeekEndDay])
 
   const transactionViewOptions = useMemo(
     () => [
@@ -319,6 +426,16 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     () => selectedTransactionView === "incoming" ? (data?.assignedTasks ?? []) : (data?.outgoingTasks ?? []),
     [data?.assignedTasks, data?.outgoingTasks, selectedTransactionView],
   )
+
+  const personalRows = useMemo(
+    () => kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks,
+    [filteredAssignedTasks, kind, visibleTransactions],
+  )
+
+  const taskById = useMemo(() => {
+    const tasks = [...(data?.assignedTasks ?? []), ...(data?.managedTasks ?? []), ...(data?.outgoingTasks ?? [])]
+    return new Map(tasks.map((task) => [task.id, task] as const))
+  }, [data?.assignedTasks, data?.managedTasks, data?.outgoingTasks])
 
   const personalTaskViewOptions = useMemo(
     () => [
@@ -431,7 +548,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
           assignedTasks: assignedToUserId === current.currentUserId ? [optimisticTask, ...current.assignedTasks] : current.assignedTasks,
           managedTasks: current.isManager ? [optimisticTask, ...current.managedTasks] : current.managedTasks,
           pendingTasksCount:
-            assignedToUserId === current.currentUserId && optimisticTask.status !== "completed"
+            assignedToUserId === current.currentUserId && isVisibleCurrentTask(optimisticTask, current.operationalPlanWeekEndDay) && optimisticTask.status !== "completed"
               ? current.pendingTasksCount + 1
               : current.pendingTasksCount,
         }
@@ -456,17 +573,70 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
             }),
           })
 
-          const attachmentPayload = await attachmentResponse.json() as TasksPageData & { error?: string }
+          const attachmentPayload = await attachmentResponse.json() as { task?: TaskMutationPayload; error?: string }
           if (!attachmentResponse.ok) {
             throw new Error(attachmentPayload.error ?? "تعذر حفظ المرفق")
           }
 
-          setData(attachmentPayload)
+          if (attachmentPayload.task) {
+            applyTaskMutation(attachmentPayload.task)
+          }
           setMessage({ type: "success", text: "تم رفع مرفق المهمة" })
         } catch (error) {
           setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ أثناء رفع المرفق" })
         }
       })()
+    }
+  }
+
+  async function handleCreateTaskClick() {
+    if (isCreatingTask) {
+      return
+    }
+
+    setMessage(null)
+    setIsCreatingTask(true)
+
+    try {
+      await handleCreateTask()
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ غير متوقع" })
+    } finally {
+      setIsCreatingTask(false)
+    }
+  }
+
+  async function handleEditTaskClick() {
+    if (isEditingTask) {
+      return
+    }
+
+    setMessage(null)
+    setIsEditingTask(true)
+
+    try {
+      await handleEditTask()
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ غير متوقع" })
+    } finally {
+      setIsEditingTask(false)
+    }
+  }
+
+  async function handleDeleteTaskClick(taskId: string) {
+    if (pendingDeleteTaskIds.includes(taskId)) {
+      return
+    }
+
+    setMessage(null)
+    setPendingDeleteTaskIds((current) => [...current, taskId])
+
+    try {
+      await handleDeleteTask(taskId)
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ غير متوقع" })
+    } finally {
+      setPendingDeleteTaskIds((current) => current.filter((id) => id !== taskId))
     }
   }
 
@@ -484,12 +654,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       }),
     })
 
-    const payload = await response.json() as TasksPageData & { error?: string }
+    const payload = await response.json() as { task?: TaskMutationPayload; error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر تعديل المهمة")
     }
 
-    setData(payload)
+    if (payload.task) {
+      applyTaskMutation(payload.task)
+    }
     setTaskForm((current) => ({ ...initialTaskForm, assignedToUserId: current.assignedToUserId }))
     setMessage({ type: "success", text: "تم تعديل المهمة" })
     setIsEditDialogOpen(false)
@@ -502,12 +674,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       body: JSON.stringify({ action: "delete_task", taskId }),
     })
 
-    const payload = await response.json() as TasksPageData & { error?: string }
+    const payload = await response.json() as { taskId?: string; error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر حذف المهمة")
     }
 
-    setData(payload)
+    if (payload.taskId) {
+      removeTaskLocally(payload.taskId)
+    }
   }
 
   async function uploadAttachmentFile(file: File, taskTitle: string, parentFolderId?: string | null) {
@@ -568,7 +742,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     setMessage(null)
 
     try {
-      const task = [...(data?.assignedTasks ?? []), ...(data?.managedTasks ?? []), ...(data?.outgoingTasks ?? [])].find((entry) => entry.id === taskId)
+      const task = taskById.get(taskId)
       const attachmentUrl = await uploadAttachmentFile(file, task?.title ?? "مهمة", task?.driveFolderId)
 
       const response = await fetch(tasksApiUrl, {
@@ -581,12 +755,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
         }),
       })
 
-      const payload = await response.json() as TasksPageData & { error?: string }
+      const payload = await response.json() as { task?: TaskMutationPayload; error?: string }
       if (!response.ok) {
         throw new Error(payload.error ?? "تعذر حفظ المرفق")
       }
 
-      setData(payload)
+      if (payload.task) {
+        applyTaskMutation(payload.task)
+      }
       setMessage({ type: "success", text: "تم حفظ مرفق المهمة" })
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "حدث خطأ غير متوقع" })
@@ -607,12 +783,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       }),
     })
 
-    const payload = await response.json() as TasksPageData & { error?: string }
+    const payload = await response.json() as { task?: TaskMutationPayload; error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر حفظ المرفق")
     }
 
-    setData(payload)
+    if (payload.task) {
+      applyTaskMutation(payload.task)
+    }
     setMessage({ type: "success", text: "تم حفظ مرفق المهمة" })
   }
 
@@ -623,12 +801,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
       body: JSON.stringify({ action: "update_status", taskId, status }),
     })
 
-    const payload = await response.json() as TasksPageData & { error?: string }
+    const payload = await response.json() as { task?: TaskMutationPayload; error?: string }
     if (!response.ok) {
       throw new Error(payload.error ?? "تعذر تحديث حالة المهمة")
     }
 
-    setData(payload)
+    if (payload.task) {
+      applyTaskMutation(payload.task)
+    }
   }
 
   function openEditDialog(task: TasksPageData["managedTasks"][number]) {
@@ -669,16 +849,17 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     return () => {
       window.removeEventListener("tasks-open-create-task", handleOpenCreateTask)
     }
-  }, [kind, data?.currentUserId, data?.assignableUsers])
+  }, [kind])
 
   const filteredManagedTasks = useMemo(() => {
-    const tasks = data?.managedTasks ?? []
+    const tasks = currentMonthManagedTasks
+
     if (selectedManagedUserId === "all") {
       return tasks
     }
 
     return tasks.filter((task) => task.assignedToUserId === selectedManagedUserId)
-  }, [data?.managedTasks, selectedManagedUserId])
+  }, [currentMonthManagedTasks, selectedManagedUserId])
 
   if (loading) {
     if (embedded) {
@@ -774,17 +955,17 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).length === 0 ? (
-                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 6 : (isPersonalTaskPage && selectedPersonalFilter === "finished" ? 6 : 5)} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
-                      ) : (kind === "internal_transaction" ? visibleTransactions : filteredAssignedTasks).map((task) => (
+                      {personalRows.length === 0 ? (
+                        <TableRow><TableCell colSpan={kind === "internal_transaction" ? 6 : (isPersonalTaskPage && selectedPersonalFilter === "finished" ? 6 : 5)} className="py-8 text-center text-muted-foreground">{kind === "internal_transaction" ? (selectedTransactionView === "incoming" ? "لا توجد معاملات موكلة إليك حاليًا." : "لا توجد معاملات قمت بإرسالها حتى الآن.") : "لا توجد مهام لهذا الشهر ضمن هذه الفئة حاليًا."}</TableCell></TableRow>
+                      ) : personalRows.map((task) => (
                         <TableRow key={task.id}>
                           <TableCell className="text-right font-semibold text-foreground">{task.title}</TableCell>
                           <TableCell className="max-w-[360px] whitespace-normal text-right leading-7">{task.description}</TableCell>
-                          <TableCell className="text-right">{formatDateTime(task.dueAt)}</TableCell>
+                          <TableCell className="text-right">{formatDateTime(getTaskEffectiveDueAt(task, operationalPlanWeekEndDay))}</TableCell>
                           {kind === "internal_transaction" ? <TableCell className="text-right">{selectedTransactionView === "incoming" ? task.assignedByName : task.assignedToName}</TableCell> : null}
                           <TableCell className="text-right">
                             {kind === "internal_transaction" && selectedTransactionView === "outgoing" ? (
-                              <Badge variant={getTaskDisplayVariant(task)} className={getStatusBadgeClass(task)}>{getTaskDisplayLabel(task)}</Badge>
+                              <Badge variant={getTaskDisplayVariant(task, operationalPlanWeekEndDay)} className={getStatusBadgeClass(task)}>{getTaskDisplayLabel(task, operationalPlanWeekEndDay)}</Badge>
                             ) : (
                               <Select value={task.status} onValueChange={(value) => runAction(() => handleUpdateStatus(task.id, value as TaskStatus))}>
                                 <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
@@ -835,7 +1016,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => runAction(() => handleDeleteTask(task.id))}>حذف</AlertDialogAction>
+                                      <AlertDialogAction onClick={() => void handleDeleteTaskClick(task.id)}>{pendingDeleteTaskIds.includes(task.id) ? "جارٍ الحذف..." : "حذف"}</AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
@@ -873,7 +1054,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">جميع الموظفين</SelectItem>
-                        {data.assignableUsers.map((user) => (
+                        {assignableUsers.map((user) => (
                           <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -891,14 +1072,14 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredManagedTasks.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">لا توجد مهام مطابقة لهذا الموظف.</TableCell></TableRow> : filteredManagedTasks.map((task) => (
+                      {filteredManagedTasks.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">لا توجد مهام لهذا الشهر مطابقة لهذا الموظف.</TableCell></TableRow> : filteredManagedTasks.map((task) => (
                         <TableRow key={task.id}>
                           <TableCell className="max-w-[320px] whitespace-normal text-right"><p className="font-semibold text-foreground">{task.title}</p>{task.description ? <p className="mt-2 text-xs leading-6 text-muted-foreground">{task.description}</p> : null}</TableCell>
                           <TableCell className="text-right">{task.assignedToName}</TableCell>
-                          <TableCell className="text-right">{formatDateTime(task.dueAt)}</TableCell>
+                          <TableCell className="text-right">{formatDateTime(getTaskEffectiveDueAt(task, operationalPlanWeekEndDay))}</TableCell>
                           <TableCell className="text-right">
-                            {getTaskCategory(task) === "stalled" ? (
-                              <Badge variant={getTaskDisplayVariant(task)} className={getStatusBadgeClass(task)}>{getTaskDisplayLabel(task)}</Badge>
+                            {getTaskCategory(task, operationalPlanWeekEndDay) === "stalled" ? (
+                              <Badge variant={getTaskDisplayVariant(task, operationalPlanWeekEndDay)} className={getStatusBadgeClass(task)}>{getTaskDisplayLabel(task, operationalPlanWeekEndDay)}</Badge>
                             ) : (
                               <Button
                                 type="button"
@@ -906,8 +1087,8 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                 className="h-auto cursor-pointer p-0 hover:bg-transparent"
                                 onClick={() => runAction(() => handleUpdateStatus(task.id, task.status === "completed" ? "under_review" : "completed"))}
                               >
-                                <Badge variant={getTaskDisplayVariant(task)} className={getStatusBadgeClass(task)}>
-                                  {getTaskDisplayLabel(task)}
+                                <Badge variant={getTaskDisplayVariant(task, operationalPlanWeekEndDay)} className={getStatusBadgeClass(task)}>
+                                  {getTaskDisplayLabel(task, operationalPlanWeekEndDay)}
                                 </Badge>
                               </Button>
                             )}
@@ -936,7 +1117,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => runAction(() => handleDeleteTask(task.id))}>حذف</AlertDialogAction>
+                                    <AlertDialogAction onClick={() => void handleDeleteTaskClick(task.id)}>{pendingDeleteTaskIds.includes(task.id) ? "جارٍ الحذف..." : "حذف"}</AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
@@ -960,7 +1141,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   </div>
 
                   <div className="grid gap-4 p-6 pt-2 md:grid-cols-2">
-                    <div className="space-y-2 text-right"><Label>إسناد إلى</Label><Select value={taskForm.assignedToUserId} onValueChange={(value) => setTaskForm((current) => ({ ...current, assignedToUserId: value }))}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{data.assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2 text-right"><Label>إسناد إلى</Label><Select value={taskForm.assignedToUserId} onValueChange={(value) => setTaskForm((current) => ({ ...current, assignedToUserId: value }))}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2 text-right">
                       <Label>موعد التسليم</Label>
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -971,7 +1152,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                     <div className="space-y-2 text-right md:col-span-2"><Label>العنوان</Label><Input value={taskForm.title} onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))} /></div>
                     <div className="space-y-2 text-right md:col-span-2"><Label>الوصف</Label><Textarea rows={5} value={taskForm.description} onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))} placeholder="اختياري" /></div>
                   </div>
-                  <div className="px-6 pb-6"><Button type="button" className="rounded-xl" onClick={() => runAction(handleEditTask)} disabled={isPending}><Pencil className="h-4 w-4" />حفظ التعديل</Button></div>
+                  <div className="px-6 pb-6"><Button type="button" className="rounded-xl" onClick={() => void handleEditTaskClick()} disabled={isEditingTask}><Pencil className="h-4 w-4" />{isEditingTask ? "جارٍ حفظ التعديل..." : "حفظ التعديل"}</Button></div>
                 </DialogContent>
               </Dialog>
 
@@ -1002,7 +1183,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
                   <Select value={taskForm.assignedToUserId} onValueChange={(value) => setTaskForm((current) => ({ ...current, assignedToUserId: value }))}>
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {data.assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}
+                      {assignableUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name} {user.role === "admin" ? "(إداري)" : "(مستخدم)"}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1036,9 +1217,9 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
               </div>
             </div>
             <div className="px-6 pb-6">
-              <Button type="button" className="rounded-xl" onClick={() => runAction(handleCreateTask)} disabled={isPending || !taskForm.title.trim() || !taskForm.dueAt}>
+              <Button type="button" className="rounded-xl" onClick={() => void handleCreateTaskClick()} disabled={isCreatingTask || !taskForm.title.trim() || !taskForm.dueAt}>
                 <Plus className="h-4 w-4" />
-                {isPending ? "جارٍ إضافة المهمة..." : "إضافة المهمة"}
+                {isCreatingTask ? "جارٍ إضافة المهمة..." : "إضافة المهمة"}
               </Button>
             </div>
           </DialogContent>

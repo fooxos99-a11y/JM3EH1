@@ -1,9 +1,9 @@
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
 import { HeaderClient } from "@/components/header-client"
 
-export async function Header() {
-  const logo = await getSiteSectionContent("logo")
+export async function Header({ logo }: { logo?: SiteContentMap["logo"] } = {}) {
+  const resolvedLogo = logo ?? await getSiteSectionContent("logo")
 
-  return <HeaderClient logo={logo} />
+  return <HeaderClient logo={resolvedLogo} />
 }

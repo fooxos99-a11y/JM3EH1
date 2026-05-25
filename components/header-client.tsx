@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronDown, Menu, ShoppingCart, X } from "lucide-react"
@@ -68,7 +69,15 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             {logo.logo ? (
               <>
                 <div className="flex h-[50px] w-[50px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-[1.02] sm:h-[56px] sm:w-[56px] lg:h-[62px] lg:w-[62px]">
-                  <img src={logo.logo} alt={logo.alt} className="h-[50px] w-[50px] object-contain sm:h-[56px] sm:w-[56px] lg:h-[62px] lg:w-[62px]" />
+                  <Image
+                    src={logo.logo}
+                    alt={logo.alt}
+                    width={62}
+                    height={62}
+                    priority
+                    sizes="(max-width: 640px) 50px, (max-width: 1024px) 56px, 62px"
+                    className="h-[50px] w-[50px] object-contain sm:h-[56px] sm:w-[56px] lg:h-[62px] lg:w-[62px]"
+                  />
                 </div>
                 <div className={`flex min-h-[50px] min-w-0 flex-col justify-center text-right transition-colors duration-300 sm:min-h-[56px] lg:min-h-[62px] ${useSolidHeader ? "" : "text-white"}`}>
                   <h1 className={`text-[0.88rem] leading-tight sm:text-[0.98rem] lg:text-[1.08rem] ${getWeightClass(logo.arabicFontWeight)}`} style={useSolidHeader ? solidTextStyle : undefined}>{arabicName}</h1>

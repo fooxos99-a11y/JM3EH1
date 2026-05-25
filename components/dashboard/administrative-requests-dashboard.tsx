@@ -1,32 +1,38 @@
 "use client"
 
-import { AlertCircle, CheckCircle2, LoaderCircle } from "lucide-react"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import dynamic from "next/dynamic"
+import { AlertCircle, CheckCircle2, LoaderCircle, Plus, Trash2 } from "lucide-react"
+import { memo, useEffect, useMemo, useState, useTransition } from "react"
 
 import {
   administrativeRequestTypeValues,
   calculateAge,
   calculateLeaveDays,
   formatDate,
+  getDateKeysBetween,
   getAdministrativeRequestStatusLabel,
   getAdministrativeRequestTypeLabel,
   getGenderLabel,
   getMaritalStatusLabel,
   type AdministrativeDashboardData,
   type AdministrativeRequestRecord,
+  type EmployeeLeaveTypeBalance,
 } from "@/lib/administrative-services"
-import { AttendancePanel } from "@/components/dashboard/attendance-panel"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePickerField } from "@/components/ui/date-picker-field"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+
+const AttendancePanel = dynamic(() => import("@/components/dashboard/attendance-panel").then((module) => module.AttendancePanel))
 
 const initialRequestForm = {
   requestType: "leave" as (typeof administrativeRequestTypeValues)[number],
@@ -39,6 +45,7 @@ const initialRequestForm = {
   requestDate: "",
   fromTime: "",
   toTime: "",
+  leaveTypeBalanceId: "",
 }
 
 const rtlInputClassName = "text-right [&::placeholder]:text-right"
@@ -46,6 +53,68 @@ const rtlLabelClassName = "block text-right"
 const rtlSelectTriggerClassName = "w-full text-right [&>span]:text-right"
 const rtlDatePickerClassName = "flex-row-reverse text-right [&>span]:text-right"
 const allEmployeesValue = "all_accounts"
+const emptyLeaveTypes: EmployeeLeaveTypeBalance[] = []
+const weekdayOptions = [
+  { value: 0, label: "الأحد" },
+  { value: 1, label: "الاثنين" },
+  { value: 2, label: "الثلاثاء" },
+  { value: 3, label: "الأربعاء" },
+  { value: 4, label: "الخميس" },
+  { value: 5, label: "الجمعة" },
+  { value: 6, label: "السبت" },
+]
+const attendancePeriodDayOptions = [
+  { value: "all_days", label: "جميع الأيام" },
+  ...weekdayOptions.map((weekday) => ({ value: String(weekday.value), label: weekday.label })),
+]
+
+function getAttendancePeriodWeekdayValue(weekdays: number[]) {
+  const uniqueWeekdays = Array.from(new Set(weekdays)).sort((left, right) => left - right)
+
+  if (uniqueWeekdays.length === weekdayOptions.length) {
+    return "all_days"
+  }
+
+  return String(uniqueWeekdays[0] ?? 0)
+}
+
+function createAttendancePeriodFormEntry(startTime = "08:00", endTime = "16:00") {
+  return {
+    weekday: "all_days",
+    startTime,
+    endTime,
+  }
+}
+
+function expandWeeklyPeriods(entries: Array<{ weekday: string; startTime: string; endTime: string }>) {
+  return entries.flatMap((entry) => {
+    const weekdays = entry.weekday === "all_days"
+      ? weekdayOptions.map((weekday) => weekday.value)
+      : [Number(entry.weekday)]
+
+    return weekdays.map((weekday) => ({
+      weekday,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+    }))
+  })
+}
+
+function createInitialScheduleForm() {
+  return {
+    templateId: null as string | null,
+    name: "",
+    description: "",
+    monthlySalary: "0",
+    lateQuotaMinutes: "0",
+    permissionQuotaMinutes: "0",
+    lateGraceMinutes: "0",
+    workStartTime: "08:00",
+    workEndTime: "16:00",
+    leaveTypes: [] as Array<{ id?: string; name: string; allowedDays: string }>,
+    periods: [] as Array<{ weekday: number; startTime: string; endTime: string }>,
+  }
+}
 
 function getStatusVariant(status: AdministrativeRequestRecord["status"]) {
   if (status === "approved") return "default"
@@ -62,16 +131,16 @@ function getRequestStatusText(request: AdministrativeRequestRecord) {
   return getAdministrativeRequestStatusLabel(request.status)
 }
 
-function InfoField({ label, value }: { label: string; value: string }) {
+const InfoField = memo(function InfoField({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 text-right">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="mt-2 text-sm font-semibold text-foreground">{value || "-"}</p>
     </div>
   )
-}
+})
 
-function BalanceMetric({ label, value, hint }: { label: string; value: number; hint: string }) {
+const BalanceMetric = memo(function BalanceMetric({ label, value, hint }: { label: string; value: number; hint: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-white p-4 text-right shadow-sm">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -79,9 +148,9 @@ function BalanceMetric({ label, value, hint }: { label: string; value: number; h
       <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
     </div>
   )
-}
+})
 
-function CompactBalanceMetric({ label, value, hint }: { label: string; value: number; hint: string }) {
+const CompactBalanceMetric = memo(function CompactBalanceMetric({ label, value, hint }: { label: string; value: number; hint: string }) {
   return (
     <div className="rounded-xl border border-border/60 bg-muted/10 p-4 text-right">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -89,9 +158,9 @@ function CompactBalanceMetric({ label, value, hint }: { label: string; value: nu
       <p className="mt-2 text-[11px] text-muted-foreground">{hint}</p>
     </div>
   )
-}
+})
 
-function RecordSummaryCard({ title, summary, hint }: { title: string; summary: string; hint: string }) {
+const RecordSummaryCard = memo(function RecordSummaryCard({ title, summary, hint }: { title: string; summary: string; hint: string }) {
   return (
     <div className="rounded-2xl border border-border/60 bg-muted/10 p-4 text-right">
       <p className="text-sm font-semibold text-foreground">{title}</p>
@@ -99,7 +168,7 @@ function RecordSummaryCard({ title, summary, hint }: { title: string; summary: s
       <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
     </div>
   )
-}
+})
 
 function getTimeRangeMinutes(fromTime: string | null, toTime: string | null) {
   if (!fromTime || !toTime) {
@@ -121,6 +190,86 @@ function formatMinutesLabel(value: number) {
   return `${value} دقيقة`
 }
 
+function formatCurrencyLabel(value: number) {
+  return `${value.toLocaleString("ar-SA", { minimumFractionDigits: value % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })} ريال`
+}
+
+function getLeaveTypesSummary(leaveTypes: EmployeeLeaveTypeBalance[]) {
+  if (leaveTypes.length === 0) {
+    return "لا توجد أنواع إجازات مضافة بعد"
+  }
+
+  return leaveTypes.map((leaveType) => `${leaveType.name}: ${leaveType.allowedDays} يوم`).join("، ")
+}
+
+function getLeaveDaysExcludingOfficialHolidays(startDate: string, endDate: string, officialHolidayRanges: Array<{ startDate: string; endDate: string }>) {
+  const holidayDateSet = new Set(officialHolidayRanges.flatMap((holiday) => getDateKeysBetween(holiday.startDate, holiday.endDate)))
+  return getDateKeysBetween(startDate, endDate).filter((dateKey) => !holidayDateSet.has(dateKey)).length
+}
+
+function getCurrentMonthLabel() {
+  return new Intl.DateTimeFormat("ar-SA", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date())
+}
+
+function getTimeInputMinutes(value: string) {
+  const match = value.match(/^(\d{2}):(\d{2})$/)
+  if (!match) {
+    return null
+  }
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null
+  }
+
+  return hours * 60 + minutes
+}
+
+function getDerivedWeeklyRequiredMinutes(startTime: string, endTime: string, templatePeriods?: Array<{ startTime: string; endTime: string }> | null, fallbackMinutes = 0) {
+  if (templatePeriods && templatePeriods.length > 0) {
+    const totalTemplateMinutes = templatePeriods.reduce((total, period) => {
+      const startMinutes = getTimeInputMinutes(period.startTime)
+      const endMinutes = getTimeInputMinutes(period.endTime)
+      if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+        return total
+      }
+
+      return total + (endMinutes - startMinutes)
+    }, 0)
+
+    return totalTemplateMinutes > 0 ? totalTemplateMinutes : fallbackMinutes
+  }
+
+  const startMinutes = getTimeInputMinutes(startTime)
+  const endMinutes = getTimeInputMinutes(endTime)
+  if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+    return fallbackMinutes
+  }
+
+  return (endMinutes - startMinutes) * 5
+}
+
+function getHourlyDeductionAmount(monthlySalary: number, weeklyRequiredMinutes: number) {
+  if (monthlySalary <= 0 || weeklyRequiredMinutes <= 0) {
+    return 0
+  }
+
+  const averageMonthlyMinutes = Math.round((weeklyRequiredMinutes * 52) / 12)
+  if (averageMonthlyMinutes <= 0) {
+    return 0
+  }
+
+  return Number(((monthlySalary * 60) / averageMonthlyMinutes).toFixed(2))
+}
+
+function getTemplateLeaveQuotaDays(leaveTypes: Array<{ allowedDays: string }>) {
+  return leaveTypes.reduce((total, leaveType) => total + (Number(leaveType.allowedDays) || 0), 0)
+}
+
 type EmploymentSectionKey = "attendance" | "requests" | "leave" | "permissions" | "warnings" | "interrogations"
 
 const employmentSectionItems: Array<{ key: EmploymentSectionKey; label: string }> = [
@@ -132,7 +281,7 @@ const employmentSectionItems: Array<{ key: EmploymentSectionKey; label: string }
   { key: "warnings", label: "سجل الإنذارات" },
 ]
 
-function EmploymentSectionButtons({ value, onChange }: { value: EmploymentSectionKey; onChange: (value: EmploymentSectionKey) => void }) {
+const EmploymentSectionButtons = memo(function EmploymentSectionButtons({ value, onChange }: { value: EmploymentSectionKey; onChange: (value: EmploymentSectionKey) => void }) {
   return (
     <div className="flex w-full flex-wrap justify-start gap-2" dir="rtl">
       {employmentSectionItems.map((item) => (
@@ -148,9 +297,9 @@ function EmploymentSectionButtons({ value, onChange }: { value: EmploymentSectio
       ))}
     </div>
   )
-}
+})
 
-function EmptyEmploymentTable({ message }: { message: string }) {
+const EmptyEmploymentTable = memo(function EmptyEmploymentTable({ message }: { message: string }) {
   return (
     <Table>
       <TableHeader>
@@ -166,7 +315,7 @@ function EmptyEmploymentTable({ message }: { message: string }) {
       </TableBody>
     </Table>
   )
-}
+})
 
 function formatTimeOrDash(value: string | null) {
   if (!value) {
@@ -184,16 +333,18 @@ function formatTimeOrDash(value: string | null) {
   }).format(date)
 }
 
-function EmploymentRecordsTable({
+const EmploymentRecordsTable = memo(function EmploymentRecordsTable({
   section,
   requests,
   attendanceRecords,
   leaveBalance,
+  officialHolidays,
 }: {
   section: EmploymentSectionKey
   requests: AdministrativeRequestRecord[]
   attendanceRecords: AdministrativeDashboardData["attendanceHistory"]
   leaveBalance: AdministrativeDashboardData["leaveBalance"]
+  officialHolidays: AdministrativeDashboardData["officialHolidays"]
 }) {
   if (section === "attendance") {
     return (
@@ -254,6 +405,7 @@ function EmploymentRecordsTable({
                   <div className="space-y-1">
                     <p>{request.subject}</p>
                     {request.requestType === "internal_transaction" && request.targetUserName ? <p className="text-xs text-muted-foreground">إلى: {request.targetUserName}</p> : null}
+                    {request.requestType === "leave" && request.leaveTypeName ? <p className="text-xs text-muted-foreground">نوع الإجازة: {request.leaveTypeName}</p> : null}
                   </div>
                 </TableCell>
                 <TableCell className="text-right"><Badge variant={getStatusVariant(request.status)}>{getRequestStatusText(request)}</Badge></TableCell>
@@ -289,8 +441,13 @@ function EmploymentRecordsTable({
             ) : (
               leaveRequests.map((request) => (
                 <TableRow key={request.id}>
-                  <TableCell className="text-right">{request.subject}</TableCell>
-                  <TableCell className="text-right">{request.startDate && request.endDate ? `${calculateLeaveDays(request.startDate, request.endDate)} يوم` : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="space-y-1">
+                      <p>{request.subject}</p>
+                      {request.leaveTypeName ? <p className="text-xs text-muted-foreground">{request.leaveTypeName}</p> : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">{request.startDate && request.endDate ? `${getLeaveDaysExcludingOfficialHolidays(request.startDate, request.endDate, officialHolidays)} يوم` : "-"}</TableCell>
                   <TableCell className="text-right"><Badge variant={getStatusVariant(request.status)}>{getAdministrativeRequestStatusLabel(request.status)}</Badge></TableCell>
                   <TableCell className="text-right">{formatDate(request.createdAt)}</TableCell>
                 </TableRow>
@@ -417,7 +574,7 @@ function EmploymentRecordsTable({
       </TableBody>
     </Table>
   )
-}
+})
 
 export function AdministrativeRequestsDashboard({ initialTab = "submit", attendanceOnly = false }: { initialTab?: string; attendanceOnly?: boolean } = {}) {
   const [data, setData] = useState<AdministrativeDashboardData | null>(null)
@@ -435,8 +592,30 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     leaveQuotaDays: "0",
     lateQuotaMinutes: "0",
     permissionQuotaMinutes: "0",
+    monthlySalary: "0",
+    weeklyRequiredMinutes: "0",
+    lateGraceMinutes: "0",
+    scheduleTemplateId: "",
     workStartTime: "08:00",
+    workEndTime: "16:00",
   })
+  const [scheduleForm, setScheduleForm] = useState(createInitialScheduleForm)
+  const [scheduleBaseWeekday, setScheduleBaseWeekday] = useState<string>("all_days")
+  const [isGlobalBalancesDialogOpen, setIsGlobalBalancesDialogOpen] = useState(false)
+  const [globalBalancesForm, setGlobalBalancesForm] = useState({
+    lateQuotaMinutes: "0",
+    permissionQuotaMinutes: "0",
+  })
+  const [leaveTypesForm, setLeaveTypesForm] = useState<Array<{ id?: string; name: string; allowedDays: string; usedDays: number }>>([])
+  const [officialHolidayForm, setOfficialHolidayForm] = useState({
+    holidayId: null as string | null,
+    name: "",
+    startDate: "",
+    endDate: "",
+  })
+  const [isOfficialHolidaysDialogOpen, setIsOfficialHolidaysDialogOpen] = useState(false)
+  const [baseAttendanceWeekday, setBaseAttendanceWeekday] = useState<string>("all_days")
+  const [attendancePeriodsForm, setAttendancePeriodsForm] = useState<Array<{ id?: string; weekday: string; startTime: string; endTime: string }>>([])
 
   async function loadData() {
     setLoading(true)
@@ -452,11 +631,21 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     }
 
     setData(payload)
-    setRequestForm((current) => ({
-      ...current,
-      targetUserId: current.targetUserId || payload.internalRecipients[0]?.userId || "",
-    }))
-    setSelectedAccountId((current) => current || (initialTab === "balances" ? allEmployeesValue : payload.currentUserId))
+    setRequestForm((current) => {
+      const nextTargetUserId = current.targetUserId || payload.internalRecipients[0]?.userId || ""
+      const nextLeaveTypeBalanceId = current.leaveTypeBalanceId || payload.leaveTypeBalances[0]?.id || ""
+
+      if (current.targetUserId === nextTargetUserId && current.leaveTypeBalanceId === nextLeaveTypeBalanceId) {
+        return current
+      }
+
+      return {
+        ...current,
+        targetUserId: nextTargetUserId,
+        leaveTypeBalanceId: nextLeaveTypeBalanceId,
+      }
+    })
+    setSelectedAccountId((current) => current || (initialTab === "balances" ? payload.accounts[0]?.userId ?? allEmployeesValue : payload.currentUserId))
     setLoading(false)
   }
 
@@ -482,10 +671,43 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     })()
   }, [initialTab])
 
+  useEffect(() => {
+    function handleOpenOfficialHolidays() {
+      setIsOfficialHolidaysDialogOpen(true)
+    }
+
+    function handleOpenGlobalBalances() {
+      setIsGlobalBalancesDialogOpen(true)
+    }
+
+    window.addEventListener("administrative-requests-open-official-holidays", handleOpenOfficialHolidays)
+    window.addEventListener("administrative-requests-open-global-balances", handleOpenGlobalBalances)
+
+    return () => {
+      window.removeEventListener("administrative-requests-open-official-holidays", handleOpenOfficialHolidays)
+      window.removeEventListener("administrative-requests-open-global-balances", handleOpenGlobalBalances)
+    }
+  }, [])
+
   const selectedAccount = useMemo(
     () => selectedAccountId === allEmployeesValue ? null : data?.accounts.find((account) => account.userId === selectedAccountId) ?? null,
     [data?.accounts, selectedAccountId],
   )
+  const isBulkBalanceMode = selectedAccountId === allEmployeesValue
+  const globalBalancesSourceAccount = useMemo(
+    () => data?.accounts.find((account) => account.userId === data.currentUserId) ?? data?.accounts[0] ?? null,
+    [data?.accounts, data?.currentUserId],
+  )
+  const currentUserLeaveTypes = useMemo(
+    () => data?.leaveTypeBalances ?? emptyLeaveTypes,
+    [data?.leaveTypeBalances],
+  )
+  const currentUserLeaveTypeIds = useMemo(
+    () => currentUserLeaveTypes.map((leaveType) => leaveType.id),
+    [currentUserLeaveTypes],
+  )
+  const firstCurrentUserLeaveTypeId = currentUserLeaveTypeIds[0] ?? ""
+  const currentUserLeaveTypeIdsKey = useMemo(() => currentUserLeaveTypeIds.join("|"), [currentUserLeaveTypeIds])
 
   useEffect(() => {
     const sourceAccount = selectedAccountId === allEmployeesValue
@@ -496,17 +718,303 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
       return
     }
 
-    setBalanceForm({
-      leaveQuotaDays: String(sourceAccount.leaveBalance.leaveQuotaDays),
-      lateQuotaMinutes: String(sourceAccount.leaveBalance.lateQuotaMinutes),
-      permissionQuotaMinutes: String(sourceAccount.leaveBalance.permissionQuotaMinutes),
-      workStartTime: sourceAccount.leaveBalance.workStartTime,
+    setBalanceForm((current) => {
+      const nextForm = {
+        leaveQuotaDays: String(sourceAccount.leaveBalance.leaveQuotaDays),
+        lateQuotaMinutes: String(sourceAccount.leaveBalance.lateQuotaMinutes),
+        permissionQuotaMinutes: String(sourceAccount.leaveBalance.permissionQuotaMinutes),
+        monthlySalary: String(sourceAccount.leaveBalance.monthlySalary),
+        weeklyRequiredMinutes: String(sourceAccount.leaveBalance.weeklyRequiredMinutes),
+        lateGraceMinutes: String(sourceAccount.leaveBalance.lateGraceMinutes),
+        scheduleTemplateId: sourceAccount.leaveBalance.scheduleTemplateId ?? "",
+        workStartTime: sourceAccount.leaveBalance.workStartTime,
+        workEndTime: sourceAccount.leaveBalance.workEndTime,
+      }
+
+      if (
+        current.leaveQuotaDays === nextForm.leaveQuotaDays
+        && current.lateQuotaMinutes === nextForm.lateQuotaMinutes
+        && current.permissionQuotaMinutes === nextForm.permissionQuotaMinutes
+        && current.monthlySalary === nextForm.monthlySalary
+        && current.weeklyRequiredMinutes === nextForm.weeklyRequiredMinutes
+        && current.lateGraceMinutes === nextForm.lateGraceMinutes
+        && current.scheduleTemplateId === nextForm.scheduleTemplateId
+        && current.workStartTime === nextForm.workStartTime
+        && current.workEndTime === nextForm.workEndTime
+      ) {
+        return current
+      }
+
+      return nextForm
     })
   }, [data?.accounts, selectedAccount, selectedAccountId])
+
+  useEffect(() => {
+    if (!globalBalancesSourceAccount) {
+      setGlobalBalancesForm((current) => (
+        current.lateQuotaMinutes === "0" && current.permissionQuotaMinutes === "0"
+          ? current
+          : { lateQuotaMinutes: "0", permissionQuotaMinutes: "0" }
+      ))
+      setLeaveTypesForm((current) => current.length === 0 ? current : [])
+      return
+    }
+
+    setGlobalBalancesForm((current) => {
+      const nextForm = {
+        lateQuotaMinutes: String(globalBalancesSourceAccount.leaveBalance.lateQuotaMinutes),
+        permissionQuotaMinutes: String(globalBalancesSourceAccount.leaveBalance.permissionQuotaMinutes),
+      }
+
+      if (
+        current.lateQuotaMinutes === nextForm.lateQuotaMinutes
+        && current.permissionQuotaMinutes === nextForm.permissionQuotaMinutes
+      ) {
+        return current
+      }
+
+      return nextForm
+    })
+
+    setLeaveTypesForm((current) => {
+      const nextLeaveTypes = globalBalancesSourceAccount.leaveTypeBalances.map((leaveType) => ({
+        id: leaveType.id,
+        name: leaveType.name,
+        allowedDays: String(leaveType.allowedDays),
+        usedDays: leaveType.usedDays,
+      }))
+
+      if (
+        current.length === nextLeaveTypes.length
+        && current.every((entry, index) => (
+          entry.id === nextLeaveTypes[index]?.id
+          && entry.name === nextLeaveTypes[index]?.name
+          && entry.allowedDays === nextLeaveTypes[index]?.allowedDays
+          && entry.usedDays === nextLeaveTypes[index]?.usedDays
+        ))
+      ) {
+        return current
+      }
+
+      return nextLeaveTypes
+    })
+  }, [globalBalancesSourceAccount])
+
+  useEffect(() => {
+    if (!selectedAccount) {
+      setBaseAttendanceWeekday((current) => current === "all_days" ? current : "all_days")
+      setAttendancePeriodsForm((current) => current.length === 0 ? current : [])
+      return
+    }
+
+    const groupedPeriods = Array.from(
+      selectedAccount.attendancePeriodOverrides
+        .filter((override) => override.overrideDate === null && override.weekday !== null && !override.isRemoved)
+        .reduce((groups, override) => {
+          const key = `${override.startTime}-${override.endTime}`
+          const existingGroup = groups.get(key)
+
+          if (existingGroup) {
+            existingGroup.weekdays.push(override.weekday!)
+            return groups
+          }
+
+          groups.set(key, {
+            id: override.id,
+            startTime: override.startTime,
+            endTime: override.endTime,
+            weekdays: [override.weekday!],
+          })
+
+          return groups
+        }, new Map<string, { id: string; startTime: string; endTime: string; weekdays: number[] }>())
+        .values(),
+    )
+
+    const basePeriodIndex = groupedPeriods.findIndex((period) => (
+      period.startTime === selectedAccount.leaveBalance.workStartTime
+      && period.endTime === selectedAccount.leaveBalance.workEndTime
+    ))
+    const basePeriod = basePeriodIndex >= 0 ? groupedPeriods[basePeriodIndex] : null
+    const nextBaseAttendanceWeekday = basePeriod ? getAttendancePeriodWeekdayValue(basePeriod.weekdays) : "all_days"
+
+    setBaseAttendanceWeekday((current) => current === nextBaseAttendanceWeekday ? current : nextBaseAttendanceWeekday)
+
+    setAttendancePeriodsForm((current) => {
+      const nextPeriods = groupedPeriods
+        .filter((_, index) => index !== basePeriodIndex)
+        .map((period) => ({
+          id: period.id,
+          weekday: getAttendancePeriodWeekdayValue(period.weekdays),
+          startTime: period.startTime,
+          endTime: period.endTime,
+        }))
+
+      if (
+        current.length === nextPeriods.length
+        && current.every((period, index) => (
+          period.id === nextPeriods[index]?.id
+          && period.weekday === nextPeriods[index]?.weekday
+          && period.startTime === nextPeriods[index]?.startTime
+          && period.endTime === nextPeriods[index]?.endTime
+        ))
+      ) {
+        return current
+      }
+
+      return nextPeriods
+    })
+  }, [selectedAccount])
+
+  useEffect(() => {
+    if (requestForm.requestType !== "leave") {
+      return
+    }
+
+    const hasSelectedLeaveType = Boolean(requestForm.leaveTypeBalanceId) && currentUserLeaveTypeIds.includes(requestForm.leaveTypeBalanceId)
+    const nextLeaveTypeBalanceId = hasSelectedLeaveType ? requestForm.leaveTypeBalanceId : firstCurrentUserLeaveTypeId
+
+    if (requestForm.leaveTypeBalanceId === nextLeaveTypeBalanceId) {
+      return
+    }
+
+    setRequestForm((current) => {
+      if (current.requestType !== "leave") {
+        return current
+      }
+
+      const nextLeaveTypeBalanceIdForCurrent = current.leaveTypeBalanceId && currentUserLeaveTypeIds.includes(current.leaveTypeBalanceId)
+        ? current.leaveTypeBalanceId
+        : firstCurrentUserLeaveTypeId
+
+      if (current.leaveTypeBalanceId === nextLeaveTypeBalanceIdForCurrent) {
+        return current
+      }
+
+      return {
+        ...current,
+        leaveTypeBalanceId: nextLeaveTypeBalanceIdForCurrent,
+      }
+    })
+  }, [currentUserLeaveTypeIds, currentUserLeaveTypeIdsKey, firstCurrentUserLeaveTypeId, requestForm.leaveTypeBalanceId, requestForm.requestType])
+
+  useEffect(() => {
+    if (!data?.scheduleTemplates.length) {
+      setScheduleBaseWeekday((current) => current === "all_days" ? current : "all_days")
+      setScheduleForm(createInitialScheduleForm())
+      return
+    }
+
+    setScheduleForm((current) => {
+      const templateId = current.templateId ?? data.scheduleTemplates[0]?.id ?? null
+      const sourceTemplate = data.scheduleTemplates.find((template) => template.id === templateId)
+
+      if (!sourceTemplate) {
+        setScheduleBaseWeekday((weekday) => weekday === "all_days" ? weekday : "all_days")
+        return createInitialScheduleForm()
+      }
+
+      const groupedPeriods = Array.from(
+        sourceTemplate.periods.reduce((groups, period) => {
+          const key = `${period.startTime}-${period.endTime}`
+          const existingGroup = groups.get(key)
+
+          if (existingGroup) {
+            existingGroup.weekdays.push(period.weekday)
+            return groups
+          }
+
+          groups.set(key, {
+            startTime: period.startTime,
+            endTime: period.endTime,
+            weekdays: [period.weekday],
+          })
+
+          return groups
+        }, new Map<string, { startTime: string; endTime: string; weekdays: number[] }>()).values(),
+      )
+
+      const basePeriodIndex = groupedPeriods.findIndex((period) => (
+        period.startTime === sourceTemplate.workStartTime
+        && period.endTime === sourceTemplate.workEndTime
+      ))
+      const basePeriod = basePeriodIndex >= 0 ? groupedPeriods[basePeriodIndex] : null
+      const nextScheduleBaseWeekday = basePeriod ? getAttendancePeriodWeekdayValue(basePeriod.weekdays) : "all_days"
+      setScheduleBaseWeekday((weekday) => weekday === nextScheduleBaseWeekday ? weekday : nextScheduleBaseWeekday)
+
+      return {
+        templateId: sourceTemplate.id,
+        name: sourceTemplate.name,
+        description: sourceTemplate.description,
+        monthlySalary: String(sourceTemplate.monthlySalary),
+        lateQuotaMinutes: String(sourceTemplate.lateQuotaMinutes),
+        permissionQuotaMinutes: String(sourceTemplate.permissionQuotaMinutes),
+        lateGraceMinutes: String(sourceTemplate.lateGraceMinutes),
+        workStartTime: sourceTemplate.workStartTime,
+        workEndTime: sourceTemplate.workEndTime,
+        leaveTypes: sourceTemplate.leaveTypes.map((leaveType) => ({
+          id: leaveType.id,
+          name: leaveType.name,
+          allowedDays: String(leaveType.allowedDays),
+        })),
+        periods: groupedPeriods
+          .filter((_, index) => index !== basePeriodIndex)
+          .map((period) => ({
+            weekday: Number(getAttendancePeriodWeekdayValue(period.weekdays)),
+            startTime: period.startTime,
+            endTime: period.endTime,
+          })),
+      }
+    })
+  }, [data?.scheduleTemplates])
 
   const pendingReviewRequests = useMemo(
     () => data?.reviewableRequests.filter((request) => request.status === "pending") ?? [],
     [data?.reviewableRequests],
+  )
+
+  const selectedScheduleTemplate = useMemo(
+    () => data?.scheduleTemplates.find((template) => template.id === balanceForm.scheduleTemplateId) ?? null,
+    [balanceForm.scheduleTemplateId, data?.scheduleTemplates],
+  )
+  const selectedAccountPeriodOverrides = selectedAccount?.attendancePeriodOverrides ?? []
+  const derivedWeeklyRequiredMinutes = useMemo(
+    () => getDerivedWeeklyRequiredMinutes(
+      balanceForm.workStartTime,
+      balanceForm.workEndTime,
+      selectedScheduleTemplate?.periods ?? null,
+      Number(balanceForm.weeklyRequiredMinutes) || 0,
+    ),
+    [balanceForm.weeklyRequiredMinutes, balanceForm.workEndTime, balanceForm.workStartTime, selectedScheduleTemplate?.periods],
+  )
+  const hourlyDeductionAmount = useMemo(
+    () => getHourlyDeductionAmount(Number(balanceForm.monthlySalary) || 0, derivedWeeklyRequiredMinutes),
+    [balanceForm.monthlySalary, derivedWeeklyRequiredMinutes],
+  )
+  const currentMonthLabel = useMemo(() => getCurrentMonthLabel(), [])
+  const scheduleFormWeeklyRequiredMinutes = useMemo(
+    () => getDerivedWeeklyRequiredMinutes(
+      scheduleForm.workStartTime,
+      scheduleForm.workEndTime,
+      expandWeeklyPeriods([
+        {
+          weekday: scheduleBaseWeekday,
+          startTime: scheduleForm.workStartTime,
+          endTime: scheduleForm.workEndTime,
+        },
+        ...scheduleForm.periods.map((period) => ({
+          weekday: String(period.weekday),
+          startTime: period.startTime,
+          endTime: period.endTime,
+        })),
+      ]),
+      0,
+    ),
+    [scheduleBaseWeekday, scheduleForm.periods, scheduleForm.workEndTime, scheduleForm.workStartTime],
+  )
+  const scheduleFormHourlyDeductionAmount = useMemo(
+    () => getHourlyDeductionAmount(Number(scheduleForm.monthlySalary) || 0, scheduleFormWeeklyRequiredMinutes),
+    [scheduleForm.monthlySalary, scheduleFormWeeklyRequiredMinutes],
   )
 
   const isEmploymentManagerView = initialTab === "employment_records"
@@ -524,7 +1032,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
       return []
     }
 
-    return data.reviewableRequests.filter((request) => request.requesterId === managerSelectedAccount.userId)
+    return data.allRequests.filter((request) => request.requesterId === managerSelectedAccount.userId)
   }, [data, managerSelectedAccount])
 
   const managerEmploymentAttendance = useMemo(() => {
@@ -543,12 +1051,19 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     lateUsedMinutes: 0,
     permissionQuotaMinutes: 0,
     permissionUsedMinutes: 0,
+    monthlySalary: 0,
+    weeklyRequiredMinutes: 0,
+    lateGraceMinutes: 0,
+    scheduleTemplateId: null,
+    workStartTime: "08:00",
+    workEndTime: "16:00",
   }
   const employmentViewLeaveRemaining = employmentViewLeaveBalance.leaveQuotaDays - employmentViewLeaveBalance.leaveTakenDays
   const employmentViewPermissionRemaining = employmentViewLeaveBalance.permissionQuotaMinutes - employmentViewLeaveBalance.permissionUsedMinutes
   const employmentViewLateRemaining = employmentViewLeaveBalance.lateQuotaMinutes - employmentViewLeaveBalance.lateUsedMinutes
   const employmentViewWarningCount = (data?.attendanceHistory ?? []).filter((record) => record.status === "incomplete" || Boolean(record.notes)).length
   const employmentViewInterrogationCount = (data?.myRequests ?? []).filter((request) => request.status === "rejected" || request.status === "cancelled").length
+  const globalLeaveQuotaDays = leaveTypesForm.reduce((total, leaveType) => total + (Number(leaveType.allowedDays) || 0), 0)
 
   async function submitRequest() {
     setMessage(null)
@@ -569,6 +1084,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
         requestDate: requestForm.requestDate,
         fromTime: requestForm.fromTime,
         toTime: requestForm.toTime,
+        leaveTypeBalanceId: requestForm.requestType === "leave" ? requestForm.leaveTypeBalanceId || undefined : undefined,
       }),
     })
 
@@ -586,6 +1102,251 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
   function handleCreateRequest() {
     startTransition(async () => {
       await submitRequest()
+    })
+  }
+
+  function loadTemplateIntoForm(templateId: string | null) {
+    if (!templateId) {
+      setScheduleBaseWeekday("all_days")
+      setScheduleForm(createInitialScheduleForm())
+      return
+    }
+
+    const template = data?.scheduleTemplates.find((entry) => entry.id === templateId)
+    if (!template) {
+      setScheduleBaseWeekday("all_days")
+      setScheduleForm(createInitialScheduleForm())
+      return
+    }
+
+    const groupedPeriods = Array.from(
+      template.periods.reduce((groups, period) => {
+        const key = `${period.startTime}-${period.endTime}`
+        const existingGroup = groups.get(key)
+
+        if (existingGroup) {
+          existingGroup.weekdays.push(period.weekday)
+          return groups
+        }
+
+        groups.set(key, {
+          startTime: period.startTime,
+          endTime: period.endTime,
+          weekdays: [period.weekday],
+        })
+
+        return groups
+      }, new Map<string, { startTime: string; endTime: string; weekdays: number[] }>()).values(),
+    )
+
+    const basePeriodIndex = groupedPeriods.findIndex((period) => (
+      period.startTime === template.workStartTime
+      && period.endTime === template.workEndTime
+    ))
+    const basePeriod = basePeriodIndex >= 0 ? groupedPeriods[basePeriodIndex] : null
+    setScheduleBaseWeekday(basePeriod ? getAttendancePeriodWeekdayValue(basePeriod.weekdays) : "all_days")
+
+    setScheduleForm({
+      templateId: template.id,
+      name: template.name,
+      description: template.description,
+      monthlySalary: String(template.monthlySalary),
+      lateQuotaMinutes: String(template.lateQuotaMinutes),
+      permissionQuotaMinutes: String(template.permissionQuotaMinutes),
+      lateGraceMinutes: String(template.lateGraceMinutes),
+      workStartTime: template.workStartTime,
+      workEndTime: template.workEndTime,
+      leaveTypes: template.leaveTypes.map((leaveType) => ({
+        id: leaveType.id,
+        name: leaveType.name,
+        allowedDays: String(leaveType.allowedDays),
+      })),
+      periods: groupedPeriods
+        .filter((_, index) => index !== basePeriodIndex)
+        .map((period) => ({
+          weekday: Number(getAttendancePeriodWeekdayValue(period.weekdays)),
+          startTime: period.startTime,
+          endTime: period.endTime,
+        })),
+    })
+  }
+
+  function applyScheduleTemplateToBalanceForm(templateId: string) {
+    if (templateId === "no_template") {
+      setBalanceForm((current) => ({ ...current, scheduleTemplateId: "" }))
+      return
+    }
+
+    const template = data?.scheduleTemplates.find((entry) => entry.id === templateId)
+    if (!template) {
+      setBalanceForm((current) => ({ ...current, scheduleTemplateId: templateId }))
+      return
+    }
+
+    setBalanceForm({
+      leaveQuotaDays: String(template.leaveQuotaDays),
+      lateQuotaMinutes: String(template.lateQuotaMinutes),
+      permissionQuotaMinutes: String(template.permissionQuotaMinutes),
+      monthlySalary: String(template.monthlySalary),
+      weeklyRequiredMinutes: String(template.weeklyRequiredMinutes),
+      lateGraceMinutes: String(template.lateGraceMinutes),
+      scheduleTemplateId: template.id,
+      workStartTime: template.workStartTime,
+      workEndTime: template.workEndTime,
+    })
+  }
+
+  function handleSaveScheduleTemplate() {
+    setMessage(null)
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_schedule_template",
+          templateId: scheduleForm.templateId,
+          name: scheduleForm.name,
+          description: scheduleForm.description,
+          monthlySalary: Number(scheduleForm.monthlySalary) || 0,
+          leaveQuotaDays: getTemplateLeaveQuotaDays(scheduleForm.leaveTypes),
+          lateQuotaMinutes: Number(scheduleForm.lateQuotaMinutes) || 0,
+          permissionQuotaMinutes: Number(scheduleForm.permissionQuotaMinutes) || 0,
+          weeklyRequiredMinutes: scheduleFormWeeklyRequiredMinutes,
+          lateGraceMinutes: Number(scheduleForm.lateGraceMinutes) || 0,
+          workStartTime: scheduleForm.workStartTime,
+          workEndTime: scheduleForm.workEndTime,
+          leaveTypes: scheduleForm.leaveTypes.map((leaveType) => ({
+            id: leaveType.id,
+            name: leaveType.name,
+            allowedDays: Number(leaveType.allowedDays) || 0,
+          })),
+          periods: scheduleForm.periods,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string; templateId?: string }
+      if (!response.ok) {
+        setError(payload.error ?? "تعذر حفظ قالب الدوام")
+        return
+      }
+
+      if (payload.templateId) {
+        setScheduleForm((current) => ({ ...current, templateId: payload.templateId ?? current.templateId }))
+      }
+
+      setMessage("تم حفظ قالب الدوام")
+      await loadData()
+    })
+  }
+
+  function handleDeleteScheduleTemplate() {
+    if (!scheduleForm.templateId) {
+      return
+    }
+
+    setMessage(null)
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_schedule_template",
+          templateId: scheduleForm.templateId,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        setError(payload.error ?? "تعذر حذف قالب الدوام")
+        return
+      }
+
+      setMessage("تم حذف قالب الدوام")
+      setScheduleForm(createInitialScheduleForm())
+      await loadData()
+    })
+  }
+
+  function handleSaveGlobalBalances() {
+    setMessage(null)
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_general_balances",
+          leaveQuotaDays: globalLeaveQuotaDays,
+          lateQuotaMinutes: Number(globalBalancesForm.lateQuotaMinutes) || 0,
+          permissionQuotaMinutes: Number(globalBalancesForm.permissionQuotaMinutes) || 0,
+          leaveTypes: leaveTypesForm.map((leaveType) => ({
+            id: leaveType.id,
+            name: leaveType.name,
+            allowedDays: Number(leaveType.allowedDays) || 0,
+          })),
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        setError(payload.error ?? "تعذر حفظ الأرصدة العامة")
+        return
+      }
+
+      setMessage("تم حفظ الأرصدة العامة لجميع الموظفين")
+      setIsGlobalBalancesDialogOpen(false)
+      await loadData()
+    })
+  }
+
+  function handleSaveOfficialHoliday() {
+    setMessage(null)
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save_official_holiday",
+          holidayId: officialHolidayForm.holidayId,
+          name: officialHolidayForm.name,
+          startDate: officialHolidayForm.startDate,
+          endDate: officialHolidayForm.endDate,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        setError(payload.error ?? "تعذر حفظ الإجازة الرسمية")
+        return
+      }
+
+      setMessage("تم حفظ الإجازة الرسمية")
+      setOfficialHolidayForm({ holidayId: null, name: "", startDate: "", endDate: "" })
+      await loadData()
+    })
+  }
+
+  function handleDeleteOfficialHoliday(holidayId: string) {
+    setMessage(null)
+    setError(null)
+    startTransition(async () => {
+      const response = await fetch("/api/admin/administrative-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_official_holiday", holidayId }),
+      })
+
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        setError(payload.error ?? "تعذر حذف الإجازة الرسمية")
+        return
+      }
+
+      setMessage("تم حذف الإجازة الرسمية")
+      await loadData()
     })
   }
 
@@ -631,7 +1392,9 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
   const leaveRemaining = data.leaveBalance.leaveQuotaDays - data.leaveBalance.leaveTakenDays
   const permissionRemaining = data.leaveBalance.permissionQuotaMinutes - data.leaveBalance.permissionUsedMinutes
   const lateRemaining = data.leaveBalance.lateQuotaMinutes - data.leaveBalance.lateUsedMinutes
-  const requestedLeaveDays = requestForm.startDate && requestForm.endDate ? calculateLeaveDays(requestForm.startDate, requestForm.endDate) : 0
+  const requestedLeaveDays = requestForm.startDate && requestForm.endDate
+    ? getLeaveDaysExcludingOfficialHolidays(requestForm.startDate, requestForm.endDate, data.officialHolidays)
+    : 0
   const isInternalTransactionRequest = requestForm.requestType === "internal_transaction"
   const activeTab = initialTab
 
@@ -656,7 +1419,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     my_requests: "طلباتي",
     profile: "الملف الوظيفي",
     employment: "السجل الوظيفي",
-    balances: "الإجازات والأذونات",
+    balances: "إعدادات الحضور",
     reviews: "طلبات الموظفين",
     employment_records: "سجلات الموظفين",
   }
@@ -666,7 +1429,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
     my_requests: "متابعة الطلبات التي رفعتها وحالة كل طلب بحسب قرار المدير من صفحة مستقلة.",
     profile: "استعراض بيانات الحساب الوظيفية الأساسية من صفحة مستقلة.",
     employment: "عرض سجل إنشاء الحساب ونوعه والجهة التي قامت بإنشائه.",
-    balances: "إدارة الأرصدة الأساسية للإجازات والأذونات وأيام السماحية من صفحة مستقلة.",
+    balances: "إدارة إعدادات الحضور والأرصدة الأساسية وقوالب الدوام من صفحة مستقلة.",
     reviews: "اعتماد أو رفض الطلبات التي رفعها الموظفون من صفحة تقديم طلب.",
     employment_records: "استعراض سجل كل موظف عبر اختيار اسمه والانتقال بين أنواع السجلات المختلفة.",
   }
@@ -700,6 +1463,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
               requests={data.myRequests}
               attendanceRecords={data.attendanceHistory}
               leaveBalance={employmentViewLeaveBalance}
+              officialHolidays={data.officialHolidays}
             />
           </CardContent>
         </Card>
@@ -754,6 +1518,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                           <p className="font-medium text-foreground">{request.subject}</p>
                           {request.requestType === "internal_transaction" && request.targetUserName ? <p className="text-xs text-muted-foreground">إلى: {request.targetUserName}</p> : null}
                           {request.requestType === "permission" ? <p className="text-xs text-muted-foreground">{formatMinutesLabel(getTimeRangeMinutes(request.fromTime, request.toTime))}</p> : null}
+                          {request.requestType === "leave" && request.leaveTypeName ? <p className="text-xs text-muted-foreground">نوع الإجازة: {request.leaveTypeName}</p> : null}
                         </div>
                       </TableCell>
                       <TableCell className="text-right"><Badge variant={getStatusVariant(request.status)}>{getRequestStatusText(request)}</Badge></TableCell>
@@ -825,6 +1590,7 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                   requests={managerEmploymentRequests}
                   attendanceRecords={managerEmploymentAttendance}
                   leaveBalance={managerSelectedAccount.leaveBalance}
+                  officialHolidays={data.officialHolidays}
                 />
               ) : (
                 <EmptyEmploymentTable message="لا توجد حسابات متاحة لعرض السجلات." />
@@ -911,6 +1677,19 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
 
                 {requestForm.requestType === "leave" ? (
                   <>
+                    <div className="space-y-2 text-right md:col-span-2">
+                      <Label className={rtlLabelClassName}>نوع الإجازة</Label>
+                      <Select value={requestForm.leaveTypeBalanceId || "no_leave_type"} onValueChange={(value) => setRequestForm((current) => ({ ...current, leaveTypeBalanceId: value === "no_leave_type" ? "" : value }))}>
+                        <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue placeholder="اختر نوع الإجازة" /></SelectTrigger>
+                        <SelectContent>
+                          {currentUserLeaveTypes.length === 0 ? (
+                            <SelectItem value="no_leave_type">لا توجد أنواع إجازات مضافة</SelectItem>
+                          ) : currentUserLeaveTypes.map((leaveType) => (
+                            <SelectItem key={leaveType.id} value={leaveType.id}>{leaveType.name} - {leaveType.allowedDays - leaveType.usedDays} يوم متبقي</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-2 text-right">
                       <Label htmlFor="request-start-date" className={rtlLabelClassName}>من تاريخ</Label>
                       <DatePickerField id="request-start-date" value={requestForm.startDate} onChange={(value) => setRequestForm((current) => ({ ...current, startDate: value }))} placeholder="اختر تاريخ البداية" className={rtlDatePickerClassName} />
@@ -919,6 +1698,11 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                       <Label htmlFor="request-end-date" className={rtlLabelClassName}>إلى تاريخ</Label>
                       <DatePickerField id="request-end-date" value={requestForm.endDate} onChange={(value) => setRequestForm((current) => ({ ...current, endDate: value }))} placeholder="اختر تاريخ النهاية" className={rtlDatePickerClassName} />
                     </div>
+                    {requestForm.startDate && requestForm.endDate ? (
+                      <div className="text-right text-xs text-muted-foreground md:col-span-2">
+                        الأيام المحتسبة من الرصيد بعد استثناء الإجازات الرسمية: {requestedLeaveDays} يوم
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
 
@@ -1095,56 +1879,156 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
 
         <TabsContent value="balances" className="space-y-4">
           {data.isManager ? (
+            <>
             <Card className="rounded-[1.5rem] border-white/80 bg-white/95">
               <CardHeader>
-                <CardTitle>إدارة الأرصدة الأساسية</CardTitle>
+                <CardTitle>إعدادات الحضور</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <div className="space-y-2 text-right xl:col-span-4">
-                  <Label className={rtlLabelClassName}>الحساب المستهدف</Label>
-                  <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                    <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={allEmployeesValue}>جميع الموظفين</SelectItem>
-                      {data.accounts.map((account) => (
-                        <SelectItem key={account.userId} value={account.userId}>{account.name} - {account.jobTitle}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2" dir="rtl">
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>الموظف المستهدف</Label>
+                    <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                      <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={allEmployeesValue}>جميع الموظفين</SelectItem>
+                        {data.accounts.map((account) => (
+                          <SelectItem key={account.userId} value={account.userId}>{account.name} - {account.jobTitle}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>قالب الدوام</Label>
+                    <Select value={balanceForm.scheduleTemplateId || "no_template"} onValueChange={applyScheduleTemplateToBalanceForm}>
+                      <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no_template">بدون قالب</SelectItem>
+                        {(data.scheduleTemplates ?? []).map((template) => (
+                          <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="leave-quota" className={rtlLabelClassName}>رصيد الإجازات الأساسي</Label>
-                  <Input id="leave-quota" type="number" min="0" value={balanceForm.leaveQuotaDays} onChange={(event) => setBalanceForm((current) => ({ ...current, leaveQuotaDays: event.target.value }))} className={rtlInputClassName} />
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" dir="rtl">
+                    <div className="space-y-2 text-right">
+                      <Label htmlFor="monthly-salary" className={rtlLabelClassName}>الراتب الشهري</Label>
+                      <Input id="monthly-salary" type="number" min="0" step="0.01" value={balanceForm.monthlySalary} onChange={(event) => setBalanceForm((current) => ({ ...current, monthlySalary: event.target.value }))} className={rtlInputClassName} />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label htmlFor="late-grace" className={rtlLabelClassName}>سماحية التأخير</Label>
+                      <Input id="late-grace" type="number" min="0" value={balanceForm.lateGraceMinutes} onChange={(event) => setBalanceForm((current) => ({ ...current, lateGraceMinutes: event.target.value }))} className={rtlInputClassName} />
+                    </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="permission-quota" className={rtlLabelClassName}>دقائق الاستئذان المسموحة</Label>
-                  <Input id="permission-quota" type="number" min="0" value={balanceForm.permissionQuotaMinutes} onChange={(event) => setBalanceForm((current) => ({ ...current, permissionQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" dir="rtl">
+                    <div className="space-y-2 text-right">
+                      <Label htmlFor="work-start-time" className={rtlLabelClassName}>بداية الدوام من</Label>
+                      <Input id="work-start-time" type="time" value={balanceForm.workStartTime} onChange={(event) => setBalanceForm((current) => ({ ...current, workStartTime: event.target.value }))} className={rtlInputClassName} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full rounded-xl"
+                        disabled={isPending || (!selectedAccount && !isBulkBalanceMode)}
+                        onClick={() => setAttendancePeriodsForm((current) => ([
+                          ...current,
+                          createAttendancePeriodFormEntry(balanceForm.workStartTime, balanceForm.workEndTime),
+                        ]))}
+                      >
+                        <Plus className="h-4 w-4" />
+                        إضافة فترة
+                      </Button>
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label htmlFor="work-end-time" className={rtlLabelClassName}>نهاية الدوام إلى</Label>
+                      <Input id="work-end-time" type="time" value={balanceForm.workEndTime} onChange={(event) => setBalanceForm((current) => ({ ...current, workEndTime: event.target.value }))} className={rtlInputClassName} />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label className={rtlLabelClassName}>الأيام</Label>
+                      <Select value={baseAttendanceWeekday} onValueChange={setBaseAttendanceWeekday}>
+                        <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {attendancePeriodDayOptions.map((weekday) => (
+                            <SelectItem key={weekday.value} value={weekday.value}>{weekday.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label htmlFor="hourly-deduction" className={rtlLabelClassName}>الخصم بالساعة</Label>
+                      <Input id="hourly-deduction" readOnly value={formatCurrencyLabel(hourlyDeductionAmount)} className={rtlInputClassName} />
+                    </div>
                 </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="late-quota" className={rtlLabelClassName}>دقائق التأخير المسموحة</Label>
-                  <Input id="late-quota" type="number" min="0" value={balanceForm.lateQuotaMinutes} onChange={(event) => setBalanceForm((current) => ({ ...current, lateQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
-                </div>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="work-start-time" className={rtlLabelClassName}>بداية الدوام من الساعة</Label>
-                  <Input id="work-start-time" type="time" value={balanceForm.workStartTime} onChange={(event) => setBalanceForm((current) => ({ ...current, workStartTime: event.target.value }))} className={rtlInputClassName} />
-                </div>
-                <div className="flex items-end justify-start">
+
+                {attendancePeriodsForm.length > 0 ? (
+                  <div className="space-y-4">
+                    {attendancePeriodsForm.map((period, index) => (
+                      <div key={period.id ?? `attendance-period-${index}`} className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr,1fr,180px,auto]" dir="rtl">
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>بداية الدوام من</Label>
+                          <Input type="time" value={period.startTime} onChange={(event) => setAttendancePeriodsForm((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, startTime: event.target.value } : entry))} className={rtlInputClassName} />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>نهاية الدوام إلى</Label>
+                          <Input type="time" value={period.endTime} onChange={(event) => setAttendancePeriodsForm((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, endTime: event.target.value } : entry))} className={rtlInputClassName} />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>الأيام</Label>
+                          <Select value={period.weekday} onValueChange={(value) => setAttendancePeriodsForm((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, weekday: value } : entry))}>
+                            <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {attendancePeriodDayOptions.map((weekday) => (
+                                <SelectItem key={weekday.value} value={weekday.value}>{weekday.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button type="button" variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setAttendancePeriodsForm((current) => current.filter((_, entryIndex) => entryIndex !== index))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="flex justify-start">
                   <Button
                     type="button"
-                    className="rounded-xl"
-                    disabled={isPending || (!selectedAccount && selectedAccountId !== allEmployeesValue)}
+                    className="rounded-xl px-10"
+                    disabled={isPending || (!selectedAccount && !isBulkBalanceMode)}
                     onClick={() =>
                       handleRequestAction(
                         {
-                          action: "update_balance",
-                          userId: selectedAccountId === allEmployeesValue ? allEmployeesValue : selectedAccount?.userId,
-                          leaveQuotaDays: Number(balanceForm.leaveQuotaDays) || 0,
-                          lateQuotaMinutes: Number(balanceForm.lateQuotaMinutes) || 0,
-                          permissionQuotaMinutes: Number(balanceForm.permissionQuotaMinutes) || 0,
+                          action: "update_attendance_settings",
+                          userId: isBulkBalanceMode ? allEmployeesValue : selectedAccount?.userId,
+                          monthlySalary: Number(balanceForm.monthlySalary) || 0,
+                          weeklyRequiredMinutes: derivedWeeklyRequiredMinutes,
+                          lateGraceMinutes: Number(balanceForm.lateGraceMinutes) || 0,
+                          scheduleTemplateId: balanceForm.scheduleTemplateId || null,
                           workStartTime: balanceForm.workStartTime,
+                          workEndTime: balanceForm.workEndTime,
+                          periodOverrides: [
+                            {
+                              weekdays: baseAttendanceWeekday === "all_days"
+                                ? weekdayOptions.map((weekday) => weekday.value)
+                                : [Number(baseAttendanceWeekday)],
+                              startTime: balanceForm.workStartTime,
+                              endTime: balanceForm.workEndTime,
+                            },
+                            ...attendancePeriodsForm.map((period) => ({
+                              weekdays: period.weekday === "all_days"
+                                ? weekdayOptions.map((weekday) => weekday.value)
+                                : [Number(period.weekday)],
+                              startTime: period.startTime,
+                              endTime: period.endTime,
+                            })),
+                          ],
                         },
-                        selectedAccountId === allEmployeesValue ? "تم تحديث الأرصدة الأساسية لجميع الموظفين" : "تم تحديث الأرصدة الأساسية",
+                        isBulkBalanceMode ? "تم تحديث إعدادات الحضور لجميع الموظفين" : "تم تحديث إعدادات الحضور",
                       )
                     }
                   >
@@ -1152,17 +2036,330 @@ export function AdministrativeRequestsDashboard({ initialTab = "submit", attenda
                   </Button>
                 </div>
 
-                {selectedAccount ? (
-                  <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-4 text-right xl:col-span-4">
-                    <p className="text-sm font-semibold text-foreground">ملخص الحساب المحدد: {selectedAccount.name}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">المتبقي من الإجازات: {selectedAccount.leaveBalance.leaveQuotaDays - selectedAccount.leaveBalance.leaveTakenDays} يوم</p>
-                    <p className="mt-1 text-sm text-muted-foreground">المتبقي من دقائق الاستئذان: {formatMinutesLabel(selectedAccount.leaveBalance.permissionQuotaMinutes - selectedAccount.leaveBalance.permissionUsedMinutes)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">المتبقي من دقائق التأخير: {formatMinutesLabel(selectedAccount.leaveBalance.lateQuotaMinutes - selectedAccount.leaveBalance.lateUsedMinutes)}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">بداية الدوام: {selectedAccount.leaveBalance.workStartTime}</p>
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
+
+            <Accordion type="single" collapsible className="rounded-[1.5rem] border border-white/80 bg-white/95">
+              <AccordionItem value="schedule-templates" className="overflow-hidden rounded-[1.5rem] border-none">
+                <AccordionTrigger className="flex-row-reverse px-6 py-5 text-right hover:no-underline [&_svg]:shrink-0">
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-foreground">قوالب الدوام</p>
+                    <p className="mt-1 text-sm text-muted-foreground">أنشئ قوالب بفترات متعددة لكل يوم، ثم اربط القالب بالموظف من نفس الصفحة.</p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6">
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 text-right md:col-span-2">
+                    <Label className={rtlLabelClassName}>القالب</Label>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => setScheduleForm(createInitialScheduleForm())}>
+                        <Plus className="h-4 w-4" />
+                        قالب جديد
+                      </Button>
+                      <Select value={scheduleForm.templateId ?? "new_template"} onValueChange={(value) => loadTemplateIntoForm(value === "new_template" ? null : value)}>
+                        <SelectTrigger className="w-full md:max-w-sm text-right [&>span]:text-right"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="new_template">قالب جديد</SelectItem>
+                          {(data.scheduleTemplates ?? []).map((template) => (
+                            <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>اسم القالب</Label>
+                    <Input value={scheduleForm.name} onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>الوصف</Label>
+                    <Textarea value={scheduleForm.description} onChange={(event) => setScheduleForm((current) => ({ ...current, description: event.target.value }))} className={`min-h-24 ${rtlInputClassName}`} />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" dir="rtl">
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>الراتب الشهري</Label>
+                    <Input type="number" min="0" step="0.01" value={scheduleForm.monthlySalary} onChange={(event) => setScheduleForm((current) => ({ ...current, monthlySalary: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>دقائق الاستئذان المسموحة</Label>
+                    <Input type="number" min="0" value={scheduleForm.permissionQuotaMinutes} onChange={(event) => setScheduleForm((current) => ({ ...current, permissionQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>دقائق التأخير المسموحة</Label>
+                    <Input type="number" min="0" value={scheduleForm.lateQuotaMinutes} onChange={(event) => setScheduleForm((current) => ({ ...current, lateQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>سماحية التأخير</Label>
+                    <Input type="number" min="0" value={scheduleForm.lateGraceMinutes} onChange={(event) => setScheduleForm((current) => ({ ...current, lateGraceMinutes: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" dir="rtl">
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>بداية الدوام من</Label>
+                    <Input type="time" value={scheduleForm.workStartTime} onChange={(event) => setScheduleForm((current) => ({ ...current, workStartTime: event.target.value }))} className={rtlInputClassName} />
+                    <Button type="button" variant="outline" className="w-full rounded-xl" onClick={() => setScheduleForm((current) => ({
+                      ...current,
+                      periods: [...current.periods, { weekday: 0, startTime: current.workStartTime, endTime: current.workEndTime }],
+                    }))}>
+                      <Plus className="h-4 w-4" />
+                      إضافة فترة
+                    </Button>
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>نهاية الدوام إلى</Label>
+                    <Input type="time" value={scheduleForm.workEndTime} onChange={(event) => setScheduleForm((current) => ({ ...current, workEndTime: event.target.value }))} className={rtlInputClassName} />
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>الأيام</Label>
+                    <Select value={scheduleBaseWeekday} onValueChange={setScheduleBaseWeekday}>
+                      <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {attendancePeriodDayOptions.map((weekday) => (
+                          <SelectItem key={weekday.value} value={weekday.value}>{weekday.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 text-right">
+                    <Label className={rtlLabelClassName}>الخصم بالساعة</Label>
+                    <Input readOnly value={formatCurrencyLabel(scheduleFormHourlyDeductionAmount)} className={rtlInputClassName} />
+                  </div>
+                </div>
+
+                {scheduleForm.periods.length > 0 ? (
+                  <div className="space-y-4">
+                    {scheduleForm.periods.map((period, index) => (
+                      <div key={`${period.weekday}-${index}`} className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr,1fr,180px,auto]" dir="rtl">
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>بداية الدوام من</Label>
+                          <Input type="time" value={period.startTime} onChange={(event) => setScheduleForm((current) => ({ ...current, periods: current.periods.map((entry, periodIndex) => periodIndex === index ? { ...entry, startTime: event.target.value } : entry) }))} className={rtlInputClassName} />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>نهاية الدوام إلى</Label>
+                          <Input type="time" value={period.endTime} onChange={(event) => setScheduleForm((current) => ({ ...current, periods: current.periods.map((entry, periodIndex) => periodIndex === index ? { ...entry, endTime: event.target.value } : entry) }))} className={rtlInputClassName} />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>الأيام</Label>
+                          <Select value={String(period.weekday)} onValueChange={(value) => setScheduleForm((current) => ({ ...current, periods: current.periods.map((entry, periodIndex) => periodIndex === index ? { ...entry, weekday: Number(value) } : entry) }))}>
+                            <SelectTrigger className={rtlSelectTriggerClassName}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {weekdayOptions.map((weekday) => (
+                                <SelectItem key={weekday.value} value={String(weekday.value)}>{weekday.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setScheduleForm((current) => ({ ...current, periods: current.periods.filter((_, periodIndex) => periodIndex !== index) }))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-border/60 bg-muted/10 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => setScheduleForm((current) => ({ ...current, leaveTypes: [...current.leaveTypes, { name: "", allowedDays: "0" }] }))}>
+                      <Plus className="h-4 w-4" />
+                      إضافة نوع إجازة
+                    </Button>
+                    <p className="text-sm font-semibold text-foreground">أنواع الإجازات داخل القالب</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {scheduleForm.leaveTypes.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border/70 bg-white p-4 text-center text-sm text-muted-foreground">
+                        لا توجد أنواع إجازات داخل هذا القالب بعد.
+                      </div>
+                    ) : scheduleForm.leaveTypes.map((leaveType, index) => (
+                      <div key={leaveType.id ?? `template-leave-${index}`} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr,180px,auto]" dir="rtl">
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>اسم النوع</Label>
+                          <Input value={leaveType.name} onChange={(event) => setScheduleForm((current) => ({ ...current, leaveTypes: current.leaveTypes.map((entry, entryIndex) => entryIndex === index ? { ...entry, name: event.target.value } : entry) }))} className={rtlInputClassName} />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>عدد الأيام</Label>
+                          <Input type="number" min="0" value={leaveType.allowedDays} onChange={(event) => setScheduleForm((current) => ({ ...current, leaveTypes: current.leaveTypes.map((entry, entryIndex) => entryIndex === index ? { ...entry, allowedDays: event.target.value } : entry) }))} className={rtlInputClassName} />
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setScheduleForm((current) => ({ ...current, leaveTypes: current.leaveTypes.filter((_, entryIndex) => entryIndex !== index) }))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  {scheduleForm.templateId ? (
+                    <Button type="button" variant="outline" className="rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700" disabled={isPending} onClick={handleDeleteScheduleTemplate}>
+                      <Trash2 className="h-4 w-4" />
+                      حذف القالب
+                    </Button>
+                  ) : null}
+                  <Button type="button" className="rounded-xl" disabled={isPending || !scheduleForm.name.trim() || scheduleForm.leaveTypes.some((leaveType) => !leaveType.name.trim())} onClick={handleSaveScheduleTemplate}>
+                    <Plus className="h-4 w-4" />
+                    {scheduleForm.templateId ? "حفظ التعديلات" : "إضافة القالب"}
+                  </Button>
+                </div>
+              </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+
+            <Dialog open={isGlobalBalancesDialogOpen} onOpenChange={setIsGlobalBalancesDialogOpen}>
+              <DialogContent className="max-w-3xl text-right" showCloseButton={false}>
+                <DialogHeader>
+                  <DialogTitle>إدارة الأرصدة</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2" dir="rtl">
+                    <div className="space-y-2 text-right">
+                      <Label className={`${rtlLabelClassName} whitespace-nowrap`}>دقائق الاستئذان المسموحة</Label>
+                      <Input type="number" min="0" value={globalBalancesForm.permissionQuotaMinutes} onChange={(event) => setGlobalBalancesForm((current) => ({ ...current, permissionQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label className={rtlLabelClassName}>دقائق التأخير المسموحة</Label>
+                      <Input type="number" min="0" value={globalBalancesForm.lateQuotaMinutes} onChange={(event) => setGlobalBalancesForm((current) => ({ ...current, lateQuotaMinutes: event.target.value }))} className={rtlInputClassName} />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-start">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setLeaveTypesForm((current) => [...current, { name: "", allowedDays: "0", usedDays: 0 }])}
+                    >
+                      <Plus className="h-4 w-4" />
+                      إضافة نوع إجازة
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {leaveTypesForm.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                        لا توجد أنواع إجازات عامة مضافة حتى الآن.
+                      </div>
+                    ) : leaveTypesForm.map((leaveType, index) => (
+                      <div key={leaveType.id ?? `new-${index}`} className="grid gap-3 rounded-xl border border-border/60 bg-muted/10 p-4 md:grid-cols-[1fr,160px,auto]" dir="rtl">
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>اسم الإجازة</Label>
+                          <Input
+                            value={leaveType.name}
+                            onChange={(event) => setLeaveTypesForm((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, name: event.target.value } : entry))}
+                            className={rtlInputClassName}
+                          />
+                        </div>
+                        <div className="space-y-2 text-right">
+                          <Label className={rtlLabelClassName}>عدد الأيام</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={leaveType.allowedDays}
+                            onChange={(event) => setLeaveTypesForm((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, allowedDays: event.target.value } : entry))}
+                            className={rtlInputClassName}
+                          />
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => setLeaveTypesForm((current) => current.filter((_, entryIndex) => entryIndex !== index))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsGlobalBalancesDialogOpen(false)}>
+                      إغلاق
+                    </Button>
+                    <Button
+                      type="button"
+                      className="rounded-xl"
+                      disabled={isPending || leaveTypesForm.some((leaveType) => !leaveType.name.trim())}
+                      onClick={handleSaveGlobalBalances}
+                    >
+                      حفظ الأرصدة
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isOfficialHolidaysDialogOpen} onOpenChange={setIsOfficialHolidaysDialogOpen}>
+              <DialogContent className="max-w-4xl text-right">
+                <DialogHeader>
+                  <DialogTitle>الإجازات الرسمية</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,1fr)_minmax(260px,1fr)]" dir="rtl">
+                    <div className="space-y-2 text-right">
+                      <Label className={rtlLabelClassName}>اسم الإجازة</Label>
+                      <Input value={officialHolidayForm.name} onChange={(event) => setOfficialHolidayForm((current) => ({ ...current, name: event.target.value }))} className={rtlInputClassName} />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label className={rtlLabelClassName}>من تاريخ</Label>
+                      <DatePickerField value={officialHolidayForm.startDate} onChange={(value) => setOfficialHolidayForm((current) => ({ ...current, startDate: value }))} placeholder="اختر تاريخ البداية" className={`${rtlDatePickerClassName} w-full min-w-[260px]`} />
+                    </div>
+                    <div className="space-y-2 text-right">
+                      <Label className={rtlLabelClassName}>إلى تاريخ</Label>
+                      <DatePickerField value={officialHolidayForm.endDate} onChange={(value) => setOfficialHolidayForm((current) => ({ ...current, endDate: value }))} placeholder="اختر تاريخ النهاية" className={`${rtlDatePickerClassName} w-full min-w-[260px]`} />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap justify-end gap-3">
+                    {officialHolidayForm.holidayId ? (
+                      <Button type="button" variant="outline" className="rounded-xl" onClick={() => setOfficialHolidayForm({ holidayId: null, name: "", startDate: "", endDate: "" })}>
+                        إلغاء التعديل
+                      </Button>
+                    ) : null}
+                    <Button type="button" className="rounded-xl" disabled={isPending || !officialHolidayForm.name.trim() || !officialHolidayForm.startDate || !officialHolidayForm.endDate} onClick={handleSaveOfficialHoliday}>
+                      <Plus className="h-4 w-4" />
+                      {officialHolidayForm.holidayId ? "حفظ التعديل" : "إضافة إجازة رسمية"}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {data.officialHolidays.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">لا توجد إجازات رسمية مضافة حاليًا.</p>
+                    ) : data.officialHolidays.map((holiday) => (
+                      <div key={holiday.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-white p-3">
+                        <div className="flex items-center gap-2">
+                          <Button type="button" variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700" disabled={isPending} onClick={() => handleDeleteOfficialHoliday(holiday.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" className="rounded-xl" disabled={isPending} onClick={() => setOfficialHolidayForm({ holidayId: holiday.id, name: holiday.name, startDate: holiday.startDate, endDate: holiday.endDate })}>
+                            تعديل
+                          </Button>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">{holiday.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">من {formatDate(holiday.startDate)} إلى {formatDate(holiday.endDate)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            </>
           ) : null}
         </TabsContent>
       </Tabs>

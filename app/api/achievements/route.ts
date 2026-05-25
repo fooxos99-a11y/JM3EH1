@@ -22,6 +22,14 @@ type UserRow = {
   full_name: string
 }
 
+type AchievementMutationPayload = {
+  entry: WeeklyAchievementEntry
+}
+
+type AchievementDeletePayload = {
+  entryId: string
+}
+
 const postSchema = z.object({
   achievementText: z.string().trim().min(3, "أدخل نص الإنجاز"),
   imageUrl: z.string().url("رابط الصورة غير صالح").nullable().optional(),
@@ -178,13 +186,13 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseAdminClient()
-    const { error } = await supabase.from("weekly_achievement_entries").insert({
+    const { data: insertedEntries, error } = await supabase.from("weekly_achievement_entries").insert({
       user_id: user.id,
       week_start_date: weekStartDate,
       week_end_date: weekEndDate,
       achievement_text: payload.achievementText,
       image_url: payload.imageUrl ?? null,
-    })
+    }).select("id,user_id,week_start_date,week_end_date,achievement_text,image_url,created_at,updated_at")
 
     if (error) {
       if (isSchemaMissing(error)) {
@@ -194,8 +202,24 @@ export async function POST(request: Request) {
       throw new Error(error.message)
     }
 
-    const isManager = user.role === "admin" && user.permissions.includes("*")
-    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, weekStartDate))
+    const insertedEntry = insertedEntries?.[0] as AchievementRow | undefined
+    if (!insertedEntry) {
+      throw new Error("تعذر حفظ الإنجاز")
+    }
+
+    return NextResponse.json({
+      entry: {
+        id: insertedEntry.id,
+        userId: insertedEntry.user_id,
+        userName: user.name,
+        weekStartDate: insertedEntry.week_start_date,
+        weekEndDate: insertedEntry.week_end_date,
+        achievementText: insertedEntry.achievement_text,
+        imageUrl: insertedEntry.image_url,
+        createdAt: insertedEntry.created_at,
+        updatedAt: insertedEntry.updated_at,
+      },
+    } satisfies AchievementMutationPayload)
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -238,13 +262,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "يمكن تعديل إنجازات الأسبوع الحالي فقط" }, { status: 400 })
     }
 
-    const { error } = await supabase
+    const { data: updatedEntries, error } = await supabase
       .from("weekly_achievement_entries")
       .update({
         achievement_text: parsed.data.achievementText,
         image_url: parsed.data.imageUrl ?? null,
       })
       .eq("id", parsed.data.entryId)
+      .select("id,user_id,week_start_date,week_end_date,achievement_text,image_url,created_at,updated_at")
 
     if (error) {
       if (isSchemaMissing(error)) {
@@ -254,8 +279,24 @@ export async function PATCH(request: Request) {
       throw new Error(error.message)
     }
 
-    const isManager = user.role === "admin" && user.permissions.includes("*")
-    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, currentWeekStartDate))
+    const updatedEntry = updatedEntries?.[0] as AchievementRow | undefined
+    if (!updatedEntry) {
+      throw new Error("تعذر تعديل الإنجاز")
+    }
+
+    return NextResponse.json({
+      entry: {
+        id: updatedEntry.id,
+        userId: updatedEntry.user_id,
+        userName: user.name,
+        weekStartDate: updatedEntry.week_start_date,
+        weekEndDate: updatedEntry.week_end_date,
+        achievementText: updatedEntry.achievement_text,
+        imageUrl: updatedEntry.image_url,
+        createdAt: updatedEntry.created_at,
+        updatedAt: updatedEntry.updated_at,
+      },
+    } satisfies AchievementMutationPayload)
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()
@@ -308,8 +349,7 @@ export async function DELETE(request: Request) {
       throw new Error(error.message)
     }
 
-    const isManager = user.role === "admin" && user.permissions.includes("*")
-    return NextResponse.json(await loadAchievementsPageData(user.id, isManager, currentWeekStartDate))
+    return NextResponse.json({ entryId: parsed.data.entryId } satisfies AchievementDeletePayload)
   } catch (error) {
     if (error instanceof Error && error.message === "SCHEMA_MISSING") {
       return schemaResponse()

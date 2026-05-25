@@ -21,8 +21,9 @@ export default async function RootLayout({
   const primaryGradientEnd = colors.mode === 'single' ? colors.primary : colors.secondary
 
   return (
-    <html lang="ar" dir="rtl" className="bg-background">
+    <html lang="ar" dir="rtl" className="bg-background" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${cairo.variable} font-sans antialiased`}
         style={{
           ['--primary' as string]: colors.primary,

@@ -110,13 +110,171 @@ create table if not exists public.employee_leave_balances (
   allowance_used_days integer not null default 0,
   permission_quota_count integer not null default 0,
   permission_used_count integer not null default 0,
+  monthly_salary numeric(12,2) not null default 0,
+  weekly_required_minutes integer not null default 0,
+  late_grace_minutes integer not null default 0,
+  schedule_template_id uuid,
   work_start_time text not null default '08:00',
+  work_end_time text not null default '16:00',
   updated_by uuid references public.app_users(id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
 
 alter table public.employee_leave_balances add column if not exists work_start_time text not null default '08:00';
+alter table public.employee_leave_balances add column if not exists work_end_time text not null default '16:00';
+alter table public.employee_leave_balances add column if not exists monthly_salary numeric(12,2) not null default 0;
+alter table public.employee_leave_balances add column if not exists weekly_required_minutes integer not null default 0;
+alter table public.employee_leave_balances add column if not exists late_grace_minutes integer not null default 0;
+alter table public.employee_leave_balances add column if not exists schedule_template_id uuid;
+
+create table if not exists public.employee_leave_type_balances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  leave_type_name text not null,
+  allowed_days integer not null default 0,
+  used_days integer not null default 0,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, leave_type_name)
+);
+
+create index if not exists employee_leave_type_balances_user_id_idx on public.employee_leave_type_balances(user_id, sort_order);
+
+create table if not exists public.official_holidays (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  start_date date not null,
+  end_date date not null,
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (end_date >= start_date)
+);
+
+create index if not exists official_holidays_date_idx on public.official_holidays(start_date, end_date);
+
+create table if not exists public.attendance_schedule_templates (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  monthly_salary numeric(12,2) not null default 0,
+  leave_quota_days integer not null default 0,
+  late_quota_minutes integer not null default 0,
+  permission_quota_minutes integer not null default 0,
+  weekly_required_minutes integer not null default 0,
+  late_grace_minutes integer not null default 0,
+  work_start_time text not null default '08:00',
+  work_end_time text not null default '16:00',
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.attendance_schedule_templates add column if not exists monthly_salary numeric(12,2) not null default 0;
+alter table public.attendance_schedule_templates add column if not exists leave_quota_days integer not null default 0;
+alter table public.attendance_schedule_templates add column if not exists late_quota_minutes integer not null default 0;
+alter table public.attendance_schedule_templates add column if not exists permission_quota_minutes integer not null default 0;
+alter table public.attendance_schedule_templates add column if not exists weekly_required_minutes integer not null default 0;
+alter table public.attendance_schedule_templates add column if not exists late_grace_minutes integer not null default 0;
+alter table public.attendance_schedule_templates add column if not exists work_start_time text not null default '08:00';
+alter table public.attendance_schedule_templates add column if not exists work_end_time text not null default '16:00';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'employee_leave_balances_schedule_template_id_fkey'
+  ) then
+    alter table public.employee_leave_balances
+    add constraint employee_leave_balances_schedule_template_id_fkey
+    foreign key (schedule_template_id) references public.attendance_schedule_templates(id) on delete set null;
+  end if;
+end $$;
+
+create table if not exists public.attendance_schedule_template_leave_types (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references public.attendance_schedule_templates(id) on delete cascade,
+  leave_type_name text not null,
+  allowed_days integer not null default 0,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists attendance_schedule_template_leave_types_template_id_idx on public.attendance_schedule_template_leave_types(template_id, sort_order);
+
+create table if not exists public.attendance_schedule_template_periods (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references public.attendance_schedule_templates(id) on delete cascade,
+  weekday integer not null check (weekday between 0 and 6),
+  start_time text not null,
+  end_time text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists attendance_schedule_template_periods_template_id_idx on public.attendance_schedule_template_periods(template_id, weekday, sort_order);
+
+create table if not exists public.employee_attendance_period_overrides (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  override_date date,
+  weekday integer check (weekday between 0 and 6),
+  start_time text not null,
+  end_time text not null,
+  is_removed boolean not null default false,
+  note text not null default '',
+  created_by uuid references public.app_users(id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists employee_attendance_period_overrides_user_id_idx on public.employee_attendance_period_overrides(user_id, override_date, weekday);
+
+create table if not exists public.employee_monthly_permission_balances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  balance_year integer not null,
+  balance_month integer not null check (balance_month between 1 and 12),
+  allowed_minutes integer not null default 0,
+  used_minutes integer not null default 0,
+  remaining_minutes integer not null default 0,
+  reset_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, balance_year, balance_month)
+);
+
+create table if not exists public.employee_yearly_leave_balances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  balance_year integer not null,
+  allowed_days integer not null default 0,
+  used_days integer not null default 0,
+  remaining_days integer not null default 0,
+  reset_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, balance_year)
+);
+
+create table if not exists public.employee_monthly_deductions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.app_users(id) on delete cascade,
+  deduction_year integer not null,
+  deduction_month integer not null check (deduction_month between 1 and 12),
+  late_minutes integer not null default 0,
+  early_leave_minutes integer not null default 0,
+  total_deduction_amount numeric(12,2) not null default 0,
+  is_locked boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (user_id, deduction_year, deduction_month)
+);
 
 create table if not exists public.administrative_requests (
   id uuid primary key default gen_random_uuid(),
@@ -133,6 +291,7 @@ create table if not exists public.administrative_requests (
   from_time text,
   to_time text,
   leave_allocation_type leave_allocation_type,
+  leave_type_balance_id uuid references public.employee_leave_type_balances(id) on delete set null,
   reviewed_by uuid references public.app_users(id) on delete set null,
   reviewed_at timestamptz,
   rejection_reason text,
@@ -141,6 +300,7 @@ create table if not exists public.administrative_requests (
 );
 
 alter table public.administrative_requests add column if not exists target_user_id uuid references public.app_users(id) on delete set null;
+alter table public.administrative_requests add column if not exists leave_type_balance_id uuid references public.employee_leave_type_balances(id) on delete set null;
 
 create table if not exists public.work_location_settings (
   id uuid primary key default gen_random_uuid(),
@@ -297,19 +457,49 @@ create table if not exists public.operational_plan_occurrences (
 alter table public.operational_plan_occurrences add column if not exists sequence_number integer;
 alter table public.operational_plan_occurrences add column if not exists label text;
 alter table public.operational_plan_occurrences add column if not exists due_at timestamptz;
+alter table public.operational_plans add column if not exists annual_target integer;
+alter table public.operational_plan_occurrences add column if not exists target_value integer;
+alter table public.operational_plan_occurrences add column if not exists achieved_value integer;
+alter table public.operational_plan_occurrences add column if not exists progress_percentage numeric(5,2) not null default 0;
 alter table public.operational_plan_occurrences add column if not exists status text not null default 'pending';
 alter table public.operational_plan_occurrences add column if not exists completed_at timestamptz;
 alter table public.operational_plan_occurrences add column if not exists created_at timestamptz not null default timezone('utc', now());
 alter table public.operational_plan_occurrences add column if not exists updated_at timestamptz not null default timezone('utc', now());
 alter table public.operational_plan_occurrences drop constraint if exists operational_plan_occurrences_status_check;
 alter table public.operational_plan_occurrences add constraint operational_plan_occurrences_status_check check (status in ('pending', 'completed'));
+alter table public.operational_plan_occurrences drop constraint if exists operational_plan_occurrences_progress_percentage_check;
+alter table public.operational_plan_occurrences add constraint operational_plan_occurrences_progress_percentage_check check (progress_percentage >= 0 and progress_percentage <= 100);
+
+update public.operational_plan_occurrences
+set progress_percentage = 100
+where status = 'completed' and coalesce(progress_percentage, 0) < 100;
+
+update public.operational_plans
+set target_count = 12
+where coalesce(target_count, 0) <> 12;
+
+update public.operational_plans
+set annual_target = coalesce(annual_target, target_count)
+where annual_target is null;
 
 create unique index if not exists operational_plan_occurrences_plan_id_sequence_number_key on public.operational_plan_occurrences(plan_id, sequence_number);
 create index if not exists operational_plans_plan_year_idx on public.operational_plans(plan_year);
 create index if not exists operational_plan_occurrences_plan_id_idx on public.operational_plan_occurrences(plan_id);
 alter table public.user_tasks add column if not exists operational_plan_id uuid references public.operational_plans(id) on delete set null;
 alter table public.user_tasks add column if not exists operational_plan_occurrence_id uuid references public.operational_plan_occurrences(id) on delete set null;
-create unique index if not exists user_tasks_operational_plan_occurrence_id_key on public.user_tasks(operational_plan_occurrence_id) where operational_plan_occurrence_id is not null;
+alter table public.user_tasks add column if not exists operational_plan_task_index integer;
+alter table public.user_tasks add column if not exists operational_plan_task_count integer;
+alter table public.user_tasks add column if not exists operational_plan_release_at timestamptz;
+
+update public.user_tasks
+set operational_plan_task_index = 1,
+    operational_plan_task_count = 1,
+    operational_plan_release_at = coalesce(operational_plan_release_at, due_at)
+where operational_plan_occurrence_id is not null
+  and operational_plan_task_index is null;
+
+drop index if exists user_tasks_operational_plan_occurrence_id_key;
+create unique index if not exists user_tasks_operational_plan_occurrence_task_key on public.user_tasks(operational_plan_occurrence_id, operational_plan_task_index) where operational_plan_occurrence_id is not null and operational_plan_task_index is not null;
 
 update public.user_tasks
 set status = 'in_progress'
@@ -451,6 +641,34 @@ drop trigger if exists employee_leave_balances_set_updated_at on public.employee
 
 create trigger employee_leave_balances_set_updated_at
 before update on public.employee_leave_balances
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists employee_leave_type_balances_set_updated_at on public.employee_leave_type_balances;
+
+create trigger employee_leave_type_balances_set_updated_at
+before update on public.employee_leave_type_balances
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists official_holidays_set_updated_at on public.official_holidays;
+
+create trigger official_holidays_set_updated_at
+before update on public.official_holidays
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists attendance_schedule_templates_set_updated_at on public.attendance_schedule_templates;
+
+create trigger attendance_schedule_templates_set_updated_at
+before update on public.attendance_schedule_templates
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists attendance_schedule_template_leave_types_set_updated_at on public.attendance_schedule_template_leave_types;
+
+create trigger attendance_schedule_template_leave_types_set_updated_at
+before update on public.attendance_schedule_template_leave_types
 for each row
 execute function public.set_updated_at();
 

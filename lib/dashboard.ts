@@ -34,13 +34,6 @@ export const dashboardSections: DashboardGroup[] = [
         autoAccess: true,
       },
       {
-        slug: "my_files",
-        label: "ملفاتي",
-        description: "إدارة ملفاتك ومجلداتك على Google Drive مع إمكانية الانتقال إلى جميع الملفات.",
-        permission: "tasks",
-        autoAccess: true,
-      },
-      {
         slug: "my_transactions",
         label: "معاملاتي",
         description: "متابعة المعاملات الداخلية الواردة لك بنفس عرض المهام ولكن في صفحة مستقلة.",
@@ -54,18 +47,18 @@ export const dashboardSections: DashboardGroup[] = [
         permission: "administrative_requests",
         autoAccess: true,
       },
+      {
+        slug: "my_operational_plans",
+        label: "الخطة التشغيلية",
+        description: "عرض خطتك التشغيلية الشخصية ومتابعة تنفيذ عناصرها فقط.",
+        permission: "tasks",
+        autoAccess: true,
+      },
     ],
   },
   {
     title: "الإدارة",
     items: [
-      {
-        slug: "preparation-history",
-        label: "موقع التحضير",
-        description: "إدارة موقع التحضير ونطاق الحضور من صفحة مستقلة مخصصة لمدير النظام.",
-        permission: "preparation",
-        managerOnly: true,
-      },
       {
         slug: "staff_tasks",
         label: "مهام الموظفين",
@@ -74,8 +67,8 @@ export const dashboardSections: DashboardGroup[] = [
       },
       {
         slug: "operational_plans",
-        label: "الخطة التشغيلية",
-        description: "إدارة الخطط التشغيلية السنوية مع التكرار ونسبة الإنجاز وشريط التقدم.",
+        label: "الخطة التشغيلية للموظفين",
+        description: "إدارة الخطط التشغيلية للموظفين ومتابعة نسب الإنجاز والعناصر المرتبطة بها.",
         permission: "tasks",
         managerOnly: true,
       },
@@ -90,13 +83,6 @@ export const dashboardSections: DashboardGroup[] = [
         slug: "staff_employment_records",
         label: "سجلات الموظفين",
         description: "استعراض السجلات الوظيفية للموظفين من صفحة مخصصة للمدير.",
-        permission: "administrative_requests",
-        managerOnly: true,
-      },
-      {
-        slug: "administrative_balances",
-        label: "الإجازات والأذونات",
-        description: "إدارة الأرصدة الأساسية للإجازات والأذونات وأيام السماحية من صفحة مستقلة.",
         permission: "administrative_requests",
         managerOnly: true,
       },
@@ -125,15 +111,16 @@ export const dashboardSections: DashboardGroup[] = [
     title: "الخدمات",
     items: [
       {
-        slug: "service_image_to_pdf",
-        label: "تحويل إلى PDF",
-        description: "تحويل صورة واحدة أو عدة صور إلى ملف PDF جاهز للتنزيل.",
-        permission: "services",
+        slug: "my_files",
+        label: "الملفات",
+        description: "إدارة ملفاتك ومجلداتك على Google Drive مع إمكانية الانتقال إلى جميع الملفات.",
+        permission: "tasks",
+        autoAccess: true,
       },
       {
-        slug: "service_pdf_to_images",
-        label: "تحويل إلى صورة",
-        description: "استخراج صفحات PDF كصور PNG مستقلة.",
+        slug: "services",
+        label: "تحويل الملفات",
+        description: "تحويل الملفات بين PDF والصور من زر واحد بقائمة منسدلة.",
         permission: "services",
       },
       {
@@ -265,6 +252,19 @@ export const dashboardSections: DashboardGroup[] = [
         label: "ادارة الموظفين",
         description: "إنشاء الحسابات الإدارية وتحديد الصلاحيات لكل حساب.",
         permission: "permissions",
+      },
+      {
+        slug: "settings",
+        label: "الإعدادات",
+        description: "إعدادات عامة للنظام مثل يوم نهاية أسبوع الخطة التشغيلية.",
+        permission: "settings",
+      },
+      {
+        slug: "administrative_balances",
+        label: "إعدادات الحضور",
+        description: "إدارة إعدادات الحضور والأرصدة الأساسية وقوالب الدوام من صفحة مستقلة.",
+        permission: "administrative_requests",
+        managerOnly: true,
       },
     ],
   },

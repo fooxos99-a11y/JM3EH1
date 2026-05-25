@@ -30,6 +30,7 @@ export const dashboardPermissionKeys = [
   "footer",
   "colors",
   "permissions",
+  "settings",
 ] as const
 
 export type DashboardPermissionKey = (typeof dashboardPermissionKeys)[number]

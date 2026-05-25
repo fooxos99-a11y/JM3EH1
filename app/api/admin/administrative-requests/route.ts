@@ -9,6 +9,7 @@ import {
   createEmptyLeaveBalance,
   createEmptyProfile,
   formatWorkedHours,
+  getDateKeysBetween,
   getAccountTypeLabel,
   toSaudiDateInputValue,
   type AdministrativeAccountSummary,
@@ -16,8 +17,10 @@ import {
   type AdministrativeRequestRecord,
   type AttendanceDaySummary,
   type AttendanceRecord,
+  type EmployeeAttendancePeriodOverride,
   type EmployeeProfile,
   type LeaveBalance,
+  type OfficialHoliday,
   type WeeklyAttendanceSummary,
   type WorkLocationSettings,
   leaveAllocationTypeValues,
@@ -34,6 +37,7 @@ const coordinateSchema = z.object({
 
 const DEFAULT_WORK_START_MINUTES = 8 * 60
 const DEFAULT_WORK_START_TIME = "08:00"
+const DEFAULT_WORK_END_TIME = "16:00"
 const STAFF_REQUESTS_SECTION_KEY = "staff_requests"
 
 const locationIntegritySchema = z.object({
@@ -147,9 +151,14 @@ const createRequestSchema = z
     fromTime: z.string().trim().optional(),
     toTime: z.string().trim().optional(),
     leaveAllocationType: z.enum(leaveAllocationTypeValues).optional(),
+    leaveTypeBalanceId: z.string().uuid("نوع الإجازة المحدد غير صالح").optional(),
   })
   .superRefine((value, context) => {
     if (value.requestType === "leave") {
+      if (!value.leaveTypeBalanceId) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: "يجب اختيار نوع الإجازة" })
+      }
+
       if (!value.startDate || !value.endDate) {
         context.addIssue({ code: z.ZodIssueCode.custom, message: "يجب تحديد تاريخ بداية ونهاية الإجازة" })
       } else {
@@ -218,7 +227,115 @@ const patchSchema = z.discriminatedUnion("action", [
     leaveQuotaDays: z.number().min(0),
     lateQuotaMinutes: z.number().min(0),
     permissionQuotaMinutes: z.number().min(0),
+    monthlySalary: z.number().min(0),
+    weeklyRequiredMinutes: z.number().int().min(0),
+    lateGraceMinutes: z.number().int().min(0),
+    scheduleTemplateId: z.string().uuid().nullable(),
     workStartTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الدوام غير صالح"),
+    workEndTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الدوام غير صالح"),
+    leaveTypes: z.array(
+      z.object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
+        allowedDays: z.number().int().min(0),
+      }),
+    ).optional(),
+  }),
+  z.object({
+    action: z.literal("update_attendance_settings"),
+    userId: z.union([z.string().uuid(), z.literal("all_accounts")]),
+    monthlySalary: z.number().min(0),
+    weeklyRequiredMinutes: z.number().int().min(0),
+    lateGraceMinutes: z.number().int().min(0),
+    scheduleTemplateId: z.string().uuid().nullable(),
+    workStartTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الدوام غير صالح"),
+    workEndTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الدوام غير صالح"),
+    periodOverrides: z.array(
+      z.object({
+        weekdays: z.array(z.number().int().min(0).max(6)).min(1, "يجب اختيار يوم واحد على الأقل"),
+        startTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الفترة غير صالح"),
+        endTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الفترة غير صالح"),
+      }),
+    ).optional(),
+  }),
+  z.object({
+    action: z.literal("update_general_balances"),
+    leaveQuotaDays: z.number().min(0),
+    lateQuotaMinutes: z.number().min(0),
+    permissionQuotaMinutes: z.number().min(0),
+    leaveTypes: z.array(
+      z.object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
+        allowedDays: z.number().int().min(0),
+      }),
+    ),
+  }),
+  z.object({
+    action: z.literal("save_leave_types"),
+    userId: z.string().uuid("الموظف المحدد غير صالح"),
+    leaveTypes: z.array(
+      z.object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
+        allowedDays: z.number().int().min(0),
+      }),
+    ),
+  }),
+  z.object({
+    action: z.literal("save_employee_period_override"),
+    userId: z.string().uuid("الموظف المحدد غير صالح"),
+    overrideDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ الفترة غير صالح"),
+    startTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الفترة غير صالح"),
+    endTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الفترة غير صالح"),
+    note: z.string().trim().optional().transform((value) => value ?? ""),
+  }),
+  z.object({
+    action: z.literal("delete_employee_period_override"),
+    overrideId: z.string().uuid("الفترة المحددة غير صالحة"),
+  }),
+  z.object({
+    action: z.literal("save_official_holiday"),
+    holidayId: z.string().uuid().nullable().optional(),
+    name: z.string().trim().min(1, "اسم الإجازة الرسمية مطلوب"),
+    startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ البداية غير صالح"),
+    endDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "تاريخ النهاية غير صالح"),
+  }),
+  z.object({
+    action: z.literal("delete_official_holiday"),
+    holidayId: z.string().uuid("الإجازة الرسمية غير صالحة"),
+  }),
+  z.object({
+    action: z.literal("save_schedule_template"),
+    templateId: z.string().uuid().nullable().optional(),
+    name: z.string().trim().min(1, "اسم القالب مطلوب"),
+    description: z.string().trim().optional().transform((value) => value ?? ""),
+    monthlySalary: z.number().min(0),
+    leaveQuotaDays: z.number().int().min(0),
+    lateQuotaMinutes: z.number().int().min(0),
+    permissionQuotaMinutes: z.number().int().min(0),
+    weeklyRequiredMinutes: z.number().int().min(0),
+    lateGraceMinutes: z.number().int().min(0),
+    workStartTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الدوام غير صالح"),
+    workEndTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الدوام غير صالح"),
+    leaveTypes: z.array(
+      z.object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
+        allowedDays: z.number().int().min(0),
+      }),
+    ),
+    periods: z.array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        startTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت البداية غير صالح"),
+        endTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت النهاية غير صالح"),
+      }),
+    ).min(1, "يجب إضافة فترة دوام واحدة على الأقل"),
+  }),
+  z.object({
+    action: z.literal("delete_schedule_template"),
+    templateId: z.string().uuid("القالب غير صالح"),
   }),
   z.object({
     action: z.literal("configure_work_location"),
@@ -259,7 +376,87 @@ type LeaveBalanceRow = {
   allowance_used_days: number
   permission_quota_count: number
   permission_used_count: number
+  monthly_salary: number | null
+  weekly_required_minutes: number | null
+  late_grace_minutes: number | null
+  schedule_template_id: string | null
   work_start_time: string
+  work_end_time: string
+}
+
+type LeaveTypeBalanceRow = {
+  id: string
+  user_id: string
+  leave_type_name: string
+  allowed_days: number
+  used_days: number
+  sort_order: number
+}
+
+type ScheduleTemplateRow = {
+  id: string
+  name: string
+  description: string
+  monthly_salary: number | null
+  leave_quota_days: number | null
+  late_quota_minutes: number | null
+  permission_quota_minutes: number | null
+  weekly_required_minutes: number | null
+  late_grace_minutes: number | null
+  work_start_time: string
+  work_end_time: string
+}
+
+type ScheduleTemplatePeriodRow = {
+  id: string
+  template_id: string
+  weekday: number
+  start_time: string
+  end_time: string
+  sort_order: number
+}
+
+type ScheduleTemplateLeaveTypeRow = {
+  id: string
+  template_id: string
+  leave_type_name: string
+  allowed_days: number
+  sort_order: number
+}
+
+type MonthlyDeductionRow = {
+  user_id: string
+  deduction_year: number
+  deduction_month: number
+  late_minutes: number
+  early_leave_minutes: number
+  total_deduction_amount: number | null
+  is_locked: boolean
+}
+
+type AttendancePeriodOverrideRow = {
+  id: string
+  user_id: string
+  override_date: string | null
+  weekday: number | null
+  start_time: string
+  end_time: string
+  is_removed: boolean
+  note: string
+}
+
+type OfficialHolidayRow = {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
+  created_at: string
+}
+
+type ResolvedAttendanceSchedule = {
+  startMinutes: number | null
+  endMinutes: number | null
+  totalMinutes: number
 }
 
 type RequestRow = {
@@ -277,6 +474,7 @@ type RequestRow = {
   from_time: string | null
   to_time: string | null
   leave_allocation_type: (typeof leaveAllocationTypeValues)[number] | null
+  leave_type_balance_id: string | null
   reviewed_by: string | null
   reviewed_at: string | null
   rejection_reason: string | null
@@ -320,7 +518,18 @@ function isSchemaMissing(error: { code?: string; message?: string } | null | und
     return false
   }
 
-  return error.code === "42P01" || error.code === "42703" || error.code === "22P02"
+  const message = error.message?.toLowerCase() ?? ""
+
+  return (
+    error.code === "42P01" ||
+    error.code === "42703" ||
+    error.code === "22P02" ||
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("could not find the table") ||
+    message.includes("could not find the column")
+  )
 }
 
 function schemaResponse() {
@@ -405,7 +614,85 @@ function mapLeaveBalance(row: LeaveBalanceRow | undefined, userId: string): Leav
     lateUsedMinutes: row.allowance_used_days,
     permissionQuotaMinutes: row.permission_quota_count,
     permissionUsedMinutes: row.permission_used_count,
+    monthlySalary: row.monthly_salary ?? 0,
+    weeklyRequiredMinutes: row.weekly_required_minutes ?? 0,
+    lateGraceMinutes: row.late_grace_minutes ?? 0,
+    scheduleTemplateId: row.schedule_template_id ?? null,
     workStartTime: row.work_start_time || DEFAULT_WORK_START_TIME,
+    workEndTime: row.work_end_time || DEFAULT_WORK_END_TIME,
+  }
+}
+
+function mapLeaveTypeBalance(row: LeaveTypeBalanceRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.leave_type_name,
+    allowedDays: row.allowed_days,
+    usedDays: row.used_days,
+    sortOrder: row.sort_order,
+  }
+}
+
+function mapScheduleTemplateLeaveType(row: ScheduleTemplateLeaveTypeRow) {
+  return {
+    id: row.id,
+    name: row.leave_type_name,
+    allowedDays: row.allowed_days,
+    sortOrder: row.sort_order,
+  }
+}
+
+function mapAttendancePeriodOverride(row: AttendancePeriodOverrideRow): EmployeeAttendancePeriodOverride {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    overrideDate: row.override_date,
+    weekday: row.weekday,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    isRemoved: row.is_removed,
+    note: row.note,
+  }
+}
+
+function mapOfficialHoliday(row: OfficialHolidayRow): OfficialHoliday {
+  return {
+    id: row.id,
+    name: row.name,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    createdAt: row.created_at,
+  }
+}
+
+function buildOfficialHolidayDateSet(officialHolidays: Array<{ start_date: string; end_date: string }>) {
+  const holidayDates = new Set<string>()
+
+  for (const holiday of officialHolidays) {
+    for (const dateKey of getDateKeysBetween(holiday.start_date, holiday.end_date)) {
+      holidayDates.add(dateKey)
+    }
+  }
+
+  return holidayDates
+}
+
+function calculateLeaveDaysExcludingOfficialHolidays(startDate: string, endDate: string, officialHolidays: Array<{ start_date: string; end_date: string }>) {
+  const officialHolidayDateSet = buildOfficialHolidayDateSet(officialHolidays)
+
+  return getDateKeysBetween(startDate, endDate).filter((dateKey) => !officialHolidayDateSet.has(dateKey)).length
+}
+
+function applyLeaveTypeTotals(balance: LeaveBalance, leaveTypes: Array<{ allowedDays: number; usedDays: number }>) {
+  if (leaveTypes.length === 0) {
+    return balance
+  }
+
+  return {
+    ...balance,
+    leaveQuotaDays: leaveTypes.reduce((total, leaveType) => total + leaveType.allowedDays, 0),
+    leaveTakenDays: leaveTypes.reduce((total, leaveType) => total + leaveType.usedDays, 0),
   }
 }
 
@@ -454,7 +741,7 @@ function getSaudiClockMinutes(dateValue: string) {
   return hour * 60 + minute
 }
 
-function mapRequest(row: RequestRow, namesById: Map<string, string>, currentUserId: string, isManager: boolean): AdministrativeRequestRecord {
+function mapRequest(row: RequestRow, namesById: Map<string, string>, leaveTypeNamesById: Map<string, string>, currentUserId: string, isManager: boolean): AdministrativeRequestRecord {
   return {
     id: row.id,
     requesterId: row.user_id,
@@ -472,6 +759,8 @@ function mapRequest(row: RequestRow, namesById: Map<string, string>, currentUser
     fromTime: row.from_time,
     toTime: row.to_time,
     leaveAllocationType: row.leave_allocation_type,
+    leaveTypeBalanceId: row.leave_type_balance_id,
+    leaveTypeName: row.leave_type_balance_id ? leaveTypeNamesById.get(row.leave_type_balance_id) ?? null : null,
     reviewedBy: row.reviewed_by,
     reviewerName: row.reviewed_by ? namesById.get(row.reviewed_by) ?? null : null,
     reviewedAt: row.reviewed_at,
@@ -589,6 +878,348 @@ function mapWorkLocation(row: WorkLocationRow | null, namesById: Map<string, str
 
 function getSaudiDateKey(date = new Date()) {
   return toSaudiDateInputValue(date)
+}
+
+function getWeekdayFromDateKey(workDate: string) {
+  const date = new Date(`${workDate}T00:00:00Z`)
+
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return date.getUTCDay()
+}
+
+function getMonthRangeFromDateKey(workDate: string) {
+  const [yearText, monthText] = workDate.split("-")
+  const year = Number(yearText)
+  const month = Number(monthText)
+
+  if (Number.isNaN(year) || Number.isNaN(month) || month < 1 || month > 12) {
+    return null
+  }
+
+  const nextYear = month === 12 ? year + 1 : year
+  const nextMonth = month === 12 ? 1 : month + 1
+
+  return {
+    year,
+    month,
+    start: `${yearText}-${monthText}-01`,
+    end: `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}-01`,
+  }
+}
+
+function resolveAttendanceScheduleForDate(
+  periods: ScheduleTemplatePeriodRow[],
+  overrides: AttendancePeriodOverrideRow[],
+  workDate: string,
+  fallbackStartTime?: string | null,
+  fallbackEndTime?: string | null,
+): ResolvedAttendanceSchedule {
+  const matchingOverrides = overrides
+    .filter((override) => override.override_date === workDate && !override.is_removed)
+    .sort((left, right) => left.start_time.localeCompare(right.start_time))
+
+  if (matchingOverrides.length > 0) {
+    let startMinutes: number | null = null
+    let endMinutes: number | null = null
+    let totalMinutes = 0
+
+    for (const override of matchingOverrides) {
+      const periodStart = parseTimeToMinutes(override.start_time)
+      const periodEnd = parseTimeToMinutes(override.end_time)
+
+      if (periodStart === null || periodEnd === null || periodEnd <= periodStart) {
+        continue
+      }
+
+      startMinutes = startMinutes === null ? periodStart : Math.min(startMinutes, periodStart)
+      endMinutes = endMinutes === null ? periodEnd : Math.max(endMinutes, periodEnd)
+      totalMinutes += periodEnd - periodStart
+    }
+
+    return {
+      startMinutes: startMinutes ?? parseTimeToMinutes(fallbackStartTime) ?? null,
+      endMinutes,
+      totalMinutes,
+    }
+  }
+
+  const weekday = getWeekdayFromDateKey(workDate)
+  const matchingPeriods = weekday === null
+    ? []
+    : periods
+      .filter((period) => period.weekday === weekday)
+      .sort((left, right) => left.sort_order - right.sort_order)
+
+  if (matchingPeriods.length === 0) {
+    return {
+      startMinutes: parseTimeToMinutes(fallbackStartTime) ?? null,
+      endMinutes: parseTimeToMinutes(fallbackEndTime) ?? null,
+      totalMinutes: 0,
+    }
+  }
+
+  let startMinutes: number | null = null
+  let endMinutes: number | null = null
+  let totalMinutes = 0
+
+  for (const period of matchingPeriods) {
+    const periodStart = parseTimeToMinutes(period.start_time)
+    const periodEnd = parseTimeToMinutes(period.end_time)
+
+    if (periodStart === null || periodEnd === null || periodEnd <= periodStart) {
+      continue
+    }
+
+    startMinutes = startMinutes === null ? periodStart : Math.min(startMinutes, periodStart)
+    endMinutes = endMinutes === null ? periodEnd : Math.max(endMinutes, periodEnd)
+    totalMinutes += periodEnd - periodStart
+  }
+
+  return {
+    startMinutes: startMinutes ?? parseTimeToMinutes(fallbackStartTime) ?? null,
+    endMinutes,
+    totalMinutes,
+  }
+}
+
+function calculateMonthlyDeductionAmount(totalMinutes: number, monthlySalary: number, weeklyRequiredMinutes: number) {
+  if (totalMinutes <= 0 || monthlySalary <= 0 || weeklyRequiredMinutes <= 0) {
+    return 0
+  }
+
+  const averageMonthlyMinutes = Math.round((weeklyRequiredMinutes * 52) / 12)
+  if (averageMonthlyMinutes <= 0) {
+    return 0
+  }
+
+  return Number(((totalMinutes / averageMonthlyMinutes) * monthlySalary).toFixed(2))
+}
+
+function mapMonthlyDeduction(row: MonthlyDeductionRow | undefined | null) {
+  if (!row) {
+    return null
+  }
+
+  return {
+    year: row.deduction_year,
+    month: row.deduction_month,
+    lateMinutes: row.late_minutes,
+    earlyLeaveMinutes: row.early_leave_minutes,
+    totalDeductionAmount: row.total_deduction_amount ?? 0,
+    isLocked: row.is_locked,
+  }
+}
+
+async function syncLeaveTypeAggregateBalance(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  updatedBy: string,
+  currentBalance?: LeaveBalance,
+) {
+  const leaveTypeRows = await safeSelect<LeaveTypeBalanceRow>(() =>
+    supabase
+      .from("employee_leave_type_balances")
+      .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+      .eq("user_id", userId),
+  )
+
+  const baseBalance = currentBalance ?? mapLeaveBalance(undefined, userId)
+  const totals = leaveTypeRows.reduce(
+    (accumulator, row) => ({
+      allowedDays: accumulator.allowedDays + row.allowed_days,
+      usedDays: accumulator.usedDays + row.used_days,
+    }),
+    { allowedDays: 0, usedDays: 0 },
+  )
+
+  const { error } = await supabase.from("employee_leave_balances").upsert(
+    {
+      user_id: userId,
+      leave_quota_days: totals.allowedDays,
+      leave_taken_days: totals.usedDays,
+      allowance_total_days: baseBalance.lateQuotaMinutes,
+      allowance_used_days: baseBalance.lateUsedMinutes,
+      permission_quota_count: baseBalance.permissionQuotaMinutes,
+      permission_used_count: baseBalance.permissionUsedMinutes,
+      monthly_salary: baseBalance.monthlySalary,
+      weekly_required_minutes: baseBalance.weeklyRequiredMinutes,
+      late_grace_minutes: baseBalance.lateGraceMinutes,
+      schedule_template_id: baseBalance.scheduleTemplateId,
+      work_start_time: baseBalance.workStartTime,
+      work_end_time: baseBalance.workEndTime,
+      updated_by: updatedBy,
+    },
+    { onConflict: "user_id" },
+  )
+
+  return error
+}
+
+async function replaceEmployeeLeaveTypes(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  leaveTypes: Array<{ id?: string; name: string; allowedDays: number }>,
+) {
+  const existingLeaveTypes = await safeSelect<LeaveTypeBalanceRow>(() =>
+    supabase
+      .from("employee_leave_type_balances")
+      .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+      .eq("user_id", userId),
+  )
+  const existingById = new Map(existingLeaveTypes.map((row) => [row.id, row]))
+  const existingByName = new Map(existingLeaveTypes.map((row) => [row.leave_type_name.trim(), row]))
+  const retainedIds = leaveTypes.flatMap((leaveType) => leaveType.id ? [leaveType.id] : [])
+  const deleteIds = existingLeaveTypes.filter((row) => !retainedIds.includes(row.id)).map((row) => row.id)
+
+  if (deleteIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("employee_leave_type_balances")
+      .delete()
+      .in("id", deleteIds)
+
+    if (deleteError) {
+      return deleteError
+    }
+  }
+
+  if (leaveTypes.length === 0) {
+    return null
+  }
+
+  const { error: upsertError } = await supabase.from("employee_leave_type_balances").upsert(
+    leaveTypes.map((leaveType, index) => ({
+      ...(leaveType.id ? { id: leaveType.id } : {}),
+      user_id: userId,
+      leave_type_name: leaveType.name,
+      allowed_days: leaveType.allowedDays,
+      used_days: existingById.get(leaveType.id ?? "")?.used_days ?? existingByName.get(leaveType.name.trim())?.used_days ?? 0,
+      sort_order: index,
+    })),
+    { onConflict: "id" },
+  )
+
+  return upsertError
+}
+
+async function loadScheduleTemplatePeriods(templateId: string | null) {
+  if (!templateId) {
+    return [] as ScheduleTemplatePeriodRow[]
+  }
+
+  const supabase = createSupabaseAdminClient()
+  return safeSelect<ScheduleTemplatePeriodRow>(() =>
+    supabase
+      .from("attendance_schedule_template_periods")
+      .select("id,template_id,weekday,start_time,end_time,sort_order")
+      .eq("template_id", templateId)
+      .order("weekday", { ascending: true })
+      .order("sort_order", { ascending: true }),
+  )
+}
+
+async function loadAttendancePeriodOverrides(userId: string, monthRange?: { start: string; end: string } | null) {
+  const supabase = createSupabaseAdminClient()
+
+  return safeSelect<AttendancePeriodOverrideRow>(() => {
+    let query = supabase
+      .from("employee_attendance_period_overrides")
+      .select("id,user_id,override_date,weekday,start_time,end_time,is_removed,note")
+      .eq("user_id", userId)
+      .eq("is_removed", false)
+
+    if (monthRange) {
+      query = query.gte("override_date", monthRange.start).lt("override_date", monthRange.end)
+    }
+
+    return query.order("override_date", { ascending: true }).order("start_time", { ascending: true })
+  })
+}
+
+async function syncMonthlyDeductionsForAttendance(userId: string, balance: LeaveBalance, workDate: string) {
+  const monthRange = getMonthRangeFromDateKey(workDate)
+  if (!monthRange) {
+    return
+  }
+
+  const supabase = createSupabaseAdminClient()
+  const [attendanceRows, templatePeriods, attendanceOverrides, officialHolidayRows] = await Promise.all([
+    safeSelect<AttendanceRow>(() =>
+      supabase
+        .from("attendance_records")
+        .select("id,user_id,work_date,clock_in_at,clock_out_at,clock_in_latitude,clock_in_longitude,clock_out_latitude,clock_out_longitude,notes")
+        .eq("user_id", userId)
+        .gte("work_date", monthRange.start)
+        .lt("work_date", monthRange.end)
+        .order("work_date", { ascending: true })
+        .order("clock_in_at", { ascending: true }),
+    ),
+    loadScheduleTemplatePeriods(balance.scheduleTemplateId),
+    loadAttendancePeriodOverrides(userId, monthRange),
+    safeSelect<OfficialHolidayRow>(() =>
+      supabase
+        .from("official_holidays")
+        .select("id,name,start_date,end_date,created_at")
+        .lte("start_date", monthRange.end)
+        .gte("end_date", monthRange.start),
+    ),
+  ])
+  const officialHolidayDateSet = buildOfficialHolidayDateSet(officialHolidayRows)
+
+  const emptyNames = new Map<string, string>()
+  const recordsByDate = new Map<string, AttendanceRecord[]>()
+
+  for (const row of attendanceRows) {
+    const record = mapAttendance(row, emptyNames)
+    const existing = recordsByDate.get(record.workDate) ?? []
+    existing.push(record)
+    recordsByDate.set(record.workDate, existing)
+  }
+
+  let lateMinutes = 0
+  let earlyLeaveMinutes = 0
+
+  for (const [attendanceDate, dailyRecords] of recordsByDate) {
+    if (officialHolidayDateSet.has(attendanceDate)) {
+      continue
+    }
+
+    const dailySummary = buildAttendanceDaySummary(dailyRecords)
+    if (!dailySummary?.clockInAt) {
+      continue
+    }
+
+    const expectedSchedule = resolveAttendanceScheduleForDate(templatePeriods, attendanceOverrides, attendanceDate, balance.workStartTime, balance.workEndTime)
+    const firstClockMinutes = expectedSchedule.startMinutes === null ? null : getSaudiClockMinutes(dailySummary.clockInAt)
+
+    if (firstClockMinutes !== null && expectedSchedule.startMinutes !== null) {
+      lateMinutes += Math.max(0, firstClockMinutes - expectedSchedule.startMinutes - Math.max(0, balance.lateGraceMinutes))
+    }
+
+    if (dailySummary.clockOutAt && expectedSchedule.endMinutes !== null) {
+      const lastClockMinutes = getSaudiClockMinutes(dailySummary.clockOutAt)
+      earlyLeaveMinutes += Math.max(0, expectedSchedule.endMinutes - lastClockMinutes)
+    }
+  }
+
+  const { error } = await supabase.from("employee_monthly_deductions").upsert(
+    {
+      user_id: userId,
+      deduction_year: monthRange.year,
+      deduction_month: monthRange.month,
+      late_minutes: lateMinutes,
+      early_leave_minutes: earlyLeaveMinutes,
+      total_deduction_amount: calculateMonthlyDeductionAmount(lateMinutes + earlyLeaveMinutes, balance.monthlySalary, balance.weeklyRequiredMinutes),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,deduction_year,deduction_month" },
+  )
+
+  if (error && !isSchemaMissing(error)) {
+    throw new Error(error.message)
+  }
 }
 
 function getSaudiEndOfDayIso(date = new Date()) {
@@ -733,6 +1364,7 @@ async function getLatestWorkLocation() {
 async function buildDashboardData(userId: string, isManager: boolean, currentUserName: string, currentUserTitle: string): Promise<AdministrativeDashboardData> {
   const supabase = createSupabaseAdminClient()
   const permissionsContent = await getSiteSectionContent("permissions")
+  const currentMonthRange = getMonthRangeFromDateKey(getSaudiDateKey())
 
   const { data: users, error: usersError } = await supabase
     .from("app_users")
@@ -751,14 +1383,71 @@ async function buildDashboardData(userId: string, isManager: boolean, currentUse
   const leaveBalances = await safeSelect<LeaveBalanceRow>(() =>
     supabase
       .from("employee_leave_balances")
-      .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,work_start_time"),
+      .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time"),
   )
+  const leaveTypeBalanceRows = await safeSelect<LeaveTypeBalanceRow>(() =>
+    supabase
+      .from("employee_leave_type_balances")
+      .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+  )
+  const attendancePeriodOverrideRows = await safeSelect<AttendancePeriodOverrideRow>(() =>
+    supabase
+      .from("employee_attendance_period_overrides")
+      .select("id,user_id,override_date,weekday,start_time,end_time,is_removed,note")
+      .eq("is_removed", false)
+      .order("override_date", { ascending: true })
+      .order("start_time", { ascending: true }),
+  )
+  const officialHolidayRows = await safeSelect<OfficialHolidayRow>(() =>
+    supabase
+      .from("official_holidays")
+      .select("id,name,start_date,end_date,created_at")
+      .order("start_date", { ascending: true })
+      .order("created_at", { ascending: true }),
+  )
+  const scheduleTemplateRows = await safeSelect<ScheduleTemplateRow>(() =>
+    supabase
+      .from("attendance_schedule_templates")
+      .select("id,name,description,monthly_salary,leave_quota_days,late_quota_minutes,permission_quota_minutes,weekly_required_minutes,late_grace_minutes,work_start_time,work_end_time")
+      .order("created_at", { ascending: true }),
+  )
+  const scheduleTemplatePeriods = scheduleTemplateRows.length === 0
+    ? []
+    : await safeSelect<ScheduleTemplatePeriodRow>(() =>
+      supabase
+        .from("attendance_schedule_template_periods")
+        .select("id,template_id,weekday,start_time,end_time,sort_order")
+        .in("template_id", scheduleTemplateRows.map((row) => row.id))
+        .order("weekday", { ascending: true })
+        .order("sort_order", { ascending: true }),
+    )
+  const scheduleTemplateLeaveTypeRows = scheduleTemplateRows.length === 0
+    ? []
+    : await safeSelect<ScheduleTemplateLeaveTypeRow>(() =>
+      supabase
+        .from("attendance_schedule_template_leave_types")
+        .select("id,template_id,leave_type_name,allowed_days,sort_order")
+        .in("template_id", scheduleTemplateRows.map((row) => row.id))
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+    )
   const requestRows = await safeSelect<RequestRow>(() =>
     supabase
       .from("administrative_requests")
-      .select("id,user_id,request_type,target_user_id,status,subject,details,amount_requested,start_date,end_date,request_date,from_time,to_time,leave_allocation_type,reviewed_by,reviewed_at,rejection_reason,created_at")
+      .select("id,user_id,request_type,target_user_id,status,subject,details,amount_requested,start_date,end_date,request_date,from_time,to_time,leave_allocation_type,leave_type_balance_id,reviewed_by,reviewed_at,rejection_reason,created_at")
       .order("created_at", { ascending: false }),
   )
+  const monthlyDeductionRows = currentMonthRange
+    ? await safeSelect<MonthlyDeductionRow>(() =>
+      supabase
+        .from("employee_monthly_deductions")
+        .select("user_id,deduction_year,deduction_month,late_minutes,early_leave_minutes,total_deduction_amount,is_locked")
+        .eq("deduction_year", currentMonthRange.year)
+        .eq("deduction_month", currentMonthRange.month),
+    )
+    : []
   const attendanceRows = await safeSelect<AttendanceRow>(async () => {
     const query = supabase
       .from("attendance_records")
@@ -773,14 +1462,49 @@ async function buildDashboardData(userId: string, isManager: boolean, currentUse
   const namesById = new Map(userRows.map((entry) => [entry.id, entry.full_name]))
   const profilesById = new Map(profiles.map((profile) => [profile.user_id, profile]))
   const leaveBalancesById = new Map(leaveBalances.map((balance) => [balance.user_id, balance]))
+  const leaveTypeBalancesByUserId = new Map<string, ReturnType<typeof mapLeaveTypeBalance>[]>()
+  const attendanceOverridesByUserId = new Map<string, EmployeeAttendancePeriodOverride[]>()
+  const monthlyDeductionsById = new Map(monthlyDeductionRows.map((deduction) => [deduction.user_id, deduction]))
+  const schedulePeriodsByTemplateId = new Map<string, ScheduleTemplatePeriodRow[]>()
+  const scheduleTemplateLeaveTypesByTemplateId = new Map<string, ReturnType<typeof mapScheduleTemplateLeaveType>[]>()
+  const leaveTypeNamesById = new Map(leaveTypeBalanceRows.map((row) => [row.id, row.leave_type_name]))
+
+  for (const leaveTypeRow of leaveTypeBalanceRows) {
+    const existing = leaveTypeBalancesByUserId.get(leaveTypeRow.user_id) ?? []
+    existing.push(mapLeaveTypeBalance(leaveTypeRow))
+    leaveTypeBalancesByUserId.set(leaveTypeRow.user_id, existing)
+  }
+
+  for (const overrideRow of attendancePeriodOverrideRows) {
+    const existing = attendanceOverridesByUserId.get(overrideRow.user_id) ?? []
+    existing.push(mapAttendancePeriodOverride(overrideRow))
+    attendanceOverridesByUserId.set(overrideRow.user_id, existing)
+  }
+
+  for (const period of scheduleTemplatePeriods) {
+    const existing = schedulePeriodsByTemplateId.get(period.template_id) ?? []
+    existing.push(period)
+    schedulePeriodsByTemplateId.set(period.template_id, existing)
+  }
+
+  for (const leaveTypeRow of scheduleTemplateLeaveTypeRows) {
+    const existing = scheduleTemplateLeaveTypesByTemplateId.get(leaveTypeRow.template_id) ?? []
+    existing.push(mapScheduleTemplateLeaveType(leaveTypeRow))
+    scheduleTemplateLeaveTypesByTemplateId.set(leaveTypeRow.template_id, existing)
+  }
 
   const currentProfile = mapProfile(profilesById.get(userId), userId)
-  const currentLeaveBalance = mapLeaveBalance(leaveBalancesById.get(userId), userId)
+  const currentLeaveTypeBalances = leaveTypeBalancesByUserId.get(userId) ?? []
+  const currentAttendanceOverrides = attendanceOverridesByUserId.get(userId) ?? []
+  const currentLeaveBalance = applyLeaveTypeTotals(mapLeaveBalance(leaveBalancesById.get(userId), userId), currentLeaveTypeBalances)
+  const currentMonthlyDeduction = mapMonthlyDeduction(monthlyDeductionsById.get(userId))
   const currentUserRow = userRows.find((entry) => entry.id === userId)
 
   const accounts: AdministrativeAccountSummary[] = adminUserRows.map((entry) => {
     const profile = mapProfile(profilesById.get(entry.id), entry.id)
-    const leaveBalance = mapLeaveBalance(leaveBalancesById.get(entry.id), entry.id)
+    const leaveTypeBalances = leaveTypeBalancesByUserId.get(entry.id) ?? []
+    const attendancePeriodOverrides = attendanceOverridesByUserId.get(entry.id) ?? []
+    const leaveBalance = applyLeaveTypeTotals(mapLeaveBalance(leaveBalancesById.get(entry.id), entry.id), leaveTypeBalances)
 
     return {
       userId: entry.id,
@@ -791,6 +1515,9 @@ async function buildDashboardData(userId: string, isManager: boolean, currentUse
       jobTitle: titleById.get(entry.id) ?? "مدير النظام",
       profile,
       leaveBalance,
+      leaveTypeBalances,
+      attendancePeriodOverrides,
+      monthlyDeduction: mapMonthlyDeduction(monthlyDeductionsById.get(entry.id)),
       createdAt: entry.created_at,
       createdByName: profile.createdBy ? namesById.get(profile.createdBy) ?? null : null,
     }
@@ -798,10 +1525,14 @@ async function buildDashboardData(userId: string, isManager: boolean, currentUse
 
   const myRequests = requestRows
     .filter((request) => request.user_id === userId)
-    .map((request) => mapRequest(request, namesById, userId, isManager))
+    .map((request) => mapRequest(request, namesById, leaveTypeNamesById, userId, isManager))
+
+  const allRequests = isManager
+    ? requestRows.map((request) => mapRequest(request, namesById, leaveTypeNamesById, userId, isManager))
+    : []
 
   const reviewableRequests = isManager
-    ? requestRows.filter((request) => request.request_type !== "internal_transaction").map((request) => mapRequest(request, namesById, userId, isManager))
+    ? requestRows.filter((request) => request.request_type !== "internal_transaction").map((request) => mapRequest(request, namesById, leaveTypeNamesById, userId, isManager))
     : []
 
   const allAttendanceHistory = attendanceRows.map((row) => mapAttendance(row, namesById))
@@ -829,18 +1560,59 @@ async function buildDashboardData(userId: string, isManager: boolean, currentUse
       jobRank: currentProfile.jobRank,
     },
     workLocation: mapWorkLocation(workLocationRow, namesById),
+    monthlyDeduction: currentMonthlyDeduction,
+    leaveTypeBalances: currentLeaveTypeBalances,
+    attendancePeriodOverrides: currentAttendanceOverrides,
     todayAttendance,
     weeklyAttendance: buildWeeklyAttendance(attendanceHistory),
     attendanceHistory,
     allAttendanceHistory,
     myRequests,
+    allRequests,
     reviewableRequests,
     accounts,
+    scheduleTemplates: scheduleTemplateRows.map((template) => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      monthlySalary: template.monthly_salary ?? 0,
+      leaveQuotaDays: template.leave_quota_days ?? 0,
+      lateQuotaMinutes: template.late_quota_minutes ?? 0,
+      permissionQuotaMinutes: template.permission_quota_minutes ?? 0,
+      weeklyRequiredMinutes: template.weekly_required_minutes ?? 0,
+      lateGraceMinutes: template.late_grace_minutes ?? 0,
+      workStartTime: template.work_start_time || DEFAULT_WORK_START_TIME,
+      workEndTime: template.work_end_time || DEFAULT_WORK_END_TIME,
+      periods: (schedulePeriodsByTemplateId.get(template.id) ?? []).map((period) => ({
+        id: period.id,
+        weekday: period.weekday,
+        startTime: period.start_time,
+        endTime: period.end_time,
+        sortOrder: period.sort_order,
+      })),
+      leaveTypes: scheduleTemplateLeaveTypesByTemplateId.get(template.id) ?? [],
+    })),
+    officialHolidays: officialHolidayRows.map(mapOfficialHoliday),
   }
 }
 
 async function insertAdministrativeRequest(userId: string, currentUserName: string, payload: z.infer<typeof createRequestSchema>) {
   const supabase = createSupabaseAdminClient()
+
+  if (payload.requestType === "leave") {
+    const leaveTypeBalance = await safeMaybeSingle<LeaveTypeBalanceRow>(() =>
+      supabase
+        .from("employee_leave_type_balances")
+        .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+        .eq("id", payload.leaveTypeBalanceId ?? "")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    )
+
+    if (!leaveTypeBalance) {
+      return { message: "نوع الإجازة المحدد غير موجود لهذا الموظف" }
+    }
+  }
 
   if (payload.requestType === "internal_transaction") {
     if (!payload.targetUserId) {
@@ -944,6 +1716,7 @@ async function insertAdministrativeRequest(userId: string, currentUserName: stri
     from_time: payload.fromTime || null,
     to_time: payload.toTime || null,
     leave_allocation_type: payload.requestType === "leave" ? "leave_balance" : payload.leaveAllocationType ?? null,
+    leave_type_balance_id: payload.requestType === "leave" ? payload.leaveTypeBalanceId ?? null : null,
   })
 
   return error
@@ -1037,13 +1810,32 @@ async function handleClockAttendance(
     const existingBalanceRows = await safeSelect<LeaveBalanceRow>(() =>
       supabase
         .from("employee_leave_balances")
-        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,work_start_time")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
         .eq("user_id", userId),
     )
     const balance = mapLeaveBalance(existingBalanceRows[0], userId)
+    const [templatePeriods, attendanceOverrides, officialHolidayRows] = await Promise.all([
+      loadScheduleTemplatePeriods(balance.scheduleTemplateId),
+      loadAttendancePeriodOverrides(userId),
+      safeSelect<OfficialHolidayRow>(() =>
+        supabase
+          .from("official_holidays")
+          .select("id,name,start_date,end_date,created_at")
+          .lte("start_date", workDate)
+          .gte("end_date", workDate),
+      ),
+    ])
+    const isOfficialHoliday = officialHolidayRows.some((holiday) => holiday.start_date <= workDate && holiday.end_date >= workDate)
+    const expectedSchedule = resolveAttendanceScheduleForDate(
+      templatePeriods,
+      attendanceOverrides,
+      workDate,
+      balance.workStartTime || workLocation.work_start_time || DEFAULT_WORK_START_TIME,
+      balance.workEndTime || DEFAULT_WORK_END_TIME,
+    )
     const currentClockMinutes = getSaudiClockMinutes(now)
-    const configuredWorkStartMinutes = parseTimeToMinutes(balance.workStartTime) ?? parseTimeToMinutes(workLocation.work_start_time) ?? DEFAULT_WORK_START_MINUTES
-    const lateMinutes = hasAttendanceForDay ? 0 : Math.max(0, currentClockMinutes - configuredWorkStartMinutes)
+    const configuredWorkStartMinutes = expectedSchedule.startMinutes ?? parseTimeToMinutes(workLocation.work_start_time) ?? DEFAULT_WORK_START_MINUTES
+    const lateMinutes = isOfficialHoliday || hasAttendanceForDay ? 0 : Math.max(0, currentClockMinutes - configuredWorkStartMinutes - Math.max(0, balance.lateGraceMinutes))
 
     const { error } = await supabase.from("attendance_records").insert(
       {
@@ -1073,7 +1865,12 @@ async function handleClockAttendance(
           allowance_used_days: balance.lateUsedMinutes + lateMinutes,
           permission_quota_count: balance.permissionQuotaMinutes,
           permission_used_count: balance.permissionUsedMinutes,
+          monthly_salary: balance.monthlySalary,
+          weekly_required_minutes: balance.weeklyRequiredMinutes,
+          late_grace_minutes: balance.lateGraceMinutes,
+          schedule_template_id: balance.scheduleTemplateId,
           work_start_time: balance.workStartTime,
+          work_end_time: balance.workEndTime,
           updated_by: userId,
         },
         { onConflict: "user_id" },
@@ -1087,6 +1884,8 @@ async function handleClockAttendance(
         return NextResponse.json({ error: balanceUpdate.error.message }, { status: 400 })
       }
     }
+
+    await syncMonthlyDeductionsForAttendance(userId, balance, workDate).catch(() => undefined)
 
     return NextResponse.json({ ok: true })
   }
@@ -1111,6 +1910,16 @@ async function handleClockAttendance(
 
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
+
+  const existingBalanceRows = await safeSelect<LeaveBalanceRow>(() =>
+    supabase
+      .from("employee_leave_balances")
+      .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+      .eq("user_id", userId),
+  )
+  const balance = mapLeaveBalance(existingBalanceRows[0], userId)
+
+  await syncMonthlyDeductionsForAttendance(userId, balance, workDate).catch(() => undefined)
 
   return NextResponse.json({ ok: true })
 }
@@ -1237,6 +2046,173 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  if (parsed.data.action === "save_schedule_template") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه إدارة قوالب الدوام" }, { status: 403 })
+    }
+
+    const templatePayload = parsed.data
+    const normalizedPeriods = templatePayload.periods
+      .map((period, index) => ({
+        ...period,
+        sortOrder: index,
+      }))
+      .sort((left, right) => left.weekday - right.weekday || left.sortOrder - right.sortOrder)
+
+    for (const period of normalizedPeriods) {
+      const startMinutes = parseTimeInputToMinutes(period.startTime)
+      const endMinutes = parseTimeInputToMinutes(period.endTime)
+
+      if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+        return NextResponse.json({ error: "كل فترة دوام يجب أن تكون من وقت صحيح إلى وقت لاحق له" }, { status: 400 })
+      }
+    }
+
+    let templateId = templatePayload.templateId ?? null
+
+    if (templateId) {
+      const { error: updateTemplateError } = await supabase
+        .from("attendance_schedule_templates")
+        .update({
+          name: templatePayload.name,
+          description: templatePayload.description,
+          monthly_salary: templatePayload.monthlySalary,
+          leave_quota_days: templatePayload.leaveQuotaDays,
+          late_quota_minutes: templatePayload.lateQuotaMinutes,
+          permission_quota_minutes: templatePayload.permissionQuotaMinutes,
+          weekly_required_minutes: templatePayload.weeklyRequiredMinutes,
+          late_grace_minutes: templatePayload.lateGraceMinutes,
+          work_start_time: templatePayload.workStartTime,
+          work_end_time: templatePayload.workEndTime,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", templateId)
+
+      if (updateTemplateError) {
+        if (isSchemaMissing(updateTemplateError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: updateTemplateError.message }, { status: 400 })
+      }
+
+      const { error: deletePeriodsError } = await supabase
+        .from("attendance_schedule_template_periods")
+        .delete()
+        .eq("template_id", templateId)
+
+      if (deletePeriodsError) {
+        if (isSchemaMissing(deletePeriodsError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: deletePeriodsError.message }, { status: 400 })
+      }
+
+      const { error: deleteLeaveTypesError } = await supabase
+        .from("attendance_schedule_template_leave_types")
+        .delete()
+        .eq("template_id", templateId)
+
+      if (deleteLeaveTypesError) {
+        if (isSchemaMissing(deleteLeaveTypesError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: deleteLeaveTypesError.message }, { status: 400 })
+      }
+    } else {
+      const { data: insertedTemplate, error: insertTemplateError } = await supabase
+        .from("attendance_schedule_templates")
+        .insert({
+          name: templatePayload.name,
+          description: templatePayload.description,
+          monthly_salary: templatePayload.monthlySalary,
+          leave_quota_days: templatePayload.leaveQuotaDays,
+          late_quota_minutes: templatePayload.lateQuotaMinutes,
+          permission_quota_minutes: templatePayload.permissionQuotaMinutes,
+          weekly_required_minutes: templatePayload.weeklyRequiredMinutes,
+          late_grace_minutes: templatePayload.lateGraceMinutes,
+          work_start_time: templatePayload.workStartTime,
+          work_end_time: templatePayload.workEndTime,
+          created_by: user.id,
+        })
+        .select("id")
+        .maybeSingle<{ id: string }>()
+
+      if (insertTemplateError || !insertedTemplate?.id) {
+        if (isSchemaMissing(insertTemplateError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: insertTemplateError?.message ?? "تعذر إنشاء قالب الدوام" }, { status: 400 })
+      }
+
+      templateId = insertedTemplate.id
+    }
+
+    const { error: insertPeriodsError } = await supabase
+      .from("attendance_schedule_template_periods")
+      .insert(normalizedPeriods.map((period) => ({
+        template_id: templateId,
+        weekday: period.weekday,
+        start_time: period.startTime,
+        end_time: period.endTime,
+        sort_order: period.sortOrder,
+      })))
+
+    if (insertPeriodsError) {
+      if (isSchemaMissing(insertPeriodsError)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: insertPeriodsError.message }, { status: 400 })
+    }
+
+    if (templatePayload.leaveTypes.length > 0) {
+      const { error: insertLeaveTypesError } = await supabase
+        .from("attendance_schedule_template_leave_types")
+        .insert(templatePayload.leaveTypes.map((leaveType, index) => ({
+          ...(leaveType.id ? { id: leaveType.id } : {}),
+          template_id: templateId,
+          leave_type_name: leaveType.name,
+          allowed_days: leaveType.allowedDays,
+          sort_order: index,
+        })))
+
+      if (insertLeaveTypesError) {
+        if (isSchemaMissing(insertLeaveTypesError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: insertLeaveTypesError.message }, { status: 400 })
+      }
+    }
+
+    return NextResponse.json({ ok: true, templateId })
+  }
+
+  if (parsed.data.action === "delete_schedule_template") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه حذف قوالب الدوام" }, { status: 403 })
+    }
+
+    const { error } = await supabase
+      .from("attendance_schedule_templates")
+      .delete()
+      .eq("id", parsed.data.templateId)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
   if (parsed.data.action === "cancel_request") {
     const { data: requestRow, error: requestError } = await supabase
       .from("administrative_requests")
@@ -1268,20 +2244,289 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  if (parsed.data.action === "update_balance") {
+  if (parsed.data.action === "save_employee_period_override") {
     if (!user.permissions.includes("*")) {
-      return NextResponse.json({ error: "فقط مدير النظام يمكنه تحديث الأرصدة" }, { status: 403 })
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه إضافة فترة خاصة للموظف" }, { status: 403 })
     }
 
-    const targetUserIds = parsed.data.userId === "all_accounts"
+    const startMinutes = parseTimeInputToMinutes(parsed.data.startTime)
+    const endMinutes = parseTimeInputToMinutes(parsed.data.endTime)
+
+    if (!isValidDateInput(parsed.data.overrideDate) || startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+      return NextResponse.json({ error: "بيانات الفترة الخاصة غير صالحة" }, { status: 400 })
+    }
+
+    const { error } = await supabase.from("employee_attendance_period_overrides").insert({
+      user_id: parsed.data.userId,
+      override_date: parsed.data.overrideDate,
+      weekday: null,
+      start_time: parsed.data.startTime,
+      end_time: parsed.data.endTime,
+      is_removed: false,
+      note: parsed.data.note,
+      created_by: user.id,
+    })
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    const balanceRow = await safeMaybeSingle<LeaveBalanceRow>(() =>
+      supabase
+        .from("employee_leave_balances")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+        .eq("user_id", parsed.data.userId)
+        .maybeSingle(),
+    )
+
+    await syncMonthlyDeductionsForAttendance(parsed.data.userId, mapLeaveBalance(balanceRow ?? undefined, parsed.data.userId), parsed.data.overrideDate).catch(() => undefined)
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "delete_employee_period_override") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه حذف الفترات الخاصة" }, { status: 403 })
+    }
+
+    const existingOverride = await safeMaybeSingle<AttendancePeriodOverrideRow>(() =>
+      supabase
+        .from("employee_attendance_period_overrides")
+        .select("id,user_id,override_date,weekday,start_time,end_time,is_removed,note")
+        .eq("id", parsed.data.overrideId)
+        .maybeSingle(),
+    )
+
+    if (!existingOverride) {
+      return NextResponse.json({ error: "الفترة الخاصة لم تعد موجودة" }, { status: 404 })
+    }
+
+    const { error } = await supabase
+      .from("employee_attendance_period_overrides")
+      .delete()
+      .eq("id", parsed.data.overrideId)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    const balanceRow = await safeMaybeSingle<LeaveBalanceRow>(() =>
+      supabase
+        .from("employee_leave_balances")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+        .eq("user_id", existingOverride.user_id)
+        .maybeSingle(),
+    )
+
+    await syncMonthlyDeductionsForAttendance(existingOverride.user_id, mapLeaveBalance(balanceRow ?? undefined, existingOverride.user_id), existingOverride.override_date ?? getSaudiDateKey()).catch(() => undefined)
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "save_official_holiday") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه إدارة الإجازات الرسمية" }, { status: 403 })
+    }
+
+    if (!isValidDateInput(parsed.data.startDate) || !isValidDateInput(parsed.data.endDate) || parsed.data.endDate < parsed.data.startDate) {
+      return NextResponse.json({ error: "تواريخ الإجازة الرسمية غير صالحة" }, { status: 400 })
+    }
+
+    const payload = {
+      name: parsed.data.name,
+      start_date: parsed.data.startDate,
+      end_date: parsed.data.endDate,
+      created_by: user.id,
+    }
+
+    const { error } = parsed.data.holidayId
+      ? await supabase.from("official_holidays").update(payload).eq("id", parsed.data.holidayId)
+      : await supabase.from("official_holidays").insert(payload)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "delete_official_holiday") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه حذف الإجازات الرسمية" }, { status: 403 })
+    }
+
+    const { error } = await supabase
+      .from("official_holidays")
+      .delete()
+      .eq("id", parsed.data.holidayId)
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "update_attendance_settings") {
+    const attendancePayload = parsed.data
+
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه تحديث إعدادات الحضور" }, { status: 403 })
+    }
+
+    const targetUserIds = attendancePayload.userId === "all_accounts"
       ? await safeSelect<UserRow>(() =>
           supabase
             .from("app_users")
             .select("id,full_name,phone,email,role,created_at")
-            .eq("role", "admin")
             .order("created_at", { ascending: true }),
         ).then((rows) => rows.map((row) => row.id))
-      : [parsed.data.userId]
+      : [attendancePayload.userId]
+
+    if (targetUserIds.length === 0) {
+      return NextResponse.json({ error: "لا توجد حسابات متاحة لتحديث إعدادات الحضور" }, { status: 400 })
+    }
+
+    const existingRows = await safeSelect<LeaveBalanceRow>(() =>
+      supabase
+        .from("employee_leave_balances")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+        .in("user_id", targetUserIds),
+    )
+    const balancesByUserId = new Map(existingRows.map((row) => [row.user_id, row]))
+
+    const { error } = await supabase.from("employee_leave_balances").upsert(
+      targetUserIds.map((targetUserId) => {
+        const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
+
+        return {
+          user_id: targetUserId,
+          leave_quota_days: currentBalance.leaveQuotaDays,
+          leave_taken_days: currentBalance.leaveTakenDays,
+          allowance_total_days: currentBalance.lateQuotaMinutes,
+          allowance_used_days: currentBalance.lateUsedMinutes,
+          permission_quota_count: currentBalance.permissionQuotaMinutes,
+          permission_used_count: currentBalance.permissionUsedMinutes,
+          monthly_salary: attendancePayload.monthlySalary,
+          weekly_required_minutes: attendancePayload.weeklyRequiredMinutes,
+          late_grace_minutes: attendancePayload.lateGraceMinutes,
+          schedule_template_id: attendancePayload.scheduleTemplateId,
+          work_start_time: attendancePayload.workStartTime,
+          work_end_time: attendancePayload.workEndTime,
+          updated_by: user.id,
+        }
+      }),
+      { onConflict: "user_id" },
+    )
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    if (attendancePayload.periodOverrides) {
+      const uniquePeriodOverrides = attendancePayload.periodOverrides.flatMap((period) => {
+        const startMinutes = parseTimeInputToMinutes(period.startTime)
+        const endMinutes = parseTimeInputToMinutes(period.endTime)
+
+        if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+          return [null]
+        }
+
+        return [...new Set(period.weekdays)].map((weekday) => ({
+          weekday,
+          startTime: period.startTime,
+          endTime: period.endTime,
+        }))
+      })
+
+      if (uniquePeriodOverrides.some((period) => period === null)) {
+        return NextResponse.json({ error: "بيانات الفترات الأسبوعية غير صالحة" }, { status: 400 })
+      }
+
+      const normalizedPeriodOverrides = Array.from(
+        new Map(
+          uniquePeriodOverrides.map((period) => [`${period!.weekday}-${period!.startTime}-${period!.endTime}`, period!]),
+        ).values(),
+      )
+
+      for (const targetUserId of targetUserIds) {
+        const { error: deleteError } = await supabase
+          .from("employee_attendance_period_overrides")
+          .delete()
+          .eq("user_id", targetUserId)
+          .is("override_date", null)
+
+        if (deleteError) {
+          if (isSchemaMissing(deleteError)) {
+            return schemaResponse()
+          }
+
+          return NextResponse.json({ error: deleteError.message }, { status: 400 })
+        }
+
+        if (normalizedPeriodOverrides.length > 0) {
+          const { error: insertError } = await supabase
+            .from("employee_attendance_period_overrides")
+            .insert(normalizedPeriodOverrides.map((period) => ({
+              user_id: targetUserId,
+              override_date: null,
+              weekday: period.weekday,
+              start_time: period.startTime,
+              end_time: period.endTime,
+              is_removed: false,
+              note: "",
+              created_by: user.id,
+            })))
+
+          if (insertError) {
+            if (isSchemaMissing(insertError)) {
+              return schemaResponse()
+            }
+
+            return NextResponse.json({ error: insertError.message }, { status: 400 })
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "update_balance") {
+    const balancePayload = parsed.data
+
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه تحديث الأرصدة" }, { status: 403 })
+    }
+
+    const targetUserIds = balancePayload.userId === "all_accounts"
+      ? await safeSelect<UserRow>(() =>
+          supabase
+            .from("app_users")
+            .select("id,full_name,phone,email,role,created_at")
+            .order("created_at", { ascending: true }),
+        ).then((rows) => rows.map((row) => row.id))
+          : [balancePayload.userId]
 
     if (targetUserIds.length === 0) {
       return NextResponse.json({ error: "لا توجد حسابات متاحة لتحديث الأرصدة" }, { status: 400 })
@@ -1290,7 +2535,102 @@ export async function PATCH(request: Request) {
     const existingRows = await safeSelect<LeaveBalanceRow>(() =>
       supabase
         .from("employee_leave_balances")
-        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,work_start_time")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+        .in("user_id", targetUserIds),
+    )
+    const balancesByUserId = new Map(existingRows.map((row) => [row.user_id, row]))
+
+    const { error } = await supabase.from("employee_leave_balances").upsert(
+      targetUserIds.map((targetUserId) => {
+        const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
+
+        return {
+          user_id: targetUserId,
+          leave_quota_days: balancePayload.leaveQuotaDays,
+          leave_taken_days: currentBalance.leaveTakenDays,
+          allowance_total_days: balancePayload.lateQuotaMinutes,
+          allowance_used_days: currentBalance.lateUsedMinutes,
+          permission_quota_count: balancePayload.permissionQuotaMinutes,
+          permission_used_count: currentBalance.permissionUsedMinutes,
+          monthly_salary: balancePayload.monthlySalary,
+          weekly_required_minutes: balancePayload.weeklyRequiredMinutes,
+          late_grace_minutes: balancePayload.lateGraceMinutes,
+          schedule_template_id: balancePayload.scheduleTemplateId,
+          work_start_time: balancePayload.workStartTime,
+          work_end_time: balancePayload.workEndTime,
+          updated_by: user.id,
+        }
+      }),
+      { onConflict: "user_id" },
+    )
+
+    if (error) {
+      if (isSchemaMissing(error)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    if (parsed.data.leaveTypes) {
+      for (const targetUserId of targetUserIds) {
+        const replaceError = await replaceEmployeeLeaveTypes(supabase, targetUserId, parsed.data.leaveTypes)
+
+        if (replaceError) {
+          if (isSchemaMissing(replaceError)) {
+            return schemaResponse()
+          }
+
+          return NextResponse.json({ error: replaceError.message }, { status: 400 })
+        }
+
+        const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
+        const syncError = await syncLeaveTypeAggregateBalance(supabase, targetUserId, user.id, {
+          ...currentBalance,
+          leaveQuotaDays: balancePayload.leaveQuotaDays,
+          monthlySalary: balancePayload.monthlySalary,
+          weeklyRequiredMinutes: balancePayload.weeklyRequiredMinutes,
+          lateGraceMinutes: balancePayload.lateGraceMinutes,
+          scheduleTemplateId: balancePayload.scheduleTemplateId,
+          workStartTime: balancePayload.workStartTime,
+          workEndTime: balancePayload.workEndTime,
+          lateQuotaMinutes: balancePayload.lateQuotaMinutes,
+          permissionQuotaMinutes: balancePayload.permissionQuotaMinutes,
+        })
+
+        if (syncError) {
+          if (isSchemaMissing(syncError)) {
+            return schemaResponse()
+          }
+
+          return NextResponse.json({ error: syncError.message }, { status: 400 })
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "update_general_balances") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه تحديث الأرصدة العامة" }, { status: 403 })
+    }
+
+    const targetUserIds = await safeSelect<UserRow>(() =>
+      supabase
+        .from("app_users")
+        .select("id,full_name,phone,email,role,created_at")
+        .order("created_at", { ascending: true }),
+    ).then((rows) => rows.map((row) => row.id))
+
+    if (targetUserIds.length === 0) {
+      return NextResponse.json({ error: "لا توجد حسابات متاحة لتحديث الأرصدة العامة" }, { status: 400 })
+    }
+
+    const existingRows = await safeSelect<LeaveBalanceRow>(() =>
+      supabase
+        .from("employee_leave_balances")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
         .in("user_id", targetUserIds),
     )
     const balancesByUserId = new Map(existingRows.map((row) => [row.user_id, row]))
@@ -1307,7 +2647,12 @@ export async function PATCH(request: Request) {
           allowance_used_days: currentBalance.lateUsedMinutes,
           permission_quota_count: parsed.data.permissionQuotaMinutes,
           permission_used_count: currentBalance.permissionUsedMinutes,
-          work_start_time: parsed.data.workStartTime,
+          monthly_salary: currentBalance.monthlySalary,
+          weekly_required_minutes: currentBalance.weeklyRequiredMinutes,
+          late_grace_minutes: currentBalance.lateGraceMinutes,
+          schedule_template_id: currentBalance.scheduleTemplateId,
+          work_start_time: currentBalance.workStartTime,
+          work_end_time: currentBalance.workEndTime,
           updated_by: user.id,
         }
       }),
@@ -1322,6 +2667,112 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
+    for (const targetUserId of targetUserIds) {
+      const replaceError = await replaceEmployeeLeaveTypes(supabase, targetUserId, parsed.data.leaveTypes)
+
+      if (replaceError) {
+        if (isSchemaMissing(replaceError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: replaceError.message }, { status: 400 })
+      }
+
+      const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
+      const syncError = await syncLeaveTypeAggregateBalance(supabase, targetUserId, user.id, {
+        ...currentBalance,
+        leaveQuotaDays: parsed.data.leaveQuotaDays,
+        lateQuotaMinutes: parsed.data.lateQuotaMinutes,
+        permissionQuotaMinutes: parsed.data.permissionQuotaMinutes,
+      })
+
+      if (syncError) {
+        if (isSchemaMissing(syncError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: syncError.message }, { status: 400 })
+      }
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "save_leave_types") {
+    if (!user.permissions.includes("*")) {
+      return NextResponse.json({ error: "فقط مدير النظام يمكنه إدارة أنواع الإجازات" }, { status: 403 })
+    }
+
+    const existingLeaveTypes = await safeSelect<LeaveTypeBalanceRow>(() =>
+      supabase
+        .from("employee_leave_type_balances")
+        .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+        .eq("user_id", parsed.data.userId),
+    )
+    const existingById = new Map(existingLeaveTypes.map((row) => [row.id, row]))
+    const retainedIds = parsed.data.leaveTypes.flatMap((leaveType) => leaveType.id ? [leaveType.id] : [])
+    const deleteIds = existingLeaveTypes.filter((row) => !retainedIds.includes(row.id)).map((row) => row.id)
+
+    if (deleteIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("employee_leave_type_balances")
+        .delete()
+        .in("id", deleteIds)
+
+      if (deleteError) {
+        if (isSchemaMissing(deleteError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: deleteError.message }, { status: 400 })
+      }
+    }
+
+    if (parsed.data.leaveTypes.length > 0) {
+      const { error: upsertError } = await supabase.from("employee_leave_type_balances").upsert(
+        parsed.data.leaveTypes.map((leaveType, index) => ({
+          ...(leaveType.id ? { id: leaveType.id } : {}),
+          user_id: parsed.data.userId,
+          leave_type_name: leaveType.name,
+          allowed_days: leaveType.allowedDays,
+          used_days: existingById.get(leaveType.id ?? "")?.used_days ?? 0,
+          sort_order: index,
+        })),
+        { onConflict: "id" },
+      )
+
+      if (upsertError) {
+        if (isSchemaMissing(upsertError)) {
+          return schemaResponse()
+        }
+
+        return NextResponse.json({ error: upsertError.message }, { status: 400 })
+      }
+    }
+
+    const currentBalanceRow = await safeMaybeSingle<LeaveBalanceRow>(() =>
+      supabase
+        .from("employee_leave_balances")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
+        .eq("user_id", parsed.data.userId)
+        .maybeSingle(),
+    )
+
+    const syncError = await syncLeaveTypeAggregateBalance(
+      supabase,
+      parsed.data.userId,
+      user.id,
+      mapLeaveBalance(currentBalanceRow ?? undefined, parsed.data.userId),
+    )
+
+    if (syncError) {
+      if (isSchemaMissing(syncError)) {
+        return schemaResponse()
+      }
+
+      return NextResponse.json({ error: syncError.message }, { status: 400 })
+    }
+
     return NextResponse.json({ ok: true })
   }
 
@@ -1331,7 +2782,7 @@ export async function PATCH(request: Request) {
 
   const { data: row, error: rowError } = await supabase
     .from("administrative_requests")
-    .select("id,user_id,request_type,status,start_date,end_date,leave_allocation_type,from_time,to_time")
+    .select("id,user_id,request_type,status,start_date,end_date,leave_allocation_type,leave_type_balance_id,from_time,to_time")
     .eq("id", parsed.data.requestId)
     .maybeSingle<{
       id: string
@@ -1341,6 +2792,7 @@ export async function PATCH(request: Request) {
       start_date: string | null
       end_date: string | null
       leave_allocation_type: "leave_balance" | "allowance" | null
+      leave_type_balance_id: string | null
       from_time: string | null
       to_time: string | null
     }>()
@@ -1361,39 +2813,89 @@ export async function PATCH(request: Request) {
     const existingRows = await safeSelect<LeaveBalanceRow>(() =>
       supabase
         .from("employee_leave_balances")
-        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,work_start_time")
+        .select("user_id,leave_quota_days,leave_taken_days,allowance_total_days,allowance_used_days,permission_quota_count,permission_used_count,monthly_salary,weekly_required_minutes,late_grace_minutes,schedule_template_id,work_start_time,work_end_time")
         .eq("user_id", row.user_id),
     )
     const balance = mapLeaveBalance(existingRows[0], row.user_id)
 
     if (row.request_type === "leave") {
-      const requestedDays = row.start_date && row.end_date ? calculateLeaveDays(row.start_date, row.end_date) : 0
+      const officialHolidayRows = row.start_date && row.end_date
+        ? await safeSelect<OfficialHolidayRow>(() =>
+          supabase
+            .from("official_holidays")
+            .select("id,name,start_date,end_date,created_at")
+            .lte("start_date", row.end_date)
+            .gte("end_date", row.start_date),
+        )
+        : []
+      const requestedDays = row.start_date && row.end_date
+        ? calculateLeaveDaysExcludingOfficialHolidays(row.start_date, row.end_date, officialHolidayRows)
+        : 0
       if (requestedDays <= 0) {
-        return NextResponse.json({ error: "تواريخ الإجازة غير صحيحة" }, { status: 400 })
+        return NextResponse.json({ error: "الفترة المطلوبة تقع بالكامل داخل إجازة رسمية أو أن التواريخ غير صحيحة" }, { status: 400 })
       }
 
-      const remainingLeave = balance.leaveQuotaDays - balance.leaveTakenDays
+      const leaveTypeRows = await safeSelect<LeaveTypeBalanceRow>(() =>
+        supabase
+          .from("employee_leave_type_balances")
+          .select("id,user_id,leave_type_name,allowed_days,used_days,sort_order")
+          .eq("user_id", row.user_id),
+      )
+      const selectedLeaveType = row.leave_type_balance_id
+        ? leaveTypeRows.find((leaveTypeRow) => leaveTypeRow.id === row.leave_type_balance_id) ?? null
+        : null
+      const effectiveBalance = applyLeaveTypeTotals(balance, leaveTypeRows.map(mapLeaveTypeBalance))
+      const remainingLeave = selectedLeaveType
+        ? selectedLeaveType.allowed_days - selectedLeaveType.used_days
+        : effectiveBalance.leaveQuotaDays - effectiveBalance.leaveTakenDays
+
       if (remainingLeave < requestedDays) {
         return NextResponse.json({ error: "رصيد الإجازات المتبقي لا يكفي لاعتماد الطلب" }, { status: 400 })
       }
 
-      const { error } = await supabase.from("employee_leave_balances").upsert(
-        {
-          user_id: row.user_id,
-          leave_quota_days: balance.leaveQuotaDays,
-          leave_taken_days: balance.leaveTakenDays + requestedDays,
-          allowance_total_days: balance.lateQuotaMinutes,
-          allowance_used_days: balance.lateUsedMinutes,
-          permission_quota_count: balance.permissionQuotaMinutes,
-          permission_used_count: balance.permissionUsedMinutes,
-          work_start_time: balance.workStartTime,
-          updated_by: user.id,
-        },
-        { onConflict: "user_id" },
-      )
+      if (row.leave_type_balance_id) {
+        if (!selectedLeaveType) {
+          return NextResponse.json({ error: "نوع الإجازة المرتبط بالطلب لم يعد موجودًا" }, { status: 400 })
+        }
 
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 })
+        const { error: leaveTypeUpdateError } = await supabase
+          .from("employee_leave_type_balances")
+          .update({ used_days: selectedLeaveType.used_days + requestedDays })
+          .eq("id", selectedLeaveType.id)
+
+        if (leaveTypeUpdateError) {
+          return NextResponse.json({ error: leaveTypeUpdateError.message }, { status: 400 })
+        }
+
+        const syncError = await syncLeaveTypeAggregateBalance(supabase, row.user_id, user.id, balance)
+
+        if (syncError) {
+          return NextResponse.json({ error: syncError.message }, { status: 400 })
+        }
+      } else {
+        const { error } = await supabase.from("employee_leave_balances").upsert(
+          {
+            user_id: row.user_id,
+            leave_quota_days: balance.leaveQuotaDays,
+            leave_taken_days: balance.leaveTakenDays + requestedDays,
+            allowance_total_days: balance.lateQuotaMinutes,
+            allowance_used_days: balance.lateUsedMinutes,
+            permission_quota_count: balance.permissionQuotaMinutes,
+            permission_used_count: balance.permissionUsedMinutes,
+            monthly_salary: balance.monthlySalary,
+            weekly_required_minutes: balance.weeklyRequiredMinutes,
+            late_grace_minutes: balance.lateGraceMinutes,
+            schedule_template_id: balance.scheduleTemplateId,
+            work_start_time: balance.workStartTime,
+            work_end_time: balance.workEndTime,
+            updated_by: user.id,
+          },
+          { onConflict: "user_id" },
+        )
+
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
       }
     }
 
@@ -1418,6 +2920,7 @@ export async function PATCH(request: Request) {
           permission_quota_count: balance.permissionQuotaMinutes,
           permission_used_count: balance.permissionUsedMinutes + requestedMinutes,
           work_start_time: balance.workStartTime,
+          work_end_time: balance.workEndTime,
           updated_by: user.id,
         },
         { onConflict: "user_id" },

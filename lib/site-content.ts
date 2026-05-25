@@ -1,10 +1,11 @@
 import "server-only"
 
-import { unstable_noStore as noStore } from "next/cache"
+import { revalidateTag, unstable_cache } from "next/cache"
 import { z } from "zod"
 
 import { dashboardPermissionKeys, type DashboardPermissionKey } from "@/lib/dashboard-permissions"
 import { governanceSectionKeys } from "@/lib/governance"
+import { defaultOperationalPlanWeekEndDay, operationalPlanWeekEndDaySchema } from "@/lib/operational-plan-settings"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const imageSchema = z.string()
@@ -231,7 +232,7 @@ export const aboutContentSchema = z.object({
   highlight: z.string(),
   description: z.string(),
   ctaLabel: z.string(),
-  image: imageSchema,
+  image: imageSchema.trim().min(1, "صورة قسم من نحن مطلوبة"),
   visionTitle: z.string(),
   visionDescription: z.string(),
   missionTitle: z.string(),
@@ -341,6 +342,10 @@ export const permissionsContentSchema = z.object({
   accounts: z.array(adminAccountSchema),
 })
 
+export const settingsContentSchema = z.object({
+  operationalPlanWeekEndDay: operationalPlanWeekEndDaySchema.default(defaultOperationalPlanWeekEndDay),
+})
+
 export const governanceItemSchema = z.object({
   id: z.number(),
   title: z.string(),
@@ -371,6 +376,7 @@ export type FooterContent = z.infer<typeof footerContentSchema>
 export type ColorsContent = z.infer<typeof colorsContentSchema>
 export type LogoContent = z.infer<typeof logoContentSchema>
 export type PermissionsContent = z.infer<typeof permissionsContentSchema>
+export type SettingsContent = z.infer<typeof settingsContentSchema>
 export type GovernanceContent = z.infer<typeof governanceContentSchema>
 
 export const defaultHeroContent: HeroContent = {
@@ -748,6 +754,10 @@ export const defaultPermissionsContent: PermissionsContent = {
   accounts: [],
 }
 
+export const defaultSettingsContent: SettingsContent = {
+  operationalPlanWeekEndDay: defaultOperationalPlanWeekEndDay,
+}
+
 export const defaultGovernanceContent: GovernanceContent = {
   items: [],
 }
@@ -766,6 +776,7 @@ const sectionSchemas = {
   footer: footerContentSchema,
   colors: colorsContentSchema,
   permissions: permissionsContentSchema,
+  settings: settingsContentSchema,
   governance_board: governanceContentSchema,
   governance_board_members: governanceContentSchema,
   governance_general_assembly: governanceContentSchema,
@@ -794,6 +805,7 @@ const defaultContent = {
   footer: defaultFooterContent,
   colors: defaultColorsContent,
   permissions: defaultPermissionsContent,
+  settings: defaultSettingsContent,
   governance_board: defaultGovernanceContent,
   governance_board_members: defaultGovernanceContent,
   governance_general_assembly: defaultGovernanceContent,
@@ -808,6 +820,8 @@ const defaultContent = {
   governance_endowments: defaultGovernanceContent,
 }
 
+export type SiteContentMap = typeof defaultContent
+
 type SectionKey = keyof typeof sectionSchemas
 
 export type SiteSectionKey = SectionKey
@@ -816,14 +830,33 @@ export const siteSectionKeys = Object.keys(sectionSchemas) as SiteSectionKey[]
 
 export const governanceSiteSectionKeys = governanceSectionKeys as SiteSectionKey[]
 
+const loadSiteSectionContent = unstable_cache(
+  async (section: SectionKey) => {
+    const supabase = createSupabaseAdminClient()
+    const { data } = await supabase.from("site_content").select("content").eq("section_key", section).maybeSingle<{ content: unknown }>()
+
+    const parsed = sectionSchemas[section].safeParse(data?.content)
+    return parsed.success ? parsed.data : defaultContent[section]
+  },
+  ["site-section-content"],
+  {
+    revalidate: 300,
+    tags: ["site-content"],
+  },
+)
+
 export async function getSiteSectionContent<T extends SectionKey>(section: T): Promise<(typeof defaultContent)[T]> {
-  noStore()
+  return loadSiteSectionContent(section) as Promise<(typeof defaultContent)[T]>
+}
 
-  const supabase = createSupabaseAdminClient()
-  const { data } = await supabase.from("site_content").select("content").eq("section_key", section).maybeSingle<{ content: unknown }>()
+export async function getSiteSectionsContent<T extends readonly SectionKey[]>(sections: T): Promise<{ [K in T[number]]: SiteContentMap[K] }> {
+  const uniqueSections = Array.from(new Set(sections)) as T[number][]
+  const entries = await Promise.all(uniqueSections.map(async (section) => [section, await getSiteSectionContent(section)] as const))
 
-  const parsed = sectionSchemas[section].safeParse(data?.content)
-  return parsed.success ? parsed.data : defaultContent[section]
+  return entries.reduce((accumulator, [section, content]) => {
+    accumulator[section] = content
+    return accumulator
+  }, {} as { [K in T[number]]: SiteContentMap[K] })
 }
 
 export async function upsertSiteSectionContent<T extends SectionKey>(section: T, content: unknown) {
@@ -835,6 +868,8 @@ export async function upsertSiteSectionContent<T extends SectionKey>(section: T,
   if (error) {
     throw new Error(error.message)
   }
+
+  revalidateTag("site-content")
 
   return parsed
 }

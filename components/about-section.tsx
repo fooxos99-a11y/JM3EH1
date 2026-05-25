@@ -1,8 +1,8 @@
 import { AboutSectionClient } from "@/components/about-section-client"
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
-export async function AboutSection() {
-  const content = await getSiteSectionContent("about")
+export async function AboutSection({ content }: { content?: SiteContentMap["about"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("about")
 
-  return <AboutSectionClient content={content} />
+  return <AboutSectionClient content={resolvedContent} />
 }

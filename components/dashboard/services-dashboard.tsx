@@ -1,14 +1,17 @@
 "use client"
 
 import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload, X } from "lucide-react"
-import { degrees, PDFDocument, StandardFonts, rgb } from "pdf-lib"
+import { useRouter } from "next/navigation"
+import type { PDFDocument as PdfDocumentType } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { Editor } from "@tinymce/tinymce-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -53,6 +56,13 @@ type WriterTemplateConfig = {
   backgroundKind: "image" | "html"
   backgroundValue: string
   textLayers: EditableTextLayer[]
+}
+
+let pdfLibPromise: Promise<typeof import("pdf-lib")> | null = null
+
+async function loadPdfLib() {
+  pdfLibPromise ??= import("pdf-lib")
+  return pdfLibPromise
 }
 
 function formatDateTime(value: string) {
@@ -166,7 +176,7 @@ async function loadPdfJs() {
   return pdfjs
 }
 
-async function embedAssetImageForPdf(pdf: PDFDocument, imageUrl: string) {
+async function embedAssetImageForPdf(pdf: PdfDocumentType, imageUrl: string) {
   const response = await fetch(imageUrl)
   if (!response.ok) {
     throw new Error("تعذر تحميل صورة الختم أو التوقيع")
@@ -245,6 +255,7 @@ function serializeWriterTemplateConfig(config: WriterTemplateConfig) {
 }
 
 export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?: string } = {}) {
+  const router = useRouter()
   const [data, setData] = useState<ServicesDashboardData | null>(null)
   const [message, setMessage] = useState<MessageState>(null)
   const [loading, setLoading] = useState(true)
@@ -343,6 +354,36 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     [writerTextLayers, activeWriterTextLayerId],
   )
 
+  const editTextLayersByPage = useMemo(() => {
+    const layersByPage = new Map<number, EditableTextLayer[]>()
+
+    for (const layer of editTextLayers) {
+      const pageLayers = layersByPage.get(layer.pageNumber)
+      if (pageLayers) {
+        pageLayers.push(layer)
+      } else {
+        layersByPage.set(layer.pageNumber, [layer])
+      }
+    }
+
+    return layersByPage
+  }, [editTextLayers])
+
+  const placedAssetsByPage = useMemo(() => {
+    const assetsByPage = new Map<number, PlacedAsset[]>()
+
+    for (const placedAsset of placedAssets) {
+      const pageAssets = assetsByPage.get(placedAsset.pageNumber)
+      if (pageAssets) {
+        pageAssets.push(placedAsset)
+      } else {
+        assetsByPage.set(placedAsset.pageNumber, [placedAsset])
+      }
+    }
+
+    return assetsByPage
+  }, [placedAssets])
+
   useEffect(() => {
     if (!isAssetPickerOpen || assetPickerMode !== "add") {
       return
@@ -414,13 +455,12 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   function loadWriterTemplate(template: ServiceDocumentTemplate) {
-    const config = parseWriterTemplateConfig(template.contentHtml)
     setSelectedWriterTemplateId(template.id)
     setWriterTemplateTitle(template.title)
-    setWriterBackgroundKind(config.backgroundKind)
-    setWriterBackgroundValue(config.backgroundValue)
-    setWriterTextLayers(config.textLayers)
-    setActiveWriterTextLayerId(config.textLayers[0]?.id ?? null)
+    setWriterBackgroundKind("html")
+    setWriterBackgroundValue(template.contentHtml ?? "")
+    setWriterTextLayers([])
+    setActiveWriterTextLayerId(null)
   }
 
   async function prepareWriterBackground(file: File) {
@@ -607,15 +647,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     if (!writerBackgroundValue.trim()) {
-      throw new Error("ارفع ملف القالب أولًا")
+      throw new Error("أدخل محتوى القالب أولًا")
     }
-
-    const contentHtml = serializeWriterTemplateConfig({
-      version: 1,
-      backgroundKind: writerBackgroundKind,
-      backgroundValue: writerBackgroundValue,
-      textLayers: writerTextLayers,
-    })
 
     const isNew = selectedWriterTemplateId === "new"
     const response = await fetch("/api/admin/services", {
@@ -626,7 +659,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         ...(isNew ? null : { id: selectedWriterTemplateId }),
         title: writerTemplateTitle,
         description: "",
-        contentHtml,
+        contentHtml: writerBackgroundValue,
       }),
     })
 
@@ -666,6 +699,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
       throw new Error("اختر صورة واحدة على الأقل")
     }
 
+    const { PDFDocument } = await loadPdfLib()
     const pdf = await PDFDocument.create()
 
     for (const file of imageToPdfFiles) {
@@ -754,6 +788,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
 
   async function compressPdfFile(file: File) {
     const pdfjs = await loadPdfJs()
+    const { PDFDocument } = await loadPdfLib()
     const bytes = await readFileAsArrayBuffer(file)
     const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise
     const outputPdf = await PDFDocument.create()
@@ -911,6 +946,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     context.direction = "rtl"
 
     for (const layer of editTextLayers.filter((item) => item.pageNumber === pageNumber && item.text.trim())) {
+      
       context.fillStyle = layer.color
       context.font = `${layer.fontSize}px Arial`
       const x = (layer.xPercent / 100) * width
@@ -933,6 +969,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     if (editTargetIsPdf) {
+      const { PDFDocument } = await loadPdfLib()
       const outputPdf = await PDFDocument.create()
 
       for (const previewPage of editPreviewPages) {
@@ -1086,6 +1123,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     if (isPdfFile(stampTargetFile)) {
+      const { PDFDocument, degrees } = await loadPdfLib()
       const bytes = await readFileAsArrayBuffer(stampTargetFile)
       const pdf = await PDFDocument.load(bytes)
       const pages = pdf.getPages()
@@ -1181,21 +1219,11 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     }
 
     if (!writerBackgroundValue.trim()) {
-      setMessage({ type: "error", text: "ارفع ملف القالب أولًا" })
+      setMessage({ type: "error", text: "لا يوجد محتوى للتصدير" })
       return
     }
 
-    const textLayersHtml = writerTextLayers.map((layer) => `
-      <div style="position:absolute; right:${100 - layer.xPercent}%; top:${layer.yPercent}%; transform:translate(50%, -50%); color:${layer.color}; font-size:${layer.fontSize}px; line-height:1.35; white-space:pre-wrap; text-align:right;">
-        ${layer.text.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />")}
-      </div>
-    `).join("")
-
-    const backgroundHtml = writerBackgroundKind === "image"
-      ? `<div style="position:relative; min-height:1100px; background:url('${writerBackgroundValue}') center/contain no-repeat;">${textLayersHtml}</div>`
-      : `<div style="position:relative; min-height:1100px;"><div>${writerBackgroundValue}</div>${textLayersHtml}</div>`
-
-    const documentHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>${writerTemplateTitle}</title></head><body>${backgroundHtml}</body></html>`
+    const documentHtml = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>${writerTemplateTitle}</title></head><body>${writerBackgroundValue}</body></html>`
     downloadBlob(new Blob([documentHtml], { type: "application/msword;charset=utf-8" }), `${writerTemplateTitle}.doc`)
     setMessage({ type: "success", text: "تم تصدير القالب كملف Word قابل للفتح والتعديل" })
   }
@@ -1236,6 +1264,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   }
 
   const isCompactServiceView = initialTab === "stamps" || initialTab === "image_to_pdf" || initialTab === "pdf_to_images" || initialTab === "pdf_editor" || initialTab === "writer" || initialTab === "compress"
+  const isFileConversionView = initialTab === "image_to_pdf" || initialTab === "pdf_to_images"
 
   return (
     <section className="space-y-6 text-right">
@@ -1253,6 +1282,20 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           <AlertTitle>{message.type === "success" ? "تم تنفيذ العملية" : "يوجد تنبيه"}</AlertTitle>
           {message.type === "error" ? <AlertDescription>{message.text}</AlertDescription> : null}
         </Alert>
+      ) : null}
+
+      {isFileConversionView ? (
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" className="rounded-xl">تحويل الملفات</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[190px] text-right" dir="rtl">
+              <DropdownMenuItem className="justify-end" onClick={() => router.push("/dashboard/service_image_to_pdf")}>تحويل إلى PDF</DropdownMenuItem>
+              <DropdownMenuItem className="justify-end" onClick={() => router.push("/dashboard/service_pdf_to_images")}>تحويل إلى صورة</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ) : null}
 
       {isCompactServiceView ? null : (
@@ -1369,7 +1412,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                           onPointerCancel={() => setDraggingEditTextLayerId(null)}
                         >
                           <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="w-full object-contain" />
-                          {editTextLayers.filter((item) => item.pageNumber === page.pageNumber).map((layer) => (
+                          {(editTextLayersByPage.get(page.pageNumber) ?? []).map((layer) => (
                             <button
                               key={layer.id}
                               type="button"
@@ -1514,7 +1557,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
                             }}
                           >
                             <img src={page.dataUrl} alt={`Preview ${page.pageNumber}`} className="pointer-events-none select-none w-full object-contain" draggable={false} />
-                            {placedAssets.filter((placedAsset) => placedAsset.pageNumber === page.pageNumber).map((placedAsset) => {
+                            {(placedAssetsByPage.get(page.pageNumber) ?? []).map((placedAsset) => {
                               const asset = assetMap.get(placedAsset.assetId)
                               if (!asset) {
                                 return null
@@ -1776,23 +1819,8 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
         </TabsContent>
 
         <TabsContent value="writer" className="space-y-4">
-          <input
-            ref={writerTemplateFileInputRef}
-            type="file"
-            accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) {
-                void handleWriterBackgroundChange(file)
-              }
-
-              event.currentTarget.value = ""
-            }}
-          />
-
           <div className="flex items-center justify-start">
-            <Button type="button" className="rounded-xl" onClick={() => openWriterTemplatePicker(true)}><Plus className="h-4 w-4" />إضافة قالب</Button>
+            <Button type="button" className="rounded-xl" onClick={resetWriterTemplateEditor}><Plus className="h-4 w-4" />إضافة قالب</Button>
           </div>
 
           {data.templates.length > 0 ? (
@@ -1811,76 +1839,26 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
           ) : null}
 
           <div className="space-y-4 rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-            <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
-              <Input value={writerTemplateTitle} onChange={(event) => setWriterTemplateTitle(event.target.value)} placeholder="عنوان القالب" />
-              <Button type="button" variant="outline" className="rounded-xl" onClick={() => openWriterTemplatePicker(false)}>{writerBackgroundValue ? "تغيير ملف القالب" : "اختيار ملف القالب"}</Button>
-              <Button type="button" variant="outline" className="rounded-xl" onClick={addWriterTextLayer} disabled={!writerBackgroundValue || isPreparingWriterBackground}><Plus className="h-4 w-4" />إضافة نص</Button>
-            </div>
+            <Input value={writerTemplateTitle} onChange={(event) => setWriterTemplateTitle(event.target.value)} placeholder="عنوان القالب" />
 
-            {activeWriterTextLayer ? (
-              <div className="grid gap-4 rounded-[1.25rem] border border-border/60 bg-muted/10 p-4 md:grid-cols-2 xl:grid-cols-[1.4fr,0.7fr,0.7fr,auto]">
-                <div className="space-y-2 md:col-span-2 xl:col-span-1"><Label>النص</Label><Textarea rows={3} value={activeWriterTextLayer.text} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { text: event.target.value })} /></div>
-                <div className="space-y-2"><Label>حجم الخط</Label><Input type="number" min={8} value={activeWriterTextLayer.fontSize} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { fontSize: Number(event.target.value) || 16 })} /></div>
-                <div className="space-y-2"><Label>لون الخط</Label><Input type="color" value={activeWriterTextLayer.color} onChange={(event) => updateWriterTextLayer(activeWriterTextLayer.id, { color: event.target.value })} /></div>
-                <div className="flex items-end"><Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => removeWriterTextLayer(activeWriterTextLayer.id)}><Trash2 className="h-4 w-4" />حذف النص</Button></div>
-              </div>
-            ) : null}
-
-            <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4">
-              {isPreparingWriterBackground ? <div className="flex h-[520px] items-center justify-center"><LoaderCircle className="h-5 w-5 animate-spin text-primary" /></div> : writerBackgroundValue ? (
-                <div className="mx-auto max-w-4xl overflow-hidden rounded-[1.25rem] border border-white bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-                  <div
-                    className="relative min-h-[720px] w-full overflow-hidden bg-white"
-                    onPointerMove={(event) => {
-                      if (!draggingWriterTextLayerId) {
-                        return
-                      }
-
-                      const nextPosition = getWriterLayerPosition(event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY)
-                      updateWriterTextLayer(draggingWriterTextLayerId, nextPosition)
-                    }}
-                    onPointerUp={() => setDraggingWriterTextLayerId(null)}
-                    onPointerCancel={() => setDraggingWriterTextLayerId(null)}
-                  >
-                    {writerBackgroundKind === "image" ? (
-                      <img src={writerBackgroundValue} alt="Template background" className="w-full object-contain" />
-                    ) : (
-                      <div className="pointer-events-none min-h-[720px] p-10" dangerouslySetInnerHTML={{ __html: writerBackgroundValue }} />
-                    )}
-
-                    {writerTextLayers.map((layer) => (
-                      <button
-                        key={layer.id}
-                        type="button"
-                        className={`absolute min-w-[120px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-dashed px-3 py-2 text-right shadow-sm ${activeWriterTextLayerId === layer.id ? "border-primary bg-white/95" : "border-slate-300/80 bg-white/85"}`}
-                        style={{
-                          left: `${layer.xPercent}%`,
-                          top: `${layer.yPercent}%`,
-                          color: layer.color,
-                          fontSize: `${layer.fontSize}px`,
-                          lineHeight: 1.35,
-                        }}
-                        onPointerDown={(event) => {
-                          event.stopPropagation()
-                          setActiveWriterTextLayerId(layer.id)
-                          setDraggingWriterTextLayerId(layer.id)
-                          event.currentTarget.setPointerCapture(event.pointerId)
-                        }}
-                        onPointerUp={(event) => {
-                          event.stopPropagation()
-                          setDraggingWriterTextLayerId(null)
-                        }}
-                      >
-                        {layer.text || "نص جديد"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : <div className="flex h-[520px] items-center justify-center rounded-[1.25rem] border border-dashed border-border/70 bg-white text-sm text-muted-foreground">ارفع صورة أو صفحة PDF أو ملف Word بصيغة DOCX ليكون خلفية للقالب.</div>}
+            <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4" dir="rtl">
+              <Editor
+                apiKey="no-api-key"
+                value={writerBackgroundValue}
+                onEditorChange={(value) => setWriterBackgroundValue(value)}
+                init={{
+                  height: 500,
+                  directionality: "rtl",
+                  language: "ar",
+                  menubar: true,
+                  plugins: ["lists", "link", "table", "image", "code", "wordcount"],
+                  toolbar: "undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist | table image | code",
+                }}
+              />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">{activeWriterTextLayer ? `النص المحدد: ${activeWriterTextLayer.text || "نص جديد"}` : `عدد النصوص المضافة: ${writerTextLayers.length}`}</p>
+              <p className="text-sm text-muted-foreground">حرر النص ثم احفظ القالب أو نزّل ملف Word.</p>
               <div className="flex flex-wrap gap-2">
                 {selectedWriterTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedWriterTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب</Button> : null}
                 <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}><FileText className="h-4 w-4" />تنزيل Word</Button>

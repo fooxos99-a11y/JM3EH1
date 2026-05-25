@@ -1,8 +1,8 @@
 import { AchievementsSectionClient } from "@/components/achievements-section-client"
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
-export async function AchievementsSection() {
-  const content = await getSiteSectionContent("achievements")
+export async function AchievementsSection({ content }: { content?: SiteContentMap["achievements"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("achievements")
 
-  return <AchievementsSectionClient content={content} />
+  return <AchievementsSectionClient content={resolvedContent} />
 }

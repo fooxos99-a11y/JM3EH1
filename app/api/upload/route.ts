@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const BUCKET_NAME = "site-assets"
+const IMMUTABLE_ASSET_CACHE_SECONDS = "31536000"
 
 export async function POST(request: Request) {
   const user = await getCurrentUser()
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
 
     const { error } = await supabase.storage.from(BUCKET_NAME).upload(path, Buffer.from(arrayBuffer), {
+      cacheControl: IMMUTABLE_ASSET_CACHE_SECONDS,
       contentType: file.type || "application/octet-stream",
       upsert: false,
     })

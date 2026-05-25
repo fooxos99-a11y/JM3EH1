@@ -18,6 +18,7 @@ import { NewsEditor } from "@/components/dashboard/news-editor"
 import { PartnersEditor } from "@/components/dashboard/partners-editor"
 import { PermissionsEditor } from "@/components/dashboard/permissions-editor"
 import { ProjectsEditor } from "@/components/dashboard/projects-editor"
+import { SettingsEditor } from "@/components/dashboard/settings-editor"
 import { SupportersDashboard } from "@/components/dashboard/supporters-dashboard"
 import { ServicesDashboard } from "@/components/dashboard/services-dashboard"
 import { OperationalPlansPageClient } from "@/components/operational-plans-page-client"
@@ -136,8 +137,12 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
     return <TasksPageClient embedded view="manager" />
   }
 
+  if (section === "my_operational_plans") {
+    return <OperationalPlansPageClient embedded view="personal" />
+  }
+
   if (section === "operational_plans") {
-    return <OperationalPlansPageClient embedded />
+    return <OperationalPlansPageClient embedded view="manager" />
   }
 
   if (section === "logo") {
@@ -202,6 +207,11 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
 
   if (section === "permissions") {
     return <PermissionsEditor />
+  }
+
+  if (section === "settings") {
+    const content = await getSiteSectionContent("settings")
+    return <SettingsEditor initialContent={content} />
   }
 
   const governanceSection = section as (typeof governanceSectionKeys)[number]

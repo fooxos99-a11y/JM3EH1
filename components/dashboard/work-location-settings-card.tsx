@@ -1,0 +1,417 @@
+"use client"
+
+import { AlertCircle, CircleAlert, LoaderCircle, MapPin } from "lucide-react"
+import { useEffect, useState, useTransition } from "react"
+
+import { WorkLocationMapPicker } from "@/components/dashboard/work-location-map-picker"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Slider } from "@/components/ui/slider"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { type WorkLocationSettings } from "@/lib/administrative-services"
+
+const defaultRiyadhCoordinates = {
+  latitude: 24.7136,
+  longitude: 46.6753,
+}
+
+type WorkLocationPayload = {
+  workLocation: WorkLocationSettings
+}
+
+type GeoSample = {
+  latitude: number
+  longitude: number
+  accuracy: number
+}
+
+const maxAcceptedLocationAccuracy = 1000
+
+function buildGoogleMapsUrl(latitude: number, longitude: number) {
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+}
+
+function formatReportedAccuracy(accuracy: number) {
+  return new Intl.NumberFormat("ar", {
+    minimumFractionDigits: accuracy < 10 ? 2 : 1,
+    maximumFractionDigits: accuracy < 10 ? 2 : 1,
+  }).format(accuracy)
+}
+
+function buildLocationCaptureMessage(accuracy: number) {
+  const formattedAccuracy = formatReportedAccuracy(accuracy)
+
+  if (accuracy <= 100) {
+    return `تم التقاط أفضل موقع متاح. الدقة المبلّغ عنها من الجهاز: ${formattedAccuracy} متر. احفظ التغييرات لتحديث موقع الحضور.`
+  }
+
+  return `تم التقاط أفضل موقع متاح، لكن دقة الموقع الحالية محدودة. الدقة المبلّغ عنها من الجهاز: ${formattedAccuracy} متر. يمكنك المحاولة مرة أخرى للحصول على دقة أفضل، أو حفظ التغييرات لتحديث موقع الحضور.`
+}
+
+function getBestCurrentLocation() {
+  return new Promise<GeoSample>((resolve, reject) => {
+    if (!("geolocation" in navigator)) {
+      reject(new Error("المتصفح الحالي لا يدعم خدمات الموقع"))
+      return
+    }
+
+    let bestSample: GeoSample | null = null
+    let watchId: number | null = null
+    let settled = false
+
+    const finish = (sample?: GeoSample, error?: Error) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+      window.clearTimeout(timeoutId)
+
+      if (sample) {
+        resolve(sample)
+        return
+      }
+
+      reject(error ?? new Error("تعذر قراءة موقعك الحالي"))
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (bestSample && bestSample.accuracy <= maxAcceptedLocationAccuracy) {
+        finish(bestSample)
+        return
+      }
+
+      finish(undefined, new Error("تعذر قراءة موقعك الحالي بدقة مناسبة"))
+    }, 12000)
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const rawAccuracy = position.coords.accuracy
+
+        if (!Number.isFinite(rawAccuracy) || rawAccuracy < 0) {
+          return
+        }
+
+        const sample = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: rawAccuracy,
+        }
+
+        if (!bestSample || sample.accuracy < bestSample.accuracy) {
+          bestSample = sample
+        }
+
+        if (sample.accuracy <= 30) {
+          finish(sample)
+        }
+      },
+      () => {
+        if (bestSample) {
+          finish(bestSample)
+          return
+        }
+
+        finish(undefined, new Error("تعذر قراءة موقعك الحالي. تأكد من منح إذن الموقع للمتصفح وتشغيل دقة الموقع العالية."))
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    )
+  })
+}
+
+function parseCoordinatesFromGoogleMapsUrl(url: string) {
+  const normalizedUrl = url.trim()
+
+  if (!normalizedUrl) {
+    return null
+  }
+
+  const patterns = [
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /[?&]center=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+  ]
+
+  for (const pattern of patterns) {
+    const match = normalizedUrl.match(pattern)
+    if (!match) {
+      continue
+    }
+
+    const latitude = Number.parseFloat(match[1])
+    const longitude = Number.parseFloat(match[2])
+
+    if (!Number.isNaN(latitude) && !Number.isNaN(longitude)) {
+      return { latitude, longitude }
+    }
+  }
+
+  return null
+}
+
+function HelpTooltip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="inline-flex h-6 w-6 items-center justify-center rounded-full text-primary transition hover:bg-primary/10 hover:text-primary" aria-label="معلومات إضافية">
+          <CircleAlert className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8} className="max-w-72 rounded-2xl border border-white/80 bg-white px-4 py-3 text-right text-sm leading-6 text-slate-700 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function WorkLocationSettingsCard() {
+  const [workLocation, setWorkLocation] = useState<WorkLocationSettings | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [locationForm, setLocationForm] = useState({
+    name: "",
+    address: "",
+    radiusMeters: 100,
+    latitude: defaultRiyadhCoordinates.latitude,
+    longitude: defaultRiyadhCoordinates.longitude,
+    googleMapsUrl: "",
+  })
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadWorkLocation() {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await fetch("/api/admin/attendance-history", { cache: "no-store" })
+      const nextPayload = (await response.json()) as WorkLocationPayload & { error?: string }
+
+      if (!response.ok) {
+        if (!ignore) {
+          setError(nextPayload.error ?? "تعذر تحميل موقع التحضير")
+          setIsLoading(false)
+        }
+        return
+      }
+
+      if (!ignore) {
+        setWorkLocation(nextPayload.workLocation)
+        setIsLoading(false)
+      }
+    }
+
+    void loadWorkLocation()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!workLocation) {
+      return
+    }
+
+    setLocationForm({
+      name: workLocation.name,
+      address: workLocation.address,
+      radiusMeters: workLocation.radiusMeters,
+      latitude: workLocation.latitude ?? defaultRiyadhCoordinates.latitude,
+      longitude: workLocation.longitude ?? defaultRiyadhCoordinates.longitude,
+      googleMapsUrl: workLocation.googleMapsUrl,
+    })
+  }, [workLocation])
+
+  async function reloadWorkLocation() {
+    const response = await fetch("/api/admin/attendance-history", { cache: "no-store" })
+    const nextPayload = (await response.json()) as WorkLocationPayload & { error?: string }
+
+    if (!response.ok) {
+      throw new Error(nextPayload.error ?? "تعذر تحميل موقع التحضير")
+    }
+
+    setWorkLocation(nextPayload.workLocation)
+  }
+
+  function handleMapLocationChange(coordinates: { latitude: number; longitude: number }) {
+    setLocationForm((current) => ({
+      ...current,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      googleMapsUrl: buildGoogleMapsUrl(coordinates.latitude, coordinates.longitude),
+    }))
+  }
+
+  function handleGoogleMapsUrlChange(nextUrl: string) {
+    const parsedCoordinates = parseCoordinatesFromGoogleMapsUrl(nextUrl)
+
+    setLocationForm((current) => ({
+      ...current,
+      googleMapsUrl: nextUrl,
+      latitude: parsedCoordinates?.latitude ?? current.latitude,
+      longitude: parsedCoordinates?.longitude ?? current.longitude,
+    }))
+  }
+
+  function handleUseCurrentLocation() {
+    setFeedback(null)
+
+    startTransition(async () => {
+      try {
+        const sample = await getBestCurrentLocation()
+
+        setLocationForm((current) => ({
+          ...current,
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+          googleMapsUrl: buildGoogleMapsUrl(sample.latitude, sample.longitude),
+        }))
+
+        setFeedback({
+          type: "success",
+          text: buildLocationCaptureMessage(sample.accuracy),
+        })
+      } catch (nextError) {
+        setFeedback({
+          type: "error",
+          text: nextError instanceof Error ? nextError.message : "تعذر قراءة موقعك الحالي",
+        })
+      }
+    })
+  }
+
+  function handleSaveLocation() {
+    setFeedback(null)
+
+    startTransition(async () => {
+      try {
+        const parsedCoordinates = parseCoordinatesFromGoogleMapsUrl(locationForm.googleMapsUrl)
+        const latitude = parsedCoordinates?.latitude ?? locationForm.latitude
+        const longitude = parsedCoordinates?.longitude ?? locationForm.longitude
+        const name = locationForm.name.trim() || workLocation?.name || "موقع العمل الرئيسي"
+        const address = locationForm.address.trim() || (locationForm.googleMapsUrl.trim() ? "تم تحديد الموقع عبر الرابط" : "")
+
+        const response = await fetch("/api/admin/administrative-requests", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "configure_work_location",
+            name,
+            address,
+            latitude,
+            longitude,
+            radiusMeters: locationForm.radiusMeters,
+            googleMapsUrl: locationForm.googleMapsUrl || buildGoogleMapsUrl(latitude, longitude),
+          }),
+        })
+
+        const result = (await response.json()) as { error?: string }
+        if (!response.ok) {
+          throw new Error(result.error ?? "تعذر حفظ موقع العمل")
+        }
+
+        setFeedback({ type: "success", text: "تم حفظ موقع الحضور بنجاح" })
+        await reloadWorkLocation()
+      } catch (nextError) {
+        setFeedback({ type: "error", text: nextError instanceof Error ? nextError.message : "تعذر حفظ موقع العمل" })
+      }
+    })
+  }
+
+  return (
+    <Card className="rounded-[1.75rem] border border-white/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+      <CardHeader className="text-right">
+        <div className="flex flex-row-reverse items-center justify-end gap-2 text-right">
+          <HelpTooltip text="حدّد موقع العمل ونطاق الحضور المعتمد، وسيُستخدم هذا الموقع عند التحقق من حضور الموظفين." />
+          <CardTitle className="text-right">موقع التحضير</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {feedback ? (
+          <Alert className={feedback.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}>
+            {feedback.type === "success" ? <MapPin className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <AlertTitle>{feedback.type === "success" ? "تم تنفيذ العملية" : "تعذر تنفيذ العملية"}</AlertTitle>
+            <AlertDescription>{feedback.text}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {error ? (
+          <Alert className="rounded-[1.5rem] border-red-200 bg-red-50/80 text-right">
+            <AlertTitle>تعذر تحميل البيانات</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {isLoading ? (
+          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/70 p-10 text-center">
+            <LoaderCircle className="mx-auto h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 text-right">
+                <Label htmlFor="settings-location-name">اسم الموقع</Label>
+                <Input id="settings-location-name" value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
+              </div>
+              <div className="space-y-2 text-right">
+                <Label htmlFor="settings-location-address">العنوان</Label>
+                <Input id="settings-location-address" value={locationForm.address} onChange={(event) => setLocationForm((current) => ({ ...current, address: event.target.value }))} />
+              </div>
+            </div>
+
+            <WorkLocationMapPicker
+              value={{ latitude: locationForm.latitude, longitude: locationForm.longitude }}
+              radiusMeters={locationForm.radiusMeters}
+              onChange={handleMapLocationChange}
+            />
+
+            <div className="space-y-3 rounded-[1.5rem] border border-border/60 bg-muted/10 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-row-reverse items-center justify-end gap-2 text-right">
+                  <HelpTooltip text="حرّك المؤشر لتحديد المسافة المسموح بها بين موقع الموظف والموقع المعتمد أثناء تسجيل الحضور." />
+                  <p className="font-semibold text-foreground">نطاق الحضور المسموح</p>
+                </div>
+                <span className="text-sm font-semibold text-primary">{locationForm.radiusMeters} متر</span>
+              </div>
+              <Slider value={[locationForm.radiusMeters]} min={50} max={1000} step={10} onValueChange={([value]) => setLocationForm((current) => ({ ...current, radiusMeters: value }))} />
+            </div>
+
+            <div className="space-y-2 text-right">
+              <div className="flex flex-row-reverse items-center justify-end gap-2 text-right">
+                <HelpTooltip text="يمكنك لصق رابط Google Maps مباشرة وسيتم استخراج الإحداثيات منه تلقائيًا." />
+                <Label htmlFor="settings-location-url" className="text-right">رابط Google Maps</Label>
+              </div>
+              <Input id="settings-location-url" value={locationForm.googleMapsUrl} onChange={(event) => handleGoogleMapsUrlChange(event.target.value)} placeholder="https://www.google.com/maps/..." />
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={handleUseCurrentLocation} disabled={isPending}>
+                <MapPin className="h-4 w-4" />
+                استخدام موقعي الحالي
+              </Button>
+              <Button type="button" className="rounded-xl" onClick={handleSaveLocation} disabled={isPending}>
+                {isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                حفظ موقع التحضير
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

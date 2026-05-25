@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import Image from "next/image"
 import { X, ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
 
 import type { GalleryContent } from "@/lib/site-content"
@@ -106,10 +107,13 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
                     className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-all duration-500 hover:shadow-2xl"
                     onClick={() => setSelectedImage(index)}
                   >
-                    <img
+                    <Image
                       src={image.src}
                       alt={image.title}
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      fill
+                      priority={index < itemsPerView}
+                      sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      className="object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/20 to-transparent opacity-0 transition-all duration-500 group-hover:opacity-100" />
                     <div className="absolute inset-0 flex translate-y-4 flex-col justify-end p-4 opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
@@ -165,11 +169,13 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
             <ChevronLeft className="h-8 w-8 text-white" />
           </button>
 
-          <div className="relative max-h-[85vh] max-w-5xl animate-scale-in" onClick={(event) => event.stopPropagation()}>
-            <img
+          <div className="relative h-[85vh] w-[min(92vw,80rem)] animate-scale-in" onClick={(event) => event.stopPropagation()}>
+            <Image
               src={galleryImages[selectedImage].src}
               alt={galleryImages[selectedImage].title}
-              className="max-h-[85vh] max-w-full rounded-lg object-contain"
+              fill
+              sizes="92vw"
+              className="rounded-lg object-contain"
             />
 
             <div className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-gradient-to-t from-black/80 to-transparent p-6">

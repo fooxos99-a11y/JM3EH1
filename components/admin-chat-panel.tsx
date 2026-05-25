@@ -72,8 +72,10 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
   const [isPending, startTransition] = useTransition()
   const [triggerPosition, setTriggerPosition] = useState<FloatingPosition | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const triggerButtonRef = useRef<HTMLButtonElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const dragStateRef = useRef<{ pointerId: number; moved: boolean } | null>(null)
+  const dragStateRef = useRef<{ pointerId: number; moved: boolean; offsetX: number; offsetY: number } | null>(null)
+  const liveTriggerPositionRef = useRef<FloatingPosition | null>(null)
   const suppressTriggerClickRef = useRef(false)
   const sidePositionClass = side === "left" ? "left-0" : "right-0"
   const sideBorderClass = side === "left" ? "border-r" : "border-l"
@@ -92,6 +94,15 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
 
   function persistFloatingPosition(nextPosition: FloatingPosition) {
     window.localStorage.setItem(FLOATING_TRIGGER_STORAGE_KEY, JSON.stringify(nextPosition))
+  }
+
+  function applyFloatingPosition(nextPosition: FloatingPosition) {
+    liveTriggerPositionRef.current = nextPosition
+
+    if (triggerButtonRef.current) {
+      triggerButtonRef.current.style.left = `${nextPosition.x}px`
+      triggerButtonRef.current.style.top = `${nextPosition.y}px`
+    }
   }
 
   async function loadChat() {
@@ -141,17 +152,32 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
     const savedValue = window.localStorage.getItem(FLOATING_TRIGGER_STORAGE_KEY)
     if (savedValue) {
       try {
-        setTriggerPosition(clampFloatingPosition(JSON.parse(savedValue) as FloatingPosition))
+        const nextPosition = clampFloatingPosition(JSON.parse(savedValue) as FloatingPosition)
+        liveTriggerPositionRef.current = nextPosition
+        setTriggerPosition(nextPosition)
         return
       } catch {
       }
     }
 
-    setTriggerPosition({
+    const nextPosition = {
       x: window.innerWidth - FLOATING_TRIGGER_SIZE - FLOATING_TRIGGER_MARGIN,
       y: window.innerHeight - FLOATING_TRIGGER_SIZE - FLOATING_TRIGGER_MARGIN,
-    })
+    }
+
+    liveTriggerPositionRef.current = nextPosition
+    setTriggerPosition(nextPosition)
   }, [iconOnly])
+
+  useEffect(() => {
+    if (!iconOnly) {
+      return
+    }
+
+    if (triggerPosition) {
+      applyFloatingPosition(triggerPosition)
+    }
+  }, [iconOnly, triggerPosition])
 
   useEffect(() => {
     if (!iconOnly) {
@@ -245,6 +271,8 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
     dragStateRef.current = {
       pointerId: event.pointerId,
       moved: false,
+      offsetX: event.clientX - (liveTriggerPositionRef.current?.x ?? 0),
+      offsetY: event.clientY - (liveTriggerPositionRef.current?.y ?? 0),
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -255,15 +283,15 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
     }
 
     const nextPosition = clampFloatingPosition({
-      x: event.clientX - (FLOATING_TRIGGER_SIZE / 2),
-      y: event.clientY - (FLOATING_TRIGGER_SIZE / 2),
+      x: event.clientX - dragStateRef.current.offsetX,
+      y: event.clientY - dragStateRef.current.offsetY,
     })
 
-    if (Math.abs(nextPosition.x - (triggerPosition?.x ?? 0)) > 2 || Math.abs(nextPosition.y - (triggerPosition?.y ?? 0)) > 2) {
+    if (Math.abs(nextPosition.x - (liveTriggerPositionRef.current?.x ?? 0)) > 2 || Math.abs(nextPosition.y - (liveTriggerPositionRef.current?.y ?? 0)) > 2) {
       dragStateRef.current.moved = true
     }
 
-    setTriggerPosition(nextPosition)
+    applyFloatingPosition(nextPosition)
   }
 
   function handleTriggerPointerEnd(event: React.PointerEvent<HTMLButtonElement>) {
@@ -273,8 +301,9 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
 
     suppressTriggerClickRef.current = dragStateRef.current.moved
 
-    if (triggerPosition) {
-      persistFloatingPosition(triggerPosition)
+    if (liveTriggerPositionRef.current) {
+      setTriggerPosition(liveTriggerPositionRef.current)
+      persistFloatingPosition(liveTriggerPositionRef.current)
     }
 
     dragStateRef.current = null
@@ -292,10 +321,11 @@ export function AdminChatPanel({ iconOnly = false, triggerClassName = "", side =
   return (
     <>
       <Button
+        ref={triggerButtonRef}
         type="button"
         variant="outline"
         size={iconOnly ? "icon" : "default"}
-        className={`${iconOnly ? "rounded-full touch-none cursor-grab active:cursor-grabbing" : "rounded-2xl"} ${triggerClassName}`.trim()}
+        className={`${iconOnly ? "rounded-full touch-none cursor-grab active:cursor-grabbing transition-none" : "rounded-2xl"} ${triggerClassName}`.trim()}
         style={iconOnly && triggerPosition ? { left: triggerPosition.x, top: triggerPosition.y, right: "auto", bottom: "auto", position: "fixed" } : undefined}
         aria-label={open ? "إغلاق المحادثة الإدارية" : "فتح المحادثة الإدارية"}
         aria-expanded={open}

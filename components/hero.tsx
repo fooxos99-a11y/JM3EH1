@@ -1,8 +1,8 @@
 import { HeroClient } from "@/components/hero-client"
-import { getSiteSectionContent } from "@/lib/site-content"
+import { getSiteSectionContent, type SiteContentMap } from "@/lib/site-content"
 
-export async function Hero() {
-  const content = await getSiteSectionContent("hero")
+export async function Hero({ content }: { content?: SiteContentMap["hero"] } = {}) {
+  const resolvedContent = content ?? await getSiteSectionContent("hero")
 
-  return <HeroClient content={content} />
+  return <HeroClient content={resolvedContent} />
 }

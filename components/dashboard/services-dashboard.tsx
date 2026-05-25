@@ -3,7 +3,6 @@
 import { Download, FileImage, FilePenLine, FileText, LoaderCircle, Plus, Save, Stamp, Trash2, Upload, X } from "lucide-react"
 import type { PDFDocument as PdfDocumentType } from "pdf-lib"
 import { useEffect, useMemo, useRef, useState, useTransition } from "react"
-import { Editor } from "@tinymce/tinymce-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -274,6 +273,7 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   const [draggingWriterTextLayerId, setDraggingWriterTextLayerId] = useState<string | null>(null)
   const [isPreparingWriterBackground, setIsPreparingWriterBackground] = useState(false)
   const writerTemplateFileInputRef = useRef<HTMLInputElement>(null)
+  const writerEditorRef = useRef<HTMLDivElement>(null)
 
   const [imageToPdfFiles, setImageToPdfFiles] = useState<File[]>([])
   const [pdfToImagesFile, setPdfToImagesFile] = useState<File | null>(null)
@@ -324,6 +324,18 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
   useEffect(() => {
     setCurrentTab(initialTab)
   }, [initialTab])
+
+  useEffect(() => {
+    const editor = writerEditorRef.current
+    if (!editor) {
+      return
+    }
+
+    const nextContent = writerBackgroundValue.trim() ? writerBackgroundValue : "<p></p>"
+    if (editor.innerHTML !== nextContent) {
+      editor.innerHTML = nextContent
+    }
+  }, [currentTab, selectedWriterTemplateId, writerBackgroundValue])
 
   const assetStats = useMemo(() => ({
     total: data?.assets.length ?? 0,
@@ -563,6 +575,17 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
     const xPercent = ((clientX - rect.left) / rect.width) * 100
     const yPercent = ((clientY - rect.top) / rect.height) * 100
     return { xPercent: clamp(xPercent, 0, 100), yPercent: clamp(yPercent, 0, 100) }
+  }
+
+  function applyWriterFormat(command: string) {
+    const editor = writerEditorRef.current
+    if (!editor) {
+      return
+    }
+
+    editor.focus()
+    document.execCommand(command, false)
+    setWriterBackgroundValue(editor.innerHTML)
   }
 
   async function handleCreateAsset() {
@@ -1847,23 +1870,29 @@ export function ServicesDashboard({ initialTab = "image_to_pdf" }: { initialTab?
             </div>
 
             <div className="rounded-[1.25rem] border border-border/60 bg-muted/10 p-4" dir="rtl">
-              <Editor
-                apiKey="no-api-key"
-                value={writerBackgroundValue}
-                onEditorChange={(value) => setWriterBackgroundValue(value)}
-                init={{
-                  height: 500,
-                  directionality: "rtl",
-                  language: "ar",
-                  menubar: true,
-                  plugins: ["lists", "link", "table", "image", "code", "wordcount"],
-                  toolbar: "undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist | table image | code",
-                }}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("bold")}>عريض</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("italic")}>مائل</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("underline")}>تحته خط</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("insertUnorderedList")}>تعداد نقطي</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("insertOrderedList")}>تعداد رقمي</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("justifyRight")}>يمين</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("justifyCenter")}>وسط</Button>
+                <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("justifyLeft")}>يسار</Button>
+                <Button type="button" variant="ghost" size="sm" className="rounded-lg" onClick={() => applyWriterFormat("removeFormat")}>مسح التنسيق</Button>
+              </div>
+              <div
+                ref={writerEditorRef}
+                className="min-h-[500px] rounded-[1rem] border border-border/70 bg-white p-4 text-right leading-8 focus:outline-none"
+                contentEditable
+                suppressContentEditableWarning
+                dir="rtl"
+                onInput={(event) => setWriterBackgroundValue(event.currentTarget.innerHTML)}
               />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">حرر المحتوى مباشرة عبر TinyMCE ثم احفظ القالب أو نزّله كملف Word.</p>
+              <p className="text-sm text-muted-foreground">المحرر محلي بالكامل داخل النظام، احفظ القالب أو نزّله كملف Word.</p>
               <div className="flex flex-wrap gap-2">
                 {selectedWriterTemplate ? <Button type="button" variant="ghost" className="rounded-xl text-red-600 hover:text-red-700" onClick={() => runTask(() => handleDeleteTemplate(selectedWriterTemplate.id))}><Trash2 className="h-4 w-4" />حذف القالب</Button> : null}
                 <Button type="button" variant="outline" className="rounded-xl" onClick={exportTemplateAsWord}><FileText className="h-4 w-4" />تنزيل Word</Button>

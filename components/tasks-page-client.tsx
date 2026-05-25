@@ -294,37 +294,45 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
 
   async function loadData() {
     setLoading(true)
-    const response = await fetch(tasksApiUrl, { cache: "no-store" })
-    const payload = await response.json() as TasksPageData & { error?: string }
+    try {
+      const response = await fetch(tasksApiUrl, { cache: "no-store" })
+      const payload = (await response.json().catch(() => ({}))) as TasksPageData & { error?: string }
 
-    if (!response.ok) {
-      setMessage({ type: "error", text: payload.error ?? "تعذر تحميل المهام" })
+      if (!response.ok) {
+        setMessage({ type: "error", text: payload.error ?? "تعذر تحميل المهام" })
+        return
+      }
+
+      applyPayload(payload)
+    } catch {
+      setMessage({ type: "error", text: "تعذر تحميل المهام" })
+    } finally {
       setLoading(false)
-      return
     }
-
-    applyPayload(payload)
-    setLoading(false)
   }
 
   async function markKindNotificationsRead(targetKind: TaskKind) {
     setLoading(true)
-    const response = await fetch(`/api/tasks?kind=${targetKind}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark_kind_notifications_read", kind: targetKind }),
-    })
-    const payload = await response.json() as TasksPageData & { error?: string }
+    try {
+      const response = await fetch(`/api/tasks?kind=${targetKind}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark_kind_notifications_read", kind: targetKind }),
+      })
+      const payload = (await response.json().catch(() => ({}))) as TasksPageData & { error?: string }
 
-    if (!response.ok) {
-      setMessage({ type: "error", text: payload.error ?? "تعذر تحديث الإشعارات" })
+      if (!response.ok) {
+        setMessage({ type: "error", text: payload.error ?? "تعذر تحديث الإشعارات" })
+        return
+      }
+
+      applyPayload(payload)
+      window.dispatchEvent(new Event("dashboard-badges-changed"))
+    } catch {
+      setMessage({ type: "error", text: "تعذر تحديث الإشعارات" })
+    } finally {
       setLoading(false)
-      return
     }
-
-    applyPayload(payload)
-    setLoading(false)
-    window.dispatchEvent(new Event("dashboard-badges-changed"))
   }
 
   useEffect(() => {

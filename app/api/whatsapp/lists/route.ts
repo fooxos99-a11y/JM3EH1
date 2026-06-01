@@ -3,7 +3,7 @@ import { z } from "zod"
 
 import { hasPermission, isPhoneValid, normalizePhone, requireCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { WHATSAPP_RECIPIENT_LISTS_SETTING_ID } from "@/lib/whatsapp-config"
+import { WHATSAPP_RECIPIENT_LISTS_SETTING_ID } from "@/lib/whatsapp-server-config"
 
 const recipientSchema = z.object({
   name: z.string().trim().min(1, "اسم المستلم مطلوب"),

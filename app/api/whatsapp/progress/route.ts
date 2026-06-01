@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { hasPermission, requireCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { WHATSAPP_QUEUE_TABLE } from "@/lib/whatsapp-config"
+import { WHATSAPP_QUEUE_TABLE } from "@/lib/whatsapp-server-config"
 
 export const dynamic = "force-dynamic"
 

@@ -4,7 +4,8 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { getDefaultWhatsAppWorkerStatus, type WhatsAppWorkerStatus, WHATSAPP_WORKER_STATE_SETTING_ID } from "@/lib/whatsapp-config"
+import { getDefaultWhatsAppWorkerStatus, type WhatsAppWorkerStatus } from "@/lib/whatsapp-config"
+import { WHATSAPP_WORKER_STATE_SETTING_ID } from "@/lib/whatsapp-server-config"
 
 type WorkerStatusPayload = Partial<Omit<WhatsAppWorkerStatus, "workerOnline" | "qrImageUrl">>
 

@@ -1,7 +1,8 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { normalizeWhatsAppDeliveryMode, type WhatsAppDeliveryMode, WHATSAPP_DELIVERY_MODE_SETTING_ID } from "@/lib/whatsapp-config"
+import { normalizeWhatsAppDeliveryMode, type WhatsAppDeliveryMode } from "@/lib/whatsapp-config"
+import { WHATSAPP_DELIVERY_MODE_SETTING_ID } from "@/lib/whatsapp-server-config"
 
 const DEFAULT_MODE: WhatsAppDeliveryMode = "cloud"
 

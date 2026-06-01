@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 
 import { hasPermission, isPhoneValid, normalizePhone, requireCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { isWhatsAppWorkerReady, WHATSAPP_HISTORY_TABLE, WHATSAPP_QUEUE_TABLE } from "@/lib/whatsapp-config"
+import { isWhatsAppWorkerReady } from "@/lib/whatsapp-config"
+import { WHATSAPP_HISTORY_TABLE, WHATSAPP_QUEUE_TABLE } from "@/lib/whatsapp-server-config"
 import { readWhatsAppWorkerStatus } from "@/lib/whatsapp-worker-status"
 
 type RecipientInput = {

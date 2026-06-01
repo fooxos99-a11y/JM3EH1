@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { FileSpreadsheet, LoaderCircle, Pencil, Plus, Search } from "lucide-react"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
@@ -504,28 +503,6 @@ export function SupportersDashboard() {
           event.currentTarget.value = ""
         }}
       />
-
-      <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">الداعمون</h1>
-            <p className="mt-3 text-sm leading-7 text-muted-foreground">
-              إضافة داعمين يدويًا أو عبر Excel، إدارة بياناتهم من نفس الصفحة، وتصفح القاعدة بترقيم واضح مع إمكانية التصدير إلى Excel.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2 md:self-start">
-            {isWhatsAppPickerMode ? (
-              <Button type="button" className="rounded-2xl" onClick={pushSelectedSupportersToWhatsApp}>
-                استخدام المحدد في صفحة الواتس
-              </Button>
-            ) : null}
-            <Button asChild type="button" className="rounded-2xl">
-              <Link href="/dashboard/supporters-whatsapp">الإرسال عبر الواتس</Link>
-            </Button>
-          </div>
-        </div>
-      </div>
 
       {message ? (
         <Alert className={message.type === "success" ? "rounded-[1.5rem] border-emerald-200 bg-emerald-50/80 text-right text-emerald-900" : "rounded-[1.5rem] border-red-200 bg-red-50/80 text-right"}>

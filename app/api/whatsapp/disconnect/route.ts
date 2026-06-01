@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { hasPermission, requireCurrentUser } from "@/lib/auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
-import { WHATSAPP_WORKER_COMMAND_SETTING_ID } from "@/lib/whatsapp-config"
+import { WHATSAPP_WORKER_COMMAND_SETTING_ID } from "@/lib/whatsapp-server-config"
 import { readWhatsAppWorkerStatus } from "@/lib/whatsapp-worker-status"
 
 export const dynamic = "force-dynamic"

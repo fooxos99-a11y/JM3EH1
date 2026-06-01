@@ -40,6 +40,35 @@ create table if not exists public.site_content (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.site_settings (
+  id text primary key,
+  value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.whatsapp_queue (
+  id uuid primary key default gen_random_uuid(),
+  phone_number text not null,
+  message text not null,
+  status text not null default 'pending',
+  error_message text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(),
+  phone_number text not null,
+  message_text text not null,
+  status text not null default 'pending',
+  message_id text,
+  error_message text,
+  sent_by uuid references public.app_users(id) on delete set null,
+  sent_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'employee_gender') then
@@ -594,6 +623,10 @@ create index if not exists user_drive_roots_folder_id_idx on public.user_drive_r
 create index if not exists google_drive_connections_google_email_idx on public.google_drive_connections(google_email);
 create index if not exists user_drive_preferences_default_folder_id_idx on public.user_drive_preferences(default_folder_id);
 create index if not exists supporter_contacts_phone_idx on public.supporter_contacts(phone);
+create index if not exists whatsapp_queue_status_idx on public.whatsapp_queue(status);
+create index if not exists whatsapp_queue_created_at_idx on public.whatsapp_queue(created_at desc);
+create index if not exists whatsapp_messages_status_idx on public.whatsapp_messages(status);
+create index if not exists whatsapp_messages_phone_idx on public.whatsapp_messages(phone_number);
 create index if not exists gifting_requests_submitted_at_idx on public.gifting_requests(submitted_at desc);
 create index if not exists service_media_assets_kind_idx on public.service_media_assets(asset_kind);
 create index if not exists service_document_templates_updated_at_idx on public.service_document_templates(updated_at desc);
@@ -627,6 +660,13 @@ drop trigger if exists site_content_set_updated_at on public.site_content;
 
 create trigger site_content_set_updated_at
 before update on public.site_content
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists site_settings_set_updated_at on public.site_settings;
+
+create trigger site_settings_set_updated_at
+before update on public.site_settings
 for each row
 execute function public.set_updated_at();
 
@@ -725,6 +765,20 @@ drop trigger if exists user_drive_roots_set_updated_at on public.user_drive_root
 
 create trigger user_drive_roots_set_updated_at
 before update on public.user_drive_roots
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists whatsapp_queue_set_updated_at on public.whatsapp_queue;
+
+create trigger whatsapp_queue_set_updated_at
+before update on public.whatsapp_queue
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists whatsapp_messages_set_updated_at on public.whatsapp_messages;
+
+create trigger whatsapp_messages_set_updated_at
+before update on public.whatsapp_messages
 for each row
 execute function public.set_updated_at();
 

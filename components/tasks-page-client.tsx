@@ -34,6 +34,8 @@ type PersonalTransactionView = "incoming" | "outgoing"
 
 const DEFAULT_DUE_TIME = "23:59"
 const TASKS_FETCH_TIMEOUT_MS = 12_000
+const GOOGLE_DRIVE_CONNECT_REQUIRED = "GOOGLE_DRIVE_CONNECT_REQUIRED"
+const GOOGLE_DRIVE_RECONNECT_MESSAGE = "انتهت صلاحية ربط Google Drive. اربط الحساب من جديد ثم أعد المحاولة."
 
 const initialTaskForm = {
   taskId: "",
@@ -43,10 +45,18 @@ const initialTaskForm = {
   dueAt: getDefaultDueAtInput(),
 }
 
+function getDriveUploadErrorMessage(error?: string | null, fallback = "تعذر رفع الملف إلى Google Drive") {
+  if (error === GOOGLE_DRIVE_CONNECT_REQUIRED) {
+    return GOOGLE_DRIVE_RECONNECT_MESSAGE
+  }
+
+  return error ?? fallback
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeZone: "UTC",
   }).format(new Date(value))
 }
 
@@ -720,7 +730,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
     const targetFolderId = parentFolderId || (await fetch("/api/drive/folders", { cache: "no-store" }).then(async (response) => {
       const payload = await response.json() as { defaultFolderId?: string | null; error?: string }
       if (!response.ok) {
-        throw new Error(payload.error ?? "تعذر تحميل مكان ملفاتي")
+        throw new Error(getDriveUploadErrorMessage(payload.error, "تعذر تحميل مكان ملفاتي"))
       }
 
       return payload.defaultFolderId ?? null
@@ -741,7 +751,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
 
       const payload = await response.json() as { item?: { id: string; webViewLink: string | null }; error?: string }
       if (!response.ok || !payload.item) {
-        throw new Error(payload.error ?? "تعذر رفع الملف إلى Google Drive")
+        throw new Error(getDriveUploadErrorMessage(payload.error, "تعذر رفع الملف إلى Google Drive"))
       }
 
       return payload.item.webViewLink ?? `https://drive.google.com/file/d/${payload.item.id}/view`

@@ -115,7 +115,7 @@ export function getOperationalPlanOccurrenceStatus(progressPercentage: number): 
 }
 
 export function getOperationalPlanMonthLabel(value: string | Date, month: "long" | "short" = "long") {
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { month }).format(typeof value === "string" ? new Date(value) : value)
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { month, timeZone: "UTC" }).format(typeof value === "string" ? new Date(value) : value)
 }
 
 export function getOperationalPlanPeriodRange(recurrence: OperationalPlanRecurrence, sequenceNumber: number) {
@@ -161,7 +161,7 @@ export function buildOperationalPlanOccurrences(year: number, annualTarget: numb
 }
 
 function getOperationalPlanOccurrenceDate(year: number, sequenceNumber: number) {
-  return new Date(Date.UTC(year, sequenceNumber - 1, 1))
+  return new Date(Date.UTC(year, sequenceNumber, 0, 23, 59, 0))
 }
 
 function getOperationalPlanOccurrenceLabel(sequenceNumber: number, dueAt: Date) {

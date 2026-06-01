@@ -35,15 +35,33 @@ export default async function Home() {
     <main className="min-h-screen">
       <Header logo={content.logo} />
       <Hero content={content.hero} />
-      <DonationCards content={content.donations} />
-      <ProjectsSection content={content.projects} />
-      <GiftingsSection content={content.giftings} />
-      <AchievementsSection content={content.achievements} />
-      <NewsSection content={content.news} />
-      <AboutSection content={content.about} />
-      <GallerySection content={content.gallery} />
-      <PartnersSection content={content.partners} />
-      <Footer content={content.footer} logo={content.logo} />
+      <div className="defer-section-render">
+        <DonationCards content={content.donations} />
+      </div>
+      <div className="defer-section-render">
+        <ProjectsSection content={content.projects} />
+      </div>
+      <div className="defer-section-render">
+        <GiftingsSection content={content.giftings} />
+      </div>
+      <div className="defer-section-render">
+        <AchievementsSection content={content.achievements} />
+      </div>
+      <div className="defer-section-render">
+        <NewsSection content={content.news} />
+      </div>
+      <div className="defer-section-render">
+        <AboutSection content={content.about} />
+      </div>
+      <div className="defer-section-render">
+        <GallerySection content={content.gallery} />
+      </div>
+      <div className="defer-section-render">
+        <PartnersSection content={content.partners} />
+      </div>
+      <div className="defer-section-render">
+        <Footer content={content.footer} logo={content.logo} />
+      </div>
     </main>
   )
 }

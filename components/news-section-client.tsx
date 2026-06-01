@@ -58,7 +58,7 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
       <div className="absolute bottom-0 right-0 h-80 w-80 translate-x-1/2 translate-y-1/2 rounded-full bg-accent/5 blur-3xl" />
 
       <div className="container relative z-10 mx-auto px-4">
-        <div className={`mb-12 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
+        <div className={`mb-12 transition-[opacity,transform] duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
           <div>
             <span className="mb-4 inline-block rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
               {content.badge}
@@ -72,14 +72,14 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
         <div className="relative" ref={carouselRef}>
           <button
             onClick={handlePrev}
-            className="absolute right-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white md:flex"
+            className="absolute right-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.03] hover:border-primary hover:bg-primary hover:text-white md:flex"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
 
           <button
             onClick={handleNext}
-            className="absolute left-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white md:flex"
+            className="absolute left-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.03] hover:border-primary hover:bg-primary hover:text-white md:flex"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -89,10 +89,10 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
               {news.map((item, index) => (
                 <div
                   key={item.id}
-                  className={`w-full flex-shrink-0 transition-all duration-700 md:w-[calc(33.333%-1rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}
+                  className={`w-full flex-shrink-0 transition-[opacity,transform] duration-700 md:w-[calc(33.333%-1rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}
                   style={{ transitionDelay: `${index * 100}ms` }}
                 >
-                  <div className="group h-full overflow-hidden rounded-3xl border border-border/50 bg-card shadow-sm transition-all duration-500 hover:-translate-y-2 hover:shadow-xl">
+                  <div className="group h-full overflow-hidden rounded-3xl border border-border/50 bg-card shadow-sm transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:shadow-lg">
                     <div className="relative h-56 overflow-hidden">
                       <Image
                         src={item.image}
@@ -100,7 +100,7 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
                         fill
                         priority={index < itemsPerView}
                         sizes="(max-width: 768px) 100vw, 33vw"
-                        className="object-cover transition-transform duration-700 group-hover:scale-110"
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -134,7 +134,7 @@ export function NewsSectionClient({ content }: NewsSectionClientProps) {
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
-              className={`h-2 rounded-full transition-all duration-300 ${currentIndex === index ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
+              className={`h-2 rounded-full transition-[width,background-color] duration-300 ${currentIndex === index ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
             />
           ))}
         </div>

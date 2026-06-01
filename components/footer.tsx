@@ -114,7 +114,7 @@ export async function Footer({ content, logo }: { content?: SiteContentMap["foot
                 <Link
                   key={`${social.label}-${social.icon}`}
                   href={social.href}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted font-bold text-muted-foreground transition-all duration-300 hover:scale-110 hover:bg-primary hover:text-white"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted font-bold text-muted-foreground transition-[background-color,color,transform] duration-300 hover:scale-105 hover:bg-primary hover:text-white"
                   aria-label={social.label}
                 >
                   {social.icon}
@@ -141,7 +141,7 @@ export async function Footer({ content, logo }: { content?: SiteContentMap["foot
 
       <Link
         href="#donation"
-        className="fixed bottom-6 left-6 z-40 inline-flex h-14 items-center justify-center rounded-[1.15rem] bg-gradient-to-r from-primary to-[#01b5b2] px-7 text-base font-bold text-white shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 hover:opacity-95"
+        className="fixed bottom-6 left-6 z-40 inline-flex h-14 items-center justify-center rounded-[1.15rem] bg-gradient-to-r from-primary to-[#01b5b2] px-7 text-base font-bold text-white shadow-lg shadow-primary/30 transition-[opacity,transform] duration-300 hover:scale-[1.02] hover:opacity-95"
       >
         {resolvedContent.fixedDonateLabel}
       </Link>

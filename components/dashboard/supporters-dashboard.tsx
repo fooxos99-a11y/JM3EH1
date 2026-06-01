@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { FileSpreadsheet, LoaderCircle, Pencil, Plus, Search } from "lucide-react"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -7,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -60,6 +63,8 @@ const initialForm: ManualSupporterForm = {
   phone: "",
   email: "",
 }
+
+const WHATSAPP_PICKED_PHONES_STORAGE_KEY = "supporters-whatsapp-picked-phones"
 
 async function loadXlsx() {
   return import("xlsx")
@@ -259,6 +264,7 @@ function PaginationSection({
 }
 
 export function SupportersDashboard() {
+  const searchParams = useSearchParams()
   const [data, setData] = useState<SupportersDashboardData | null>(null)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -269,9 +275,12 @@ export function SupportersDashboard() {
   const [accountsPage, setAccountsPage] = useState(1)
   const [databasePage, setDatabasePage] = useState(1)
   const [editingSupporter, setEditingSupporter] = useState<EditableSupporterForm | null>(null)
+  const [pickerSelectedPhones, setPickerSelectedPhones] = useState<string[]>([])
   const accountsExcelInputRef = useRef<HTMLInputElement>(null)
   const databaseExcelInputRef = useRef<HTMLInputElement>(null)
   const deferredQuery = useDeferredValue(query)
+  const normalizedQuery = deferredQuery.trim().toLowerCase()
+  const isWhatsAppPickerMode = searchParams.get("picker") === "whatsapp"
 
   async function loadData() {
     setLoading(true)
@@ -291,6 +300,25 @@ export function SupportersDashboard() {
   useEffect(() => {
     void loadData()
   }, [])
+
+  const filteredSupporters = useMemo(() => {
+    const supporters = data?.supporters ?? []
+
+    if (!normalizedQuery) {
+      return supporters
+    }
+
+    return supporters.filter((supporter) => {
+      const haystack = [
+        supporter.name,
+        accountTypeLabel(supporter.accountType),
+        supporter.phone,
+        supporter.email ?? "",
+      ].join(" ").toLowerCase()
+
+      return haystack.includes(normalizedQuery)
+    })
+  }, [data, normalizedQuery])
 
   useEffect(() => {
     function handleExportSupporters() {
@@ -317,18 +345,6 @@ export function SupportersDashboard() {
       window.removeEventListener("supporters-import-excel", handleImportSupporters)
     }
   }, [activeTab, filteredSupporters])
-  const filteredSupporters = useMemo(() => {
-    return data.supporters.filter((supporter) => {
-      const haystack = [
-        supporter.name,
-        accountTypeLabel(supporter.accountType),
-        supporter.phone,
-        supporter.email ?? "",
-      ].join(" ").toLowerCase()
-
-      return haystack.includes(normalizedQuery)
-    })
-  }, [data, deferredQuery])
 
   useEffect(() => {
     setAccountsPage(1)
@@ -337,6 +353,20 @@ export function SupportersDashboard() {
 
   const accountsPagination = useMemo(() => paginateRows(filteredSupporters, accountsPage, 50), [accountsPage, filteredSupporters])
   const databasePagination = useMemo(() => paginateRows(filteredSupporters, databasePage, 100), [databasePage, filteredSupporters])
+
+  function togglePickerSelection(phone: string, checked: boolean) {
+    setPickerSelectedPhones((current) => checked ? Array.from(new Set([...current, phone])) : current.filter((entry) => entry !== phone))
+  }
+
+  function pushSelectedSupportersToWhatsApp() {
+    if (pickerSelectedPhones.length === 0) {
+      setMessage({ type: "error", text: "اختر رقمًا واحدًا على الأقل أولًا." })
+      return
+    }
+
+    window.localStorage.setItem(WHATSAPP_PICKED_PHONES_STORAGE_KEY, JSON.stringify(pickerSelectedPhones))
+    window.location.href = "/dashboard/supporters-whatsapp"
+  }
 
   function runAction(task: () => Promise<void>) {
     setMessage(null)
@@ -476,10 +506,25 @@ export function SupportersDashboard() {
       />
 
       <div className="rounded-[1.75rem] border border-white/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-        <h1 className="text-2xl font-bold text-foreground">الداعمون</h1>
-        <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          إضافة داعمين يدويًا أو عبر Excel، إدارة بياناتهم من نفس الصفحة، وتصفح القاعدة بترقيم واضح مع إمكانية التصدير إلى Excel.
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">الداعمون</h1>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground">
+              إضافة داعمين يدويًا أو عبر Excel، إدارة بياناتهم من نفس الصفحة، وتصفح القاعدة بترقيم واضح مع إمكانية التصدير إلى Excel.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 md:self-start">
+            {isWhatsAppPickerMode ? (
+              <Button type="button" className="rounded-2xl" onClick={pushSelectedSupportersToWhatsApp}>
+                استخدام المحدد في صفحة الواتس
+              </Button>
+            ) : null}
+            <Button asChild type="button" className="rounded-2xl">
+              <Link href="/dashboard/supporters-whatsapp">الإرسال عبر الواتس</Link>
+            </Button>
+          </div>
+        </div>
       </div>
 
       {message ? (
@@ -547,13 +592,14 @@ export function SupportersDashboard() {
                       <TableHead className="text-right">نوع الحساب</TableHead>
                       <TableHead className="text-right">رقم الجوال</TableHead>
                       <TableHead className="text-right">البريد الإلكتروني</TableHead>
+                      {isWhatsAppPickerMode ? <TableHead className="text-right">للواتس</TableHead> : null}
                       <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {accountsPagination.rows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
+                        <TableCell colSpan={isWhatsAppPickerMode ? 6 : 5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
                       </TableRow>
                     ) : (
                       accountsPagination.rows.map((supporter) => (
@@ -562,6 +608,13 @@ export function SupportersDashboard() {
                           <TableCell className="text-right"><Badge variant="secondary">{accountTypeLabel(supporter.accountType)}</Badge></TableCell>
                           <TableCell className="text-right" dir="ltr">{supporter.phone}</TableCell>
                           <TableCell className="text-right" dir="ltr">{supporter.email ?? "-"}</TableCell>
+                          {isWhatsAppPickerMode ? (
+                            <TableCell className="text-right">
+                              <div className="flex justify-end">
+                                <Checkbox checked={pickerSelectedPhones.includes(supporter.phone)} onCheckedChange={(checked) => togglePickerSelection(supporter.phone, Boolean(checked))} />
+                              </div>
+                            </TableCell>
+                          ) : null}
                           <TableCell className="text-right">
                             <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => openEditDialog(supporter)} aria-label={`تعديل ${supporter.name}`}>
                               <Pencil className="h-4 w-4" />
@@ -601,13 +654,14 @@ export function SupportersDashboard() {
                   <TableHead className="text-right">نوع الحساب</TableHead>
                   <TableHead className="text-right">رقم الجوال</TableHead>
                   <TableHead className="text-right">البريد الإلكتروني</TableHead>
+                  {isWhatsAppPickerMode ? <TableHead className="text-right">للواتس</TableHead> : null}
                   <TableHead className="text-right">الإجراءات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {databasePagination.rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
+                    <TableCell colSpan={isWhatsAppPickerMode ? 6 : 5} className="py-8 text-center text-muted-foreground">لا توجد بيانات مطابقة.</TableCell>
                   </TableRow>
                 ) : (
                   databasePagination.rows.map((supporter) => (
@@ -616,6 +670,13 @@ export function SupportersDashboard() {
                       <TableCell className="text-right"><Badge variant="outline">{accountTypeLabel(supporter.accountType)}</Badge></TableCell>
                       <TableCell className="text-right" dir="ltr">{supporter.phone}</TableCell>
                       <TableCell className="text-right" dir="ltr">{supporter.email ?? "-"}</TableCell>
+                      {isWhatsAppPickerMode ? (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end">
+                            <Checkbox checked={pickerSelectedPhones.includes(supporter.phone)} onCheckedChange={(checked) => togglePickerSelection(supporter.phone, Boolean(checked))} />
+                          </div>
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-right">
                         <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => openEditDialog(supporter)} aria-label={`تعديل ${supporter.name}`}>
                           <Pencil className="h-4 w-4" />

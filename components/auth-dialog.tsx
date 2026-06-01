@@ -288,7 +288,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
 
   const triggerButton = (
     <button
-      className={`relative inline-flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-medium transition-all duration-300 sm:h-14 sm:w-14 ${
+      className={`relative inline-flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-medium transition-[background-color,color,transform] duration-300 sm:h-14 sm:w-14 ${
         isScrolled
           ? "text-foreground hover:bg-primary/8 hover:text-primary"
           : "text-white hover:bg-white/10"

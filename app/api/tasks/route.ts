@@ -563,7 +563,7 @@ export async function POST(request: Request) {
         task_id: insertedTask?.id ?? null,
         notification_type: "new_task",
         title: `مهمة جديدة: ${payload.title}`,
-        body: `تم إسناد مهمة جديدة لك مع موعد تسليم ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeStyle: "short" }).format(new Date(payload.dueAt))}`,
+        body: `تم إسناد مهمة جديدة لك مع موعد تسليم ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeZone: "UTC" }).format(new Date(payload.dueAt))}`,
       })
 
       if (notificationError) {

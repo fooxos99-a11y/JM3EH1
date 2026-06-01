@@ -171,9 +171,9 @@ export function GiftingsClient({ content }: GiftingsClientProps) {
               {items.map((item) => {
                 return (
                   <div key={item.id} className="flex-shrink-0" style={{ width: `calc(${100 / cardsPerView}% - ${(cardsPerView - 1) * 24 / cardsPerView}px)` }}>
-                    <div className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-xl transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
+                    <div className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white shadow-xl transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-xl">
                       <div className="relative h-56 overflow-hidden">
-                        <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                        <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                         <div className="absolute right-4 top-4 rounded-full bg-white/20 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">{item.badge}</div>
                       </div>
@@ -197,7 +197,7 @@ export function GiftingsClient({ content }: GiftingsClientProps) {
                               key={label.id}
                               type="button"
                               onClick={() => openDialog(item, label.id)}
-                              className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm font-semibold text-foreground transition-all duration-300 hover:scale-[1.03] hover:border-primary hover:bg-primary hover:text-white"
+                              className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-2.5 text-sm font-semibold text-foreground transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.01] hover:border-primary hover:bg-primary hover:text-white"
                             >
                               {label.label}
                             </button>

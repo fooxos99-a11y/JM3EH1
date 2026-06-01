@@ -11,6 +11,12 @@ next.user-config.*
 .env
 .env*.local
 
+# WhatsApp worker runtime files
+whatsapp-worker/.wwebjs_auth/
+whatsapp-worker/status-*.json
+whatsapp-worker/current-qr-*.png
+whatsapp-worker/worker-*.lock
+
 # Common ignores
 node_modules
 .next/

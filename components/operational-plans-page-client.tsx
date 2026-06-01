@@ -60,7 +60,7 @@ function createInitialPlanForm() {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { dateStyle: "medium" }).format(new Date(value))
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value))
 }
 
 function recalculatePlan(plan: OperationalPlanRecord): OperationalPlanRecord {

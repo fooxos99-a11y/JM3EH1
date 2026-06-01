@@ -115,7 +115,7 @@ export function DonationCardsClient({
               <button
                 onClick={handlePrev}
                 disabled={currentIndex === 0}
-                className={`absolute right-0 top-1/2 z-10 h-12 w-12 -translate-y-1/2 -translate-x-4 rounded-full border border-border bg-card shadow-lg transition-all duration-300 hover:border-primary hover:bg-primary hover:text-white ${
+                className={`absolute right-0 top-1/2 z-10 h-12 w-12 -translate-y-1/2 -translate-x-4 rounded-full border border-border bg-card shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:border-primary hover:bg-primary hover:text-white ${
                   currentIndex === 0 ? "cursor-not-allowed opacity-50" : "hover:scale-110"
                 }`}
               >
@@ -125,7 +125,7 @@ export function DonationCardsClient({
               <button
                 onClick={handleNext}
                 disabled={currentIndex >= maxIndex}
-                className={`absolute left-0 top-1/2 z-10 h-12 w-12 -translate-y-1/2 translate-x-4 rounded-full border border-border bg-card shadow-lg transition-all duration-300 hover:border-primary hover:bg-primary hover:text-white ${
+                className={`absolute left-0 top-1/2 z-10 h-12 w-12 -translate-y-1/2 translate-x-4 rounded-full border border-border bg-card shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:border-primary hover:bg-primary hover:text-white ${
                   currentIndex >= maxIndex ? "cursor-not-allowed opacity-50" : "hover:scale-110"
                 }`}
               >
@@ -136,7 +136,7 @@ export function DonationCardsClient({
                 <div className="flex gap-6 transition-transform duration-500 ease-out" style={{ transform: `translateX(${currentIndex * (100 / cardsPerView)}%)` }}>
                   {donations.map((donation) => {
                     return (
-                      <div key={donation.id} className="flex-shrink-0 transition-all duration-500" style={{ width: `calc(${100 / cardsPerView}% - ${(cardsPerView - 1) * 24 / cardsPerView}px)` }}>
+                      <div key={donation.id} className="flex-shrink-0" style={{ width: `calc(${100 / cardsPerView}% - ${(cardsPerView - 1) * 24 / cardsPerView}px)` }}>
                         <div
                           role="link"
                           tabIndex={0}
@@ -147,7 +147,7 @@ export function DonationCardsClient({
                               handleCardNavigation(donation.id)
                             }
                           }}
-                          className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[2rem] border border-[#d7ece9] bg-white shadow-[0_22px_60px_rgba(15,23,42,0.10)] transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_28px_80px_rgba(15,23,42,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[2rem] border border-[#d7ece9] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.08)] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-1 hover:shadow-[0_20px_52px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                         >
                           <div className="relative h-48 overflow-hidden">
                             <Image
@@ -155,14 +155,14 @@ export function DonationCardsClient({
                               alt={donation.title}
                               fill
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                              className="object-cover transition-transform duration-700 group-hover:scale-105"
+                              className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#083433]/90 via-[#0d6d69]/35 to-transparent" />
                             <div className="absolute left-4 top-4" onClick={(event) => event.stopPropagation()}>
                               <FundraisingPaymentDialog
                                 item={donation}
                                 dialogDescription={dialogDescription}
-                                triggerClassName="h-12 w-12 rounded-full border border-white/80 bg-white/95 p-0 text-primary shadow-lg transition-all duration-300 hover:scale-110 hover:bg-white"
+                                triggerClassName="h-12 w-12 rounded-full border border-white/80 bg-white/95 p-0 text-primary shadow-lg transition-[background-color,transform] duration-300 hover:scale-105 hover:bg-white"
                                 triggerContent={<ArrowLeft className="h-5 w-5" />}
                                 triggerAriaLabel={`فتح نافذة التبرع لـ ${donation.title}`}
                               />
@@ -181,7 +181,7 @@ export function DonationCardsClient({
                                   onClick={(event) => {
                                     event.stopPropagation()
                                   }}
-                                  className="rounded-full border border-primary/15 bg-white px-3 py-2 text-xs font-semibold text-primary shadow-sm transition-all duration-300 hover:border-primary/35 hover:bg-primary/5"
+                                  className="rounded-full border border-primary/15 bg-white px-3 py-2 text-xs font-semibold text-primary shadow-sm transition-[background-color,border-color,color] duration-300 hover:border-primary/35 hover:bg-primary/5"
                                 >
                                   {label.label}
                                 </button>
@@ -192,7 +192,7 @@ export function DonationCardsClient({
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="h-11 rounded-2xl border-primary/15 bg-white text-foreground transition-all duration-300 hover:scale-[1.02] hover:border-primary/35 hover:bg-primary/5 hover:text-primary"
+                                className="h-11 rounded-2xl border-primary/15 bg-white text-foreground transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.01] hover:border-primary/35 hover:bg-primary/5 hover:text-primary"
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   handleAddToCart(donation)
@@ -206,7 +206,7 @@ export function DonationCardsClient({
                                   item={donation}
                                   dialogDescription={dialogDescription}
                                   triggerLabel={donation.buttonLabel}
-                                  triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:bg-[#017f7c]"
+                                  triggerClassName="group/btn h-11 rounded-2xl border-0 bg-primary text-white shadow-sm transition-[background-color,transform] duration-300 hover:scale-[1.01] hover:bg-[#017f7c]"
                                   fullWidthTrigger
                                 />
                               </div>
@@ -231,7 +231,7 @@ export function DonationCardsClient({
                       setTimeout(() => setIsAnimating(false), 500)
                     }
                   }}
-                  className={`h-2 rounded-full transition-all duration-300 ${index === currentIndex ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
+                  className={`h-2 rounded-full transition-[width,background-color] duration-300 ${index === currentIndex ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
                 />
               ))}
             </div>

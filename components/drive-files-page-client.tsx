@@ -41,7 +41,12 @@ type FolderOptionsPayload = {
 }
 
 const GOOGLE_DRIVE_CONNECT_REQUIRED = "GOOGLE_DRIVE_CONNECT_REQUIRED"
+const GOOGLE_DRIVE_RECONNECT_MESSAGE = "انتهت صلاحية ربط Google Drive. اربط الحساب من جديد ثم أعد المحاولة."
 const VIRTUAL_ALL_FILES_ROOT_ID = "__all_files__"
+
+function isReconnectRequiredError(error?: string | null) {
+  return error === GOOGLE_DRIVE_CONNECT_REQUIRED
+}
 
 function isPdfFile(item: DriveItem) {
   return item.mimeType === "application/pdf" || item.name.toLowerCase().endsWith(".pdf")
@@ -111,6 +116,16 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     }
 
     return isVirtualAllFilesRoot ? "root" : data.currentFolderId
+  }
+
+  function handleDriveActionError(error?: string | null, fallback = "حدث خطأ غير متوقع") {
+    if (isReconnectRequiredError(error)) {
+      setData(null)
+      setGoogleDriveStatus((current) => (current ? { ...current, connected: false } : current))
+      return GOOGLE_DRIVE_RECONNECT_MESSAGE
+    }
+
+    return error ?? fallback
   }
 
   async function reloadCurrentView() {
@@ -207,13 +222,14 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     const payload = (await response.json()) as DriveBrowserData & { error?: string }
 
     if (!response.ok) {
-      if (payload.error === GOOGLE_DRIVE_CONNECT_REQUIRED) {
+      if (isReconnectRequiredError(payload.error)) {
         setData(null)
+        setGoogleDriveStatus((current) => (current ? { ...current, connected: false } : current))
         setLoading(false)
         return
       }
 
-      setMessage({ type: "error", text: payload.error ?? "تعذر تحميل الملفات" })
+      setMessage({ type: "error", text: handleDriveActionError(payload.error, "تعذر تحميل الملفات") })
       setLoading(false)
       return
     }
@@ -269,7 +285,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     const payload = (await response.json()) as { error?: string }
 
     if (!response.ok) {
-      throw new Error(payload.error ?? "تعذر إنشاء المجلد")
+      throw new Error(handleDriveActionError(payload.error, "تعذر إنشاء المجلد"))
     }
 
     setCreateFolderName("")
@@ -297,7 +313,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
       const payload = (await response.json()) as { error?: string }
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "تعذر رفع الملف")
+        throw new Error(handleDriveActionError(payload.error, "تعذر رفع الملف"))
       }
 
       await reloadCurrentView()
@@ -324,7 +340,7 @@ export function DriveFilesPageClient({ embedded = false }: { embedded?: boolean 
     const payload = (await response.json()) as { error?: string }
 
     if (!response.ok) {
-      throw new Error(payload.error ?? "تعذر إعادة التسمية")
+      throw new Error(handleDriveActionError(payload.error, "تعذر إعادة التسمية"))
     }
 
     setRenameItem(null)

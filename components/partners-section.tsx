@@ -33,14 +33,14 @@ export async function PartnersSection({ content }: { content?: SiteContentMap["p
             {marqueePartners.map((partner, index) => (
               <div
                 key={`${partner.id}-${index}`}
-                className="group flex h-[152px] w-[168px] flex-shrink-0 flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)] sm:w-[184px] md:w-[196px] lg:w-[208px] xl:w-[220px]"
+                className="group flex h-[152px] w-[168px] flex-shrink-0 flex-col items-center justify-center rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition-[transform,box-shadow,border-color] duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.06)] sm:w-[184px] md:w-[196px] lg:w-[208px] xl:w-[220px]"
               >
                 {partner.logo ? (
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50 transition-all duration-500 group-hover:scale-105 group-hover:border-primary/20">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50 transition-[transform,border-color] duration-300 group-hover:scale-[1.02] group-hover:border-primary/20">
                     <Image src={partner.logo} alt={partner.name} width={64} height={64} sizes="64px" className="h-full w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] border border-slate-200 bg-slate-50 text-lg font-bold text-primary transition-all duration-500 group-hover:scale-105 group-hover:border-primary/20">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] border border-slate-200 bg-slate-50 text-lg font-bold text-primary transition-[transform,border-color] duration-300 group-hover:scale-[1.02] group-hover:border-primary/20">
                     <span>{partner.abbr}</span>
                   </div>
                 )}

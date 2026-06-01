@@ -8,7 +8,7 @@ import { google } from "googleapis"
 import type { AuthUser } from "@/lib/auth"
 import type { DriveBrowserData, DriveFolderOption, DriveItem, DriveScope } from "@/lib/drive"
 import { getServerEnv, hasGoogleDriveEnv } from "@/lib/env"
-import { createGoogleOAuthClient, getGoogleDriveConnection, GOOGLE_DRIVE_CONNECT_REQUIRED, upsertGoogleDriveConnection } from "@/lib/google-oauth"
+import { createGoogleOAuthClient, deleteGoogleDriveConnection, getGoogleDriveConnection, GOOGLE_DRIVE_CONNECT_REQUIRED, upsertGoogleDriveConnection } from "@/lib/google-oauth"
 import { createSupabaseAdminClient } from "@/lib/supabase/server"
 
 const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -51,6 +51,17 @@ type ScopeRoot = {
   virtualAllFiles?: boolean
 }
 
+type GoogleAuthErrorLike = {
+  message?: string
+  response?: {
+    data?: {
+      error?: string
+      error_description?: string
+    }
+  }
+  cause?: unknown
+}
+
 let cachedSystemFolders: Promise<SystemFolders> | null = null
 
 function ensureGoogleDriveConfigured() {
@@ -65,6 +76,33 @@ function sanitizeDriveName(value: string) {
 
 function escapeDriveQueryValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+}
+
+function isInvalidGrantError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false
+  }
+
+  const authError = error as GoogleAuthErrorLike
+  const message = typeof authError.message === "string" ? authError.message : ""
+  const apiError = authError.response?.data?.error
+  const apiDescription = authError.response?.data?.error_description
+  const causeMessage = authError.cause instanceof Error ? authError.cause.message : ""
+
+  return [message, apiError, apiDescription, causeMessage].some((value) => value?.toLowerCase().includes("invalid_grant"))
+}
+
+async function ensureOAuthConnectionIsValid(user: AuthUser, auth: InstanceType<typeof google.auth.OAuth2>) {
+  try {
+    await auth.getAccessToken()
+  } catch (error) {
+    if (isInvalidGrantError(error)) {
+      await deleteGoogleDriveConnection(user.id)
+      throw new Error(GOOGLE_DRIVE_CONNECT_REQUIRED)
+    }
+
+    throw error
+  }
 }
 
 function mapDriveFile(file: drive_v3.Schema$File): DriveItem {
@@ -119,6 +157,8 @@ async function getDriveAccess(user: AuthUser): Promise<DriveAccess> {
             : connection.expires_at,
       })
     })
+
+    await ensureOAuthConnectionIsValid(user, auth)
 
     return {
       drive: google.drive({ version: "v3", auth }),

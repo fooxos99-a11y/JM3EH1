@@ -69,7 +69,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
       <div className="absolute bottom-20 left-20 h-80 w-80 rounded-full bg-accent/5 blur-3xl" />
 
       <div className="container relative z-10 mx-auto px-4">
-        <div className={`mb-12 transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
+        <div className={`mb-12 transition-[opacity,transform] duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
           <div>
             <span className="mb-4 inline-block rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
               {content.badge}
@@ -83,14 +83,14 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
         <div className="relative">
           <button
             onClick={handleCarouselPrev}
-            className="absolute right-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white md:flex"
+            className="absolute right-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.03] hover:border-primary hover:bg-primary hover:text-white md:flex"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
 
           <button
             onClick={handleCarouselNext}
-            className="absolute left-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-primary hover:text-white md:flex"
+            className="absolute left-2 top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border/70 bg-white/95 text-primary shadow-lg transition-[background-color,border-color,color,transform] duration-300 hover:scale-[1.03] hover:border-primary hover:bg-primary hover:text-white md:flex"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -100,11 +100,11 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
               {galleryImages.map((image, index) => (
                 <div
                   key={image.id}
-                  className={`w-full flex-shrink-0 transition-all duration-700 sm:w-[calc(50%-0.5rem)] md:w-[calc(33.333%-0.75rem)] lg:w-[calc(25%-0.75rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}
+                  className={`w-full flex-shrink-0 transition-[opacity,transform] duration-700 sm:w-[calc(50%-0.5rem)] md:w-[calc(33.333%-0.75rem)] lg:w-[calc(25%-0.75rem)] ${isVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}
                   style={{ transitionDelay: `${index * 100}ms` }}
                 >
                   <div
-                    className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-all duration-500 hover:shadow-2xl"
+                    className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-[transform,box-shadow] duration-300 hover:shadow-xl"
                     onClick={() => setSelectedImage(index)}
                   >
                     <Image
@@ -113,13 +113,13 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
                       fill
                       priority={index < itemsPerView}
                       sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      className="object-cover transition-transform duration-700 group-hover:scale-110"
+                      className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/20 to-transparent opacity-0 transition-all duration-500 group-hover:opacity-100" />
-                    <div className="absolute inset-0 flex translate-y-4 flex-col justify-end p-4 opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                    <div className="absolute inset-0 flex translate-y-4 flex-col justify-end p-4 opacity-0 transition-[opacity,transform] duration-300 group-hover:translate-y-0 group-hover:opacity-100">
                       <h4 className="text-base font-bold text-white">{image.title}</h4>
                     </div>
-                    <div className="absolute left-3 top-3 flex h-10 w-10 scale-50 items-center justify-center rounded-full bg-white/20 opacity-0 backdrop-blur-sm transition-all duration-500 group-hover:scale-100 group-hover:opacity-100">
+                    <div className="absolute left-3 top-3 flex h-10 w-10 scale-75 items-center justify-center rounded-full bg-white/20 opacity-0 backdrop-blur-sm transition-[opacity,transform] duration-300 group-hover:scale-100 group-hover:opacity-100">
                       <ZoomIn className="h-5 w-5 text-white" />
                     </div>
                   </div>
@@ -134,7 +134,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
-              className={`h-2 rounded-full transition-all duration-300 ${currentIndex === index ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
+              className={`h-2 rounded-full transition-[width,background-color] duration-300 ${currentIndex === index ? "w-8 bg-primary" : "w-2 bg-primary/30 hover:bg-primary/50"}`}
             />
           ))}
         </div>
@@ -144,7 +144,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4" onClick={() => setSelectedImage(null)}>
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute left-6 top-6 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 transition-all duration-300 hover:bg-white/20"
+            className="absolute left-6 top-6 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 transition-colors duration-300 hover:bg-white/20"
           >
             <X className="h-6 w-6 text-white" />
           </button>
@@ -154,7 +154,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
               event.stopPropagation()
               handleLightboxPrev()
             }}
-            className="absolute right-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 transition-all duration-300 hover:bg-white/20"
+            className="absolute right-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 transition-colors duration-300 hover:bg-white/20"
           >
             <ChevronRight className="h-8 w-8 text-white" />
           </button>
@@ -164,7 +164,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
               event.stopPropagation()
               handleLightboxNext()
             }}
-            className="absolute left-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 transition-all duration-300 hover:bg-white/20"
+            className="absolute left-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 transition-colors duration-300 hover:bg-white/20"
           >
             <ChevronLeft className="h-8 w-8 text-white" />
           </button>
@@ -191,7 +191,7 @@ export function GallerySectionClient({ content }: GallerySectionClientProps) {
                   event.stopPropagation()
                   setSelectedImage(index)
                 }}
-                className={`h-2 w-2 rounded-full transition-all duration-300 ${index === selectedImage ? "w-8 bg-white" : "bg-white/40 hover:bg-white/60"}`}
+                className={`h-2 w-2 rounded-full transition-[width,background-color] duration-300 ${index === selectedImage ? "w-8 bg-white" : "bg-white/40 hover:bg-white/60"}`}
               />
             ))}
           </div>

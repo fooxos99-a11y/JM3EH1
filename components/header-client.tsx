@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -22,13 +22,37 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
   const [isGovernanceOpen, setIsGovernanceOpen] = useState(false)
   const [isMobileGovernanceOpen, setIsMobileGovernanceOpen] = useState(false)
   const [expandedGovernanceHref, setExpandedGovernanceHref] = useState<string | null>(null)
+  const isScrolledRef = useRef(false)
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+    let frameId = 0
+
+    const updateScrolledState = () => {
+      frameId = 0
+      const nextIsScrolled = window.scrollY > 50
+      if (nextIsScrolled !== isScrolledRef.current) {
+        isScrolledRef.current = nextIsScrolled
+        setIsScrolled(nextIsScrolled)
+      }
     }
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
+
+    const handleScroll = () => {
+      if (frameId !== 0) {
+        return
+      }
+
+      frameId = window.requestAnimationFrame(updateScrolledState)
+    }
+
+    updateScrolledState()
+    window.addEventListener("scroll", handleScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      if (frameId !== 0) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
   }, [])
 
   const navLinks = [
@@ -61,10 +85,10 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
 
   return (
     <header
-      className={`fixed left-0 right-0 top-0 z-50 py-3 transition-all duration-500 ${useSolidHeader ? "bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]" : "bg-transparent"}`}
+      className={`fixed left-0 right-0 top-0 z-50 py-3 transition-[background-color,box-shadow] duration-500 ${useSolidHeader ? "bg-white shadow-[0_14px_40px_rgba(15,23,42,0.08)]" : "bg-transparent"}`}
     >
       <div className="container mx-auto px-3 sm:px-4 lg:px-6">
-        <div className="flex items-center justify-between gap-3 rounded-[1.75rem] px-1 py-1 transition-all duration-500 sm:gap-4">
+        <div className="flex items-center justify-between gap-3 rounded-[1.75rem] px-1 py-1 sm:gap-4">
           <Link href="/" className="group flex min-w-0 items-center gap-2 sm:gap-3">
             {logo.logo ? (
               <>
@@ -86,7 +110,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               </>
             ) : (
               <div className={`flex items-center gap-3 transition-colors duration-300 ${useSolidHeader ? "text-foreground" : "text-white"}`}>
-                <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${useSolidHeader ? "bg-primary" : "bg-white/10"}`}>
+                <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-[background-color,color] duration-300 ${useSolidHeader ? "bg-primary" : "bg-white/10"}`}>
                   <span className={`text-xl font-bold ${useSolidHeader ? "text-primary-foreground" : "text-white"}`}>ع</span>
                 </div>
                 <div className="text-right">
@@ -102,12 +126,12 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
               <Link
                 key={link.href + index}
                 href={link.href}
-                className={`group relative rounded-full px-6 py-3 text-lg font-semibold transition-all duration-300 2xl:px-7 2xl:text-[1.2rem] ${
+                className={`group relative rounded-full px-6 py-3 text-lg font-semibold transition-[background-color,color] duration-300 2xl:px-7 2xl:text-[1.2rem] ${
                   useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"
                 }`}
               >
                 {link.label}
-                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-[width] duration-300 group-hover:w-1/2" />
               </Link>
             ))}
 
@@ -116,14 +140,14 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             >
               <button
                 type="button"
-                className={`group flex items-center gap-2 rounded-full px-6 py-3 text-lg font-semibold transition-all duration-300 2xl:px-7 2xl:text-[1.2rem] ${
+                className={`group flex items-center gap-2 rounded-full px-6 py-3 text-lg font-semibold transition-[background-color,color] duration-300 2xl:px-7 2xl:text-[1.2rem] ${
                   useSolidHeader ? "text-foreground hover:bg-primary/10" : "text-white hover:bg-white/10"
                 }`}
                 onClick={() => setIsGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
                 <ChevronDown className={`h-5 w-5 transition-transform duration-300 ${isGovernanceOpen ? "rotate-180" : ""}`} />
-                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-all duration-300 group-hover:w-1/2" />
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-0 -translate-x-1/2 rounded-full bg-primary transition-[width] duration-300 group-hover:w-1/2" />
               </button>
 
               <div className={`absolute left-1/2 top-full z-50 mt-3 w-[300px] -translate-x-1/2 transition-[opacity,transform,visibility] duration-300 ease-out ${isGovernanceOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-2 opacity-0"}`}>
@@ -137,7 +161,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           {hasChildren ? (
                             <button
                               type="button"
-                              className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-all duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
+                              className={`flex w-full items-center justify-between rounded-full px-4 py-2.5 text-right text-sm font-medium transition-[background-color,color] duration-300 ${isExpanded ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-800 hover:bg-slate-100/90"}`}
                               onClick={() => toggleGovernanceItem(item.href, hasChildren)}
                             >
                               <span className="flex-1 text-right">{item.label}</span>
@@ -146,7 +170,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                           ) : (
                             <Link
                               href={item.href}
-                              className="block w-full rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-all duration-300 hover:bg-slate-100/90"
+                              className="block w-full rounded-full bg-transparent px-4 py-2.5 text-right text-sm font-medium text-slate-800 transition-[background-color,color] duration-300 hover:bg-slate-100/90"
                               onClick={() => setIsGovernanceOpen(false)}
                             >
                               <span>{item.label}</span>
@@ -161,7 +185,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                                     <Link
                                       key={child.href}
                                       href={child.href}
-                                      className="block w-full rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-slate-100/90 hover:text-slate-950"
+                                      className="block w-full rounded-full px-4 py-2 text-right text-sm font-medium text-slate-700 transition-[background-color,color] duration-300 hover:bg-slate-100/90 hover:text-slate-950"
                                       onClick={() => setIsGovernanceOpen(false)}
                                     >
                                       <span>{child.label}</span>
@@ -198,13 +222,13 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
           </div>
         </div>
 
-        <div className={`overflow-hidden transition-all duration-500 xl:hidden ${isMenuOpen ? "mt-4 max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
+        <div className={`overflow-hidden transition-[max-height,opacity,margin] duration-500 xl:hidden ${isMenuOpen ? "mt-4 max-h-[500px] opacity-100" : "max-h-0 opacity-0"}`}>
           <nav className="rounded-[1.75rem] bg-card/95 p-4 shadow-xl">
             {navLinks.map((link, index) => (
               <Link
                 key={link.href + index}
                 href={link.href}
-                className="block rounded-2xl px-4 py-4 text-lg font-semibold text-foreground transition-all duration-300 hover:bg-primary/5 hover:text-primary sm:text-xl"
+                className="block rounded-2xl px-4 py-4 text-lg font-semibold text-foreground transition-[background-color,color] duration-300 hover:bg-primary/5 hover:text-primary sm:text-xl"
                 onClick={() => setIsMenuOpen(false)}
               >
                 {link.label}
@@ -214,7 +238,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
             <div className="mt-2 rounded-[1.35rem] bg-white/98 p-2 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-4 text-right text-lg font-semibold text-slate-900 transition-all duration-300 hover:bg-slate-100/90 sm:text-xl"
+                className="flex w-full items-center justify-between rounded-2xl px-4 py-4 text-right text-lg font-semibold text-slate-900 transition-[background-color,color] duration-300 hover:bg-slate-100/90 sm:text-xl"
                 onClick={() => setIsMobileGovernanceOpen((current) => !current)}
               >
                 <span>الحوكمة</span>
@@ -228,7 +252,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                       {item.children?.length ? (
                         <button
                           type="button"
-                          className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-right text-base font-semibold transition-all duration-300 sm:text-lg ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
+                          className={`flex w-full items-center justify-between rounded-full px-4 py-3 text-right text-base font-semibold transition-[background-color,color,box-shadow] duration-300 sm:text-lg ${expandedGovernanceHref === item.href ? "bg-white text-slate-900 shadow-sm" : "bg-transparent text-slate-800 hover:bg-white/90"}`}
                           onClick={() => toggleGovernanceItem(item.href, true)}
                         >
                           <span className="flex-1 text-right">{item.label}</span>
@@ -238,7 +262,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                         <div className="text-right">
                           <Link
                             href={item.href}
-                            className="block w-full rounded-full bg-transparent px-4 py-3 text-right text-base font-semibold text-slate-800 transition-all duration-300 hover:bg-white/90 sm:text-lg"
+                            className="block w-full rounded-full bg-transparent px-4 py-3 text-right text-base font-semibold text-slate-800 transition-[background-color,color] duration-300 hover:bg-white/90 sm:text-lg"
                             onClick={() => {
                               setIsMenuOpen(false)
                               setIsMobileGovernanceOpen(false)
@@ -256,7 +280,7 @@ export function HeaderClient({ logo }: { logo: LogoContent }) {
                                 <Link
                                   key={child.href}
                                   href={child.href}
-                                  className="block w-full rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-all duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
+                                  className="block w-full rounded-full px-4 py-2.5 text-right text-sm font-medium text-slate-700 transition-[background-color,color] duration-300 hover:bg-white/90 hover:text-slate-950 sm:text-base"
                                   onClick={() => {
                                     setIsMenuOpen(false)
                                     setIsMobileGovernanceOpen(false)

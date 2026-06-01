@@ -99,7 +99,7 @@ function buildMonthlyPlanOccurrences(plan: OperationalPlanRow, rows: Operational
 
   return Array.from({ length: 12 }, (_, index) => {
     const monthNumber = index + 1
-    const dueAt = new Date(Date.UTC(plan.plan_year, index, 1)).toISOString()
+    const dueAt = new Date(Date.UTC(plan.plan_year, index + 1, 0, 23, 59, 0)).toISOString()
     const row = rows.find((item) => item.sequence_number === monthNumber) ?? rows.find((item) => (new Date(item.due_at).getUTCMonth() + 1) === monthNumber) ?? null
     const targetValue = normalizeOperationalPlanCount(row?.target_value ?? distribution[index] ?? 0)
     const achievedValue = normalizeOperationalPlanCount(
@@ -353,7 +353,7 @@ async function syncTaskForOccurrence(params: {
       task_id: insertedTaskId,
       notification_type: "new_task",
       title: `مهمة تشغيلية جديدة: ${taskTitle}`,
-      body: `تم توليد مهمة تلقائيًا من الخطة التشغيلية وموعدها ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeStyle: "short" }).format(new Date(schedule.dueAt))}`,
+      body: `تم توليد مهمة تلقائيًا من الخطة التشغيلية وموعدها ${new Intl.DateTimeFormat("sv-SE", { dateStyle: "short", timeZone: "UTC" }).format(new Date(schedule.dueAt))}`,
     })
 
     if (notificationError) {
@@ -420,7 +420,14 @@ function buildOccurrenceTaskSchedules(dueAtValue: string, taskCount: number, wee
     schedules.push({
       index,
       releaseAt: segmentStart.toISOString(),
-      dueAt: segmentEnd.toISOString(),
+      dueAt: new Date(Date.UTC(
+        segmentEnd.getUTCFullYear(),
+        segmentEnd.getUTCMonth(),
+        segmentEnd.getUTCDate(),
+        23,
+        59,
+        0,
+      )).toISOString(),
     })
 
     segmentStart = new Date(Date.UTC(
@@ -655,8 +662,8 @@ export async function PATCH(request: Request) {
       const destinationProgress = calculateOperationalPlanProgress(destinationAchievedValue, nextDestinationTargetValue)
       const destinationStatus = getOperationalPlanOccurrenceStatus(destinationProgress)
       const destinationCompletedAt = destinationStatus === "completed" ? (destinationRow?.completed_at ?? new Date().toISOString()) : null
-      const sourceDueAt = new Date(Date.UTC(planRow.plan_year, payload.fromMonthNumber - 1, 1)).toISOString()
-      const destinationDueAt = new Date(Date.UTC(planRow.plan_year, payload.toMonthNumber - 1, 1)).toISOString()
+      const sourceDueAt = new Date(Date.UTC(planRow.plan_year, payload.fromMonthNumber, 0, 23, 59, 0)).toISOString()
+      const destinationDueAt = new Date(Date.UTC(planRow.plan_year, payload.toMonthNumber, 0, 23, 59, 0)).toISOString()
 
       const { error: sourceUpdateError } = await supabase
         .from("operational_plan_occurrences")
@@ -778,7 +785,7 @@ export async function PATCH(request: Request) {
     const progressPercentage = calculateOperationalPlanProgress(achievedValue, targetValue)
     const status = getOperationalPlanOccurrenceStatus(progressPercentage)
     const completedAt = status === "completed" ? new Date().toISOString() : null
-    const dueAt = new Date(Date.UTC(planRow.plan_year, payload.monthNumber - 1, 1)).toISOString()
+    const dueAt = new Date(Date.UTC(planRow.plan_year, payload.monthNumber, 0, 23, 59, 0)).toISOString()
 
     const { data: savedOccurrence, error } = await supabase
       .from("operational_plan_occurrences")

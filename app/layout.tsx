@@ -7,9 +7,19 @@ import './globals.css'
 
 const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo" });
 
-export const metadata: Metadata = {
-  title: 'العناية بالمسلمين الجدد',
-  description: 'جمعية العناية بالمسلمين الجدد - بريدة',
+export async function generateMetadata(): Promise<Metadata> {
+  const logo = await getSiteSectionContent('logo')
+  const iconUrl = logo.logo || '/icon.svg'
+
+  return {
+    title: 'العناية بالمسلمين الجدد',
+    description: 'جمعية العناية بالمسلمين الجدد - بريدة',
+    icons: {
+      icon: iconUrl,
+      shortcut: iconUrl,
+      apple: logo.logo || '/apple-icon.png',
+    },
+  }
 }
 
 export default async function RootLayout({

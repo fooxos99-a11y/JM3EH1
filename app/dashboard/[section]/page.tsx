@@ -20,6 +20,7 @@ import { PermissionsEditor } from "@/components/dashboard/permissions-editor"
 import { ProjectsEditor } from "@/components/dashboard/projects-editor"
 import { SettingsEditor } from "@/components/dashboard/settings-editor"
 import { SupportersDashboard } from "@/components/dashboard/supporters-dashboard"
+import { SupportersWhatsAppPage } from "@/components/dashboard/supporters-whatsapp-page"
 import { ServicesDashboard } from "@/components/dashboard/services-dashboard"
 import { OperationalPlansPageClient } from "@/components/operational-plans-page-client"
 import { hasPermission, requireCurrentUser } from "@/lib/auth"
@@ -95,6 +96,10 @@ export default async function DashboardSectionPage({ params }: DashboardSectionP
 
   if (section === "supporters") {
     return <SupportersDashboard />
+  }
+
+  if (section === "supporters-whatsapp") {
+    return <SupportersWhatsAppPage />
   }
 
   if (section === "services") {

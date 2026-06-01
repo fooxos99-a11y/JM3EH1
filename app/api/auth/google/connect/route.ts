@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const url = auth.generateAuthUrl({
     access_type: "offline",
     include_granted_scopes: true,
-    prompt: "consent",
+    prompt: "consent select_account",
     scope: [...GOOGLE_DRIVE_OAUTH_SCOPES],
     state,
   })

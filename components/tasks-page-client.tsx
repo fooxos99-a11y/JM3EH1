@@ -238,6 +238,7 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   const [previewAttachment, setPreviewAttachment] = useState<{ title: string; url: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const createAttachmentInputRef = useRef<HTMLInputElement>(null)
+  const defaultAttachmentFolderIdRef = useRef<string | null>(null)
   const isPersonalTaskPage = view === "personal" && kind === "task"
   const operationalPlanWeekEndDay = data?.operationalPlanWeekEndDay
   const assignableUsers = data?.assignableUsers ?? []
@@ -727,12 +728,13 @@ export function TasksPageClient({ embedded = false, view = "personal", kind = "t
   }
 
   async function uploadAttachmentFile(file: File, taskTitle: string, parentFolderId?: string | null) {
-    const targetFolderId = parentFolderId || (await fetch("/api/drive/folders", { cache: "no-store" }).then(async (response) => {
+    const targetFolderId = parentFolderId || defaultAttachmentFolderIdRef.current || (await fetch("/api/drive/folders?mode=default", { cache: "no-store" }).then(async (response) => {
       const payload = await response.json() as { defaultFolderId?: string | null; error?: string }
       if (!response.ok) {
         throw new Error(getDriveUploadErrorMessage(payload.error, "تعذر تحميل مكان ملفاتي"))
       }
 
+      defaultAttachmentFolderIdRef.current = payload.defaultFolderId ?? null
       return payload.defaultFolderId ?? null
     }))
 

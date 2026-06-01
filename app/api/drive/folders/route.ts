@@ -2,10 +2,10 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { requireCurrentUser } from "@/lib/auth"
-import { browseDriveFolders, getUserDrivePreference, listDriveFolderOptions, setUserDrivePreference } from "@/lib/google-drive"
+import { browseDriveFolders, getUserDrivePreference, listDriveFolderOptions, resolveTaskAttachmentFolder, setUserDrivePreference } from "@/lib/google-drive"
 
 const getSchema = z.object({
-  mode: z.enum(["list", "browser"]).optional(),
+  mode: z.enum(["list", "browser", "default"]).optional(),
   parentId: z.string().trim().min(1).optional(),
   q: z.string().trim().optional(),
 })
@@ -34,6 +34,15 @@ export async function GET(request: Request) {
         ...browserData,
         defaultFolderId: preference.defaultFolderId,
         defaultFolderName: preference.defaultFolderName,
+      })
+    }
+
+    if (parsed.data.mode === "default") {
+      const preference = await resolveTaskAttachmentFolder(user)
+
+      return NextResponse.json({
+        defaultFolderId: preference.folderId,
+        defaultFolderName: preference.folderName,
       })
     }
 

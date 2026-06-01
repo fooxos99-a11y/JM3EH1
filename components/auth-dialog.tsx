@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LoaderCircle, LogIn, LogOut, ShieldCheck, UserPlus, UserRound } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -21,7 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { supabaseBrowserClient } from "@/lib/supabase/client"
 
 type SessionUser = {
   id: string
@@ -51,6 +50,16 @@ const defaultPasswordForm = {
   currentPassword: "",
   newPassword: "",
   confirmPassword: "",
+}
+
+let supabaseBrowserClientPromise: Promise<(typeof import("@/lib/supabase/client"))["supabaseBrowserClient"]> | null = null
+
+async function getSupabaseBrowserClient() {
+  if (!supabaseBrowserClientPromise) {
+    supabaseBrowserClientPromise = import("@/lib/supabase/client").then((module) => module.supabaseBrowserClient)
+  }
+
+  return supabaseBrowserClientPromise
 }
 
 function normalizePhone(rawPhone: string) {
@@ -102,8 +111,15 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
   const [isOtpSent, setIsOtpSent] = useState(false)
   const [isPhoneVerified, setIsPhoneVerified] = useState(false)
   const [verifiedAccessToken, setVerifiedAccessToken] = useState<string | null>(null)
+  const hasRequestedSessionRef = useRef(false)
 
   async function loadSession() {
+    if (hasRequestedSessionRef.current) {
+      return
+    }
+
+    hasRequestedSessionRef.current = true
+
     try {
       const response = await fetch("/api/auth/session", { cache: "no-store" })
       const payload = (await response.json()) as { user: SessionUser | null; configured?: boolean }
@@ -116,7 +132,13 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
   }
 
   useEffect(() => {
-    void loadSession()
+    const timeoutId = window.setTimeout(() => {
+      void loadSession()
+    }, 600)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
   }, [])
 
   useEffect(() => {
@@ -149,6 +171,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
         return
       }
 
+      const supabaseBrowserClient = await getSupabaseBrowserClient()
       await supabaseBrowserClient.auth.signOut()
       setUser(result.user)
       setMessage({ type: "success", text: "تم تسجيل الدخول بنجاح" })
@@ -176,6 +199,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
     setMessage(null)
 
     try {
+      const supabaseBrowserClient = await getSupabaseBrowserClient()
       const { error } = await supabaseBrowserClient.auth.signInWithOtp({
         phone: normalizePhone(registerForm.phone),
         options: {
@@ -216,6 +240,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
     setMessage(null)
 
     try {
+      const supabaseBrowserClient = await getSupabaseBrowserClient()
       const { data, error } = await supabaseBrowserClient.auth.verifyOtp({
         phone: normalizePhone(registerForm.phone),
         token: normalizedOtpCode,
@@ -243,6 +268,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
 
     try {
       await fetch("/api/auth/logout", { method: "POST" })
+      const supabaseBrowserClient = await getSupabaseBrowserClient()
       await supabaseBrowserClient.auth.signOut()
       setUser(null)
       setOpen(false)
@@ -301,6 +327,14 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
     </button>
   )
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen)
+
+    if (nextOpen) {
+      void loadSession()
+    }
+  }
+
   if (user) {
     return (
       <>
@@ -336,6 +370,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
         </DropdownMenu>
 
         <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+          {passwordDialogOpen ? (
           <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-lg" showCloseButton={false}>
             <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
               <DialogHeader className="items-start text-left">
@@ -392,17 +427,19 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
               </Button>
             </div>
           </DialogContent>
+          ) : null}
         </Dialog>
       </>
     )
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {triggerButton}
       </DialogTrigger>
 
+      {open ? (
       <DialogContent className="overflow-hidden rounded-[2rem] border-border/60 p-0 sm:max-w-xl" showCloseButton={false}>
         <div className="bg-[linear-gradient(135deg,rgba(1,154,151,0.08),rgba(255,255,255,0.98))] p-6">
           <DialogHeader className="items-start text-left">
@@ -618,6 +655,7 @@ export function AuthDialog({ isScrolled }: AuthDialogProps) {
           )}
         </div>
       </DialogContent>
+      ) : null}
     </Dialog>
   )
 }

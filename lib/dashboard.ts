@@ -152,6 +152,12 @@ export const dashboardSections: DashboardGroup[] = [
         description: "عرض الداعمين تلقائيًا، إدارة بياناتهم، وتجهيز أدوات الرسائل والتصدير.",
         permission: "supporters",
       },
+      {
+        slug: "supporters-whatsapp",
+        label: "الإرسال عبر الواتس",
+        description: "إرسال رسائل واتساب جماعية للداعمين والمتبرعين من صفحة مستقلة داخل نفس القسم.",
+        permission: "supporters",
+      },
     ],
   },
   {

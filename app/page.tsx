@@ -2,10 +2,9 @@ import dynamic from "next/dynamic"
 
 import { Header } from "@/components/header"
 import { Hero } from "@/components/hero"
-import { DonationCards } from "@/components/donation-cards"
-import { Footer } from "@/components/footer"
 import { getSiteSectionsContent } from "@/lib/site-content"
 
+const DonationCards = dynamic(() => import("@/components/donation-cards").then((module) => module.DonationCards))
 const ProjectsSection = dynamic(() => import("@/components/projects-section").then((module) => module.ProjectsSection))
 const GiftingsSection = dynamic(() => import("@/components/giftings-section").then((module) => module.GiftingsSection))
 const AchievementsSection = dynamic(() => import("@/components/achievements-section").then((module) => module.AchievementsSection))
@@ -13,6 +12,7 @@ const NewsSection = dynamic(() => import("@/components/news-section").then((modu
 const AboutSection = dynamic(() => import("@/components/about-section").then((module) => module.AboutSection))
 const GallerySection = dynamic(() => import("@/components/gallery-section").then((module) => module.GallerySection))
 const PartnersSection = dynamic(() => import("@/components/partners-section").then((module) => module.PartnersSection))
+const Footer = dynamic(() => import("@/components/footer").then((module) => module.Footer))
 
 export const revalidate = 300
 

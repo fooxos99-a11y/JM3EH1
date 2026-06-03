@@ -78,6 +78,13 @@ function escapeDriveQueryValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 }
 
+function getCurrentMonthFolderName(referenceDate = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Riyadh",
+    month: "numeric",
+  }).format(referenceDate)
+}
+
 function isInvalidGrantError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false
@@ -511,20 +518,21 @@ export async function uploadDriveFile(user: AuthUser, parentId: string, file: Fi
 }
 
 export async function resolveTaskAttachmentFolder(user: AuthUser) {
+  const access = await getDriveAccess(user)
   const preference = await getUserDrivePreference(user)
+  const root = await resolveScopeRoot(user, "my_files", access.mode)
+  const baseFolderId = preference.defaultFolderId ?? root.rootFolderId
+  const baseFolderName = preference.defaultFolderName ?? root.rootFolderName
 
-  if (preference.defaultFolderId) {
-    return {
-      folderId: preference.defaultFolderId,
-      folderName: preference.defaultFolderName ?? "مكان ملفاتي",
-    }
+  if (baseFolderId === VIRTUAL_ALL_FILES_ROOT_ID) {
+    throw new Error("اختر مجلدًا فعليًا داخل ملفاتي لحفظ مرفقات المهام")
   }
 
-  const access = await getDriveAccess(user)
-  const root = await resolveScopeRoot(user, "my_files", access.mode)
+  const monthFolder = await ensureFolderByName(access.drive, baseFolderId, getCurrentMonthFolderName())
+
   return {
-    folderId: root.rootFolderId,
-    folderName: root.rootFolderName,
+    folderId: monthFolder.id,
+    folderName: `${baseFolderName} / ${monthFolder.name}`,
   }
 }
 

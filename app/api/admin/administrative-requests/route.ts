@@ -260,16 +260,17 @@ const patchSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("update_general_balances"),
-    leaveQuotaDays: z.number().min(0),
-    lateQuotaMinutes: z.number().min(0),
-    permissionQuotaMinutes: z.number().min(0),
+    leaveQuotaDays: z.number().min(0).optional(),
+    lateQuotaMinutes: z.number().min(0).optional(),
+    permissionQuotaMinutes: z.number().min(0).optional(),
+    lateGraceMinutes: z.number().min(0).optional(),
     leaveTypes: z.array(
       z.object({
         id: z.string().uuid().optional(),
         name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
         allowedDays: z.number().int().min(0),
       }),
-    ),
+    ).optional(),
   }),
   z.object({
     action: z.literal("save_leave_types"),
@@ -310,21 +311,11 @@ const patchSchema = z.discriminatedUnion("action", [
     templateId: z.string().uuid().nullable().optional(),
     name: z.string().trim().min(1, "اسم القالب مطلوب"),
     description: z.string().trim().optional().transform((value) => value ?? ""),
-    monthlySalary: z.number().min(0),
-    leaveQuotaDays: z.number().int().min(0),
     lateQuotaMinutes: z.number().int().min(0),
     permissionQuotaMinutes: z.number().int().min(0),
     weeklyRequiredMinutes: z.number().int().min(0),
-    lateGraceMinutes: z.number().int().min(0),
     workStartTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت بداية الدوام غير صالح"),
     workEndTime: z.string().trim().regex(/^\d{2}:\d{2}$/, "وقت نهاية الدوام غير صالح"),
-    leaveTypes: z.array(
-      z.object({
-        id: z.string().uuid().optional(),
-        name: z.string().trim().min(1, "اسم نوع الإجازة مطلوب"),
-        allowedDays: z.number().int().min(0),
-      }),
-    ),
     periods: z.array(
       z.object({
         weekday: z.number().int().min(0).max(6),
@@ -2076,12 +2067,9 @@ export async function PATCH(request: Request) {
         .update({
           name: templatePayload.name,
           description: templatePayload.description,
-          monthly_salary: templatePayload.monthlySalary,
-          leave_quota_days: templatePayload.leaveQuotaDays,
           late_quota_minutes: templatePayload.lateQuotaMinutes,
           permission_quota_minutes: templatePayload.permissionQuotaMinutes,
           weekly_required_minutes: templatePayload.weeklyRequiredMinutes,
-          late_grace_minutes: templatePayload.lateGraceMinutes,
           work_start_time: templatePayload.workStartTime,
           work_end_time: templatePayload.workEndTime,
           updated_at: new Date().toISOString(),
@@ -2127,12 +2115,9 @@ export async function PATCH(request: Request) {
         .insert({
           name: templatePayload.name,
           description: templatePayload.description,
-          monthly_salary: templatePayload.monthlySalary,
-          leave_quota_days: templatePayload.leaveQuotaDays,
           late_quota_minutes: templatePayload.lateQuotaMinutes,
           permission_quota_minutes: templatePayload.permissionQuotaMinutes,
           weekly_required_minutes: templatePayload.weeklyRequiredMinutes,
-          late_grace_minutes: templatePayload.lateGraceMinutes,
           work_start_time: templatePayload.workStartTime,
           work_end_time: templatePayload.workEndTime,
           created_by: user.id,
@@ -2167,26 +2152,6 @@ export async function PATCH(request: Request) {
       }
 
       return NextResponse.json({ error: insertPeriodsError.message }, { status: 400 })
-    }
-
-    if (templatePayload.leaveTypes.length > 0) {
-      const { error: insertLeaveTypesError } = await supabase
-        .from("attendance_schedule_template_leave_types")
-        .insert(templatePayload.leaveTypes.map((leaveType, index) => ({
-          ...(leaveType.id ? { id: leaveType.id } : {}),
-          template_id: templateId,
-          leave_type_name: leaveType.name,
-          allowed_days: leaveType.allowedDays,
-          sort_order: index,
-        })))
-
-      if (insertLeaveTypesError) {
-        if (isSchemaMissing(insertLeaveTypesError)) {
-          return schemaResponse()
-        }
-
-        return NextResponse.json({ error: insertLeaveTypesError.message }, { status: 400 })
-      }
     }
 
     return NextResponse.json({ ok: true, templateId })
@@ -2641,15 +2606,15 @@ export async function PATCH(request: Request) {
 
         return {
           user_id: targetUserId,
-          leave_quota_days: parsed.data.leaveQuotaDays,
+          leave_quota_days: parsed.data.leaveQuotaDays ?? currentBalance.leaveQuotaDays,
           leave_taken_days: currentBalance.leaveTakenDays,
-          allowance_total_days: parsed.data.lateQuotaMinutes,
+          allowance_total_days: parsed.data.lateQuotaMinutes ?? currentBalance.lateQuotaMinutes,
           allowance_used_days: currentBalance.lateUsedMinutes,
-          permission_quota_count: parsed.data.permissionQuotaMinutes,
+          permission_quota_count: parsed.data.permissionQuotaMinutes ?? currentBalance.permissionQuotaMinutes,
           permission_used_count: currentBalance.permissionUsedMinutes,
           monthly_salary: currentBalance.monthlySalary,
           weekly_required_minutes: currentBalance.weeklyRequiredMinutes,
-          late_grace_minutes: currentBalance.lateGraceMinutes,
+          late_grace_minutes: parsed.data.lateGraceMinutes ?? currentBalance.lateGraceMinutes,
           schedule_template_id: currentBalance.scheduleTemplateId,
           work_start_time: currentBalance.workStartTime,
           work_end_time: currentBalance.workEndTime,
@@ -2667,31 +2632,34 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    for (const targetUserId of targetUserIds) {
-      const replaceError = await replaceEmployeeLeaveTypes(supabase, targetUserId, parsed.data.leaveTypes)
+    if (parsed.data.leaveTypes) {
+      for (const targetUserId of targetUserIds) {
+        const replaceError = await replaceEmployeeLeaveTypes(supabase, targetUserId, parsed.data.leaveTypes)
 
-      if (replaceError) {
-        if (isSchemaMissing(replaceError)) {
-          return schemaResponse()
+        if (replaceError) {
+          if (isSchemaMissing(replaceError)) {
+            return schemaResponse()
+          }
+
+          return NextResponse.json({ error: replaceError.message }, { status: 400 })
         }
 
-        return NextResponse.json({ error: replaceError.message }, { status: 400 })
-      }
+        const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
+        const syncError = await syncLeaveTypeAggregateBalance(supabase, targetUserId, user.id, {
+          ...currentBalance,
+          leaveQuotaDays: parsed.data.leaveQuotaDays ?? currentBalance.leaveQuotaDays,
+          lateQuotaMinutes: parsed.data.lateQuotaMinutes ?? currentBalance.lateQuotaMinutes,
+          permissionQuotaMinutes: parsed.data.permissionQuotaMinutes ?? currentBalance.permissionQuotaMinutes,
+          lateGraceMinutes: parsed.data.lateGraceMinutes ?? currentBalance.lateGraceMinutes,
+        })
 
-      const currentBalance = mapLeaveBalance(balancesByUserId.get(targetUserId), targetUserId)
-      const syncError = await syncLeaveTypeAggregateBalance(supabase, targetUserId, user.id, {
-        ...currentBalance,
-        leaveQuotaDays: parsed.data.leaveQuotaDays,
-        lateQuotaMinutes: parsed.data.lateQuotaMinutes,
-        permissionQuotaMinutes: parsed.data.permissionQuotaMinutes,
-      })
+        if (syncError) {
+          if (isSchemaMissing(syncError)) {
+            return schemaResponse()
+          }
 
-      if (syncError) {
-        if (isSchemaMissing(syncError)) {
-          return schemaResponse()
+          return NextResponse.json({ error: syncError.message }, { status: 400 })
         }
-
-        return NextResponse.json({ error: syncError.message }, { status: 400 })
       }
     }
 

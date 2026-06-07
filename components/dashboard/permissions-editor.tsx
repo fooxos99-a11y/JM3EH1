@@ -26,6 +26,13 @@ type AdminAccount = {
   gender: (typeof employeeGenderValues)[number]
   maritalStatus: (typeof maritalStatusValues)[number]
   jobRank: string
+  monthlySalary: string
+  scheduleTemplateId: string
+}
+
+type ScheduleTemplateOption = {
+  id: string
+  name: string
 }
 
 type PermissionBundle = {
@@ -201,11 +208,14 @@ const initialForm = {
   gender: "male" as (typeof employeeGenderValues)[number],
   maritalStatus: "single" as (typeof maritalStatusValues)[number],
   jobRank: "",
+  monthlySalary: "0",
+  scheduleTemplateId: "",
   permissions: [] as Array<DashboardPermissionKey | "*">,
 }
 
 export function PermissionsEditor() {
   const [accounts, setAccounts] = useState<AdminAccount[]>([])
+  const [scheduleTemplates, setScheduleTemplates] = useState<ScheduleTemplateOption[]>([])
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [saveSuccessDialogOpen, setSaveSuccessDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -216,18 +226,21 @@ export function PermissionsEditor() {
     setIsLoading(true)
     try {
       const response = await fetch("/api/admin/admin-users", { cache: "no-store" })
-      const payload = (await response.json()) as { accounts?: AdminAccount[]; error?: string }
+      const payload = (await response.json()) as { accounts?: AdminAccount[]; scheduleTemplates?: ScheduleTemplateOption[]; error?: string }
 
       if (!response.ok) {
         setMessage({ type: "error", text: payload.error ?? "تعذر تحميل الحسابات الإدارية" })
         setAccounts([])
+        setScheduleTemplates([])
         return
       }
 
       setAccounts(payload.accounts ?? [])
+      setScheduleTemplates(payload.scheduleTemplates ?? [])
     } catch {
       setMessage({ type: "error", text: "تعذر الاتصال بالخادم أثناء تحميل الحسابات" })
       setAccounts([])
+      setScheduleTemplates([])
     } finally {
       setIsLoading(false)
     }
@@ -305,6 +318,8 @@ export function PermissionsEditor() {
             gender: account.gender,
             maritalStatus: account.maritalStatus,
             jobRank: account.jobRank,
+            monthlySalary: Number(account.monthlySalary) || 0,
+            scheduleTemplateId: account.scheduleTemplateId || null,
             permissions: account.permissions,
           }),
         })
@@ -391,6 +406,8 @@ export function PermissionsEditor() {
           <div className="space-y-2 text-right"><Label>الحالة الاجتماعية</Label><Select value={form.maritalStatus} onValueChange={(value) => setForm((current) => ({ ...current, maritalStatus: value as (typeof maritalStatusValues)[number] }))}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="single">أعزب</SelectItem><SelectItem value="married">متزوج</SelectItem><SelectItem value="divorced">مطلق</SelectItem><SelectItem value="widowed">أرمل</SelectItem></SelectContent></Select></div>
           <div className="space-y-2 text-right"><Label htmlFor="admin-job-rank">الرتبة الوظيفية</Label><Input id="admin-job-rank" value={form.jobRank} onChange={(event) => setForm((current) => ({ ...current, jobRank: event.target.value }))} /></div>
           <div className="space-y-2 text-right"><Label htmlFor="admin-age">العمر</Label><Input id="admin-age" value={String(calculateAge(form.birthDate) ?? "")} disabled /></div>
+          <div className="space-y-2 text-right"><Label htmlFor="admin-monthly-salary">الراتب الشهري</Label><Input id="admin-monthly-salary" type="number" min="0" step="0.01" value={form.monthlySalary} onChange={(event) => setForm((current) => ({ ...current, monthlySalary: event.target.value }))} /></div>
+          <div className="space-y-2 text-right"><Label>قالب الدوام</Label><Select value={form.scheduleTemplateId || "no_template"} onValueChange={(value) => setForm((current) => ({ ...current, scheduleTemplateId: value === "no_template" ? "" : value }))}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no_template">بدون قالب</SelectItem>{scheduleTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-2 text-right md:col-span-2"><Label htmlFor="admin-password">كلمة المرور</Label><Input id="admin-password" type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></div>
           <div className="space-y-2 text-right md:col-span-2"><Label>الصلاحيات</Label><PermissionPicker value={form.permissions} onChange={(permissions) => setForm((current) => ({ ...current, permissions }))} /></div>
         </div>
@@ -413,6 +430,8 @@ export function PermissionsEditor() {
               <div className="space-y-2 text-right"><Label>الحالة الاجتماعية</Label><Select value={account.maritalStatus} onValueChange={(value) => updateAccount(index, "maritalStatus", value)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="single">أعزب</SelectItem><SelectItem value="married">متزوج</SelectItem><SelectItem value="divorced">مطلق</SelectItem><SelectItem value="widowed">أرمل</SelectItem></SelectContent></Select></div>
               <div className="space-y-2 text-right"><Label htmlFor={`account-rank-${account.id}`}>الرتبة الوظيفية</Label><Input id={`account-rank-${account.id}`} value={account.jobRank} onChange={(event) => updateAccount(index, "jobRank", event.target.value)} /></div>
               <div className="space-y-2 text-right"><Label htmlFor={`account-age-${account.id}`}>العمر</Label><Input id={`account-age-${account.id}`} value={String(calculateAge(account.birthDate) ?? "")} disabled /></div>
+              <div className="space-y-2 text-right"><Label htmlFor={`account-salary-${account.id}`}>الراتب الشهري</Label><Input id={`account-salary-${account.id}`} type="number" min="0" step="0.01" value={account.monthlySalary} onChange={(event) => updateAccount(index, "monthlySalary", event.target.value)} /></div>
+              <div className="space-y-2 text-right"><Label>قالب الدوام</Label><Select value={account.scheduleTemplateId || "no_template"} onValueChange={(value) => updateAccount(index, "scheduleTemplateId", value === "no_template" ? "" : value)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no_template">بدون قالب</SelectItem>{scheduleTemplates.map((template) => <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-2 text-right md:col-span-2"><Label>الصلاحيات</Label><PermissionPicker value={account.permissions} onChange={(permissions) => updateAccount(index, "permissions", permissions)} /></div>
             </div>
           </div>

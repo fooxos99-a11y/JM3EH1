@@ -360,6 +360,15 @@ export function AdminDashboardShell({ userId, userName, userTitle, userProfileSu
                       type="button"
                       variant="outline"
                       className="rounded-2xl border-primary/15 bg-white/80"
+                      onClick={() => window.dispatchEvent(new Event("administrative-requests-open-leave-types"))}
+                    >
+                      <FolderPlus className="h-4 w-4" />
+                      أنواع الإجازات
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-2xl border-primary/15 bg-white/80"
                       onClick={() => window.dispatchEvent(new Event("administrative-requests-open-official-holidays"))}
                     >
                       <Bell className="h-4 w-4" />

@@ -19,6 +19,8 @@ const adminUserSchema = z.object({
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
   jobRank: z.string().trim().min(1),
+  monthlySalary: z.number().min(0),
+  scheduleTemplateId: z.string().uuid().nullable().optional(),
   permissions: z.array(z.string()),
 })
 
@@ -33,6 +35,8 @@ const updateAdminUserSchema = z.object({
   gender: z.enum(employeeGenderValues),
   maritalStatus: z.enum(maritalStatusValues),
   jobRank: z.string().trim().min(1),
+  monthlySalary: z.number().min(0),
+  scheduleTemplateId: z.string().uuid().nullable().optional(),
   permissions: z.array(z.string()),
 })
 
@@ -43,6 +47,27 @@ type ProfileRow = {
   gender: (typeof employeeGenderValues)[number]
   marital_status: (typeof maritalStatusValues)[number]
   job_rank: string
+}
+
+type LeaveBalanceRow = {
+  user_id: string
+  monthly_salary: number | null
+  schedule_template_id: string | null
+  weekly_required_minutes: number | null
+  work_start_time: string | null
+  work_end_time: string | null
+  allowance_total_days: number | null
+  permission_quota_count: number | null
+}
+
+type ScheduleTemplateRow = {
+  id: string
+  name: string
+  weekly_required_minutes: number | null
+  work_start_time: string | null
+  work_end_time: string | null
+  late_quota_minutes: number | null
+  permission_quota_minutes: number | null
 }
 
 function getReadableDatabaseError(error: { code?: string; message?: string; details?: string | null } | null | undefined) {
@@ -108,6 +133,28 @@ async function requirePermissionsAdmin() {
   return { user, response: null }
 }
 
+async function loadScheduleTemplateById(supabase: ReturnType<typeof createSupabaseAdminClient>, templateId: string | null | undefined) {
+  if (!templateId) {
+    return { template: null, response: null }
+  }
+
+  const { data, error } = await supabase
+    .from("attendance_schedule_templates")
+    .select("id,name,weekly_required_minutes,work_start_time,work_end_time,late_quota_minutes,permission_quota_minutes")
+    .eq("id", templateId)
+    .maybeSingle<ScheduleTemplateRow>()
+
+  if (error) {
+    if (isSchemaMissing(error)) {
+      return { template: null, response: schemaResponse() }
+    }
+
+    return { template: null, response: NextResponse.json({ error: error.message }, { status: 400 }) }
+  }
+
+  return { template: data ?? null, response: null }
+}
+
 export async function GET() {
   const { response } = await requirePermissionsAdmin()
   if (response) return response
@@ -122,6 +169,13 @@ export async function GET() {
   const { data: profiles, error: profilesError } = await supabase
     .from("employee_profiles")
     .select("user_id,national_id,birth_date,gender,marital_status,job_rank")
+  const { data: balances, error: balancesError } = await supabase
+    .from("employee_leave_balances")
+    .select("user_id,monthly_salary,schedule_template_id,weekly_required_minutes,work_start_time,work_end_time,allowance_total_days,permission_quota_count")
+  const { data: scheduleTemplates, error: scheduleTemplatesError } = await supabase
+    .from("attendance_schedule_templates")
+    .select("id,name")
+    .order("created_at", { ascending: true })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 })
@@ -131,11 +185,21 @@ export async function GET() {
     return NextResponse.json({ error: profilesError.message }, { status: 400 })
   }
 
+  if (balancesError && !isSchemaMissing(balancesError)) {
+    return NextResponse.json({ error: balancesError.message }, { status: 400 })
+  }
+
+  if (scheduleTemplatesError && !isSchemaMissing(scheduleTemplatesError)) {
+    return NextResponse.json({ error: scheduleTemplatesError.message }, { status: 400 })
+  }
+
   const profilesById = new Map(((profiles ?? []) as ProfileRow[]).map((profile) => [profile.user_id, profile]))
+  const balancesById = new Map(((balances ?? []) as LeaveBalanceRow[]).map((balance) => [balance.user_id, balance]))
 
   const accounts = (data ?? []).map((account) => {
     const config = permissionsContent.accounts.find((item) => item.userId === account.id)
     const profile = profilesById.get(account.id)
+    const balance = balancesById.get(account.id)
 
     return {
       id: account.id,
@@ -149,10 +213,15 @@ export async function GET() {
       gender: profile?.gender ?? "male",
       maritalStatus: profile?.marital_status ?? "single",
       jobRank: profile?.job_rank ?? "",
+      monthlySalary: String(balance?.monthly_salary ?? 0),
+      scheduleTemplateId: balance?.schedule_template_id ?? "",
     }
   })
 
-  return NextResponse.json({ accounts })
+  return NextResponse.json({
+    accounts,
+    scheduleTemplates: (scheduleTemplates ?? []).map((template) => ({ id: template.id, name: template.name })),
+  })
 }
 
 export async function POST(request: Request) {
@@ -175,6 +244,11 @@ export async function POST(request: Request) {
     const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
     if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
       return schemaResponse()
+    }
+
+    const { template: selectedTemplate, response: templateResponse } = await loadScheduleTemplateById(supabase, parsed.data.scheduleTemplateId)
+    if (templateResponse) {
+      return templateResponse
     }
 
     const passwordHash = await hash(parsed.data.password, 12)
@@ -219,6 +293,13 @@ export async function POST(request: Request) {
     const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
       {
         user_id: insertedUser.id,
+        monthly_salary: parsed.data.monthlySalary,
+        schedule_template_id: selectedTemplate?.id ?? null,
+        weekly_required_minutes: selectedTemplate?.weekly_required_minutes ?? 0,
+        work_start_time: selectedTemplate?.work_start_time ?? "08:00",
+        work_end_time: selectedTemplate?.work_end_time ?? "16:00",
+        allowance_total_days: selectedTemplate?.late_quota_minutes ?? 0,
+        permission_quota_count: selectedTemplate?.permission_quota_minutes ?? 0,
         updated_by: user.id,
       },
       { onConflict: "user_id" },
@@ -254,6 +335,8 @@ export async function POST(request: Request) {
         gender: parsed.data.gender,
         maritalStatus: parsed.data.maritalStatus,
         jobRank: parsed.data.jobRank,
+        monthlySalary: String(parsed.data.monthlySalary),
+        scheduleTemplateId: parsed.data.scheduleTemplateId ?? "",
       },
     })
   } catch (error) {
@@ -277,6 +360,17 @@ export async function PATCH(request: Request) {
     const schemaCheck = await supabase.from("employee_profiles").select("user_id").limit(1)
     if (schemaCheck.error && isSchemaMissing(schemaCheck.error)) {
       return schemaResponse()
+    }
+
+    const { data: currentBalance } = await supabase
+      .from("employee_leave_balances")
+      .select("user_id,monthly_salary,schedule_template_id,weekly_required_minutes,work_start_time,work_end_time,allowance_total_days,permission_quota_count")
+      .eq("user_id", parsed.data.userId)
+      .maybeSingle<LeaveBalanceRow>()
+
+    const { template: selectedTemplate, response: templateResponse } = await loadScheduleTemplateById(supabase, parsed.data.scheduleTemplateId)
+    if (templateResponse) {
+      return templateResponse
     }
 
     const updates: Record<string, string | null> = {}
@@ -307,6 +401,25 @@ export async function PATCH(request: Request) {
 
     if (profileError) {
       return NextResponse.json({ error: getReadableDatabaseError(profileError) }, { status: 400 })
+    }
+
+    const { error: balanceError } = await supabase.from("employee_leave_balances").upsert(
+      {
+        user_id: parsed.data.userId,
+        monthly_salary: parsed.data.monthlySalary,
+        schedule_template_id: selectedTemplate?.id ?? null,
+        weekly_required_minutes: selectedTemplate?.weekly_required_minutes ?? currentBalance?.weekly_required_minutes ?? 0,
+        work_start_time: selectedTemplate?.work_start_time ?? currentBalance?.work_start_time ?? "08:00",
+        work_end_time: selectedTemplate?.work_end_time ?? currentBalance?.work_end_time ?? "16:00",
+        allowance_total_days: selectedTemplate?.late_quota_minutes ?? currentBalance?.allowance_total_days ?? 0,
+        permission_quota_count: selectedTemplate?.permission_quota_minutes ?? currentBalance?.permission_quota_count ?? 0,
+        updated_by: user.id,
+      },
+      { onConflict: "user_id" },
+    )
+
+    if (balanceError && !isSchemaMissing(balanceError)) {
+      return NextResponse.json({ error: getReadableDatabaseError(balanceError) }, { status: 400 })
     }
 
     const permissionsContent = await getSiteSectionContent("permissions")
